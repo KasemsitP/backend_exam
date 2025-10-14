@@ -6,6 +6,9 @@ import dotenv from "dotenv"
 import session from 'express-session';
 import {DB} from './model/DB';
 import authrouter from "./Routes/routes.auth"
+import userrouter from "./Routes/router.user"
+import bagrouter from "./Routes/router.bag"
+import subjectrouter from "./Routes/router.subject"
 import { isAuthenticated } from './Middleware/authentication';
 dotenv.config()
 export const app = express();
@@ -25,6 +28,9 @@ app.use(session({
 }));
 
 app.use("/api/auth/",authrouter)
+app.use("/api/",userrouter)
+app.use("/api/",bagrouter)
+app.use("/api/",subjectrouter)
 
 
 app.get("/test",isAuthenticated, async (req, res) => {

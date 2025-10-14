@@ -1,7 +1,7 @@
 
 import { DB } from "../model/DB";
 import { Pool } from "mysql2/promise";
-import { RowDataPacket } from "mysql2";
+import { RowDataPacket  } from "mysql2";
 
 export interface UserData {
     username: string;
