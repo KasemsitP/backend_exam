@@ -23,7 +23,7 @@ export class bagcontroller {
     static insertBag = async (req: Request, res: Response) => {
         try {
             const result = await bagservice.insertBagsCheck(req)
-            res.status(201).json({message: "ok"});
+            res.status(201).json({ message: "บันทึกข้อมูลสำเร็จ" });
         } catch (error: any) {
             // console.log(error)
             return res.status(400).send({ message: error.message });

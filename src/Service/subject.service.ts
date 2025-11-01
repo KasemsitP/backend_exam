@@ -5,10 +5,10 @@ import { Result } from "pg";
 export class subjectservice {
     static getSubjectByCampaign = async (req: Request) => {
         const { campaignCode } = req.query;
-        if (!campaignCode) throw new Error("campaignCode is required");
+        if (!campaignCode) throw new Error("กรุณาระบุ campaignCode");
 
         const result = await subjectrepo.getSubject(String(campaignCode))
-        if (result.length === 0) throw new Error("no information")
+        if (result.length === 0) throw new Error("ไม่พบข้อมูล")
         return result;
     };
 
@@ -24,10 +24,10 @@ export class subjectservice {
             endAt,
         } = req.body;
 
-        if (!campaignCode) throw new Error("campaignCode is required");
-        if (!sessionCode) throw new Error("sessionCode is required");
+        if (!campaignCode) throw new Error("กรุณาระบุ campaignCode");
+        if (!sessionCode) throw new Error("กรุณาระบุ sessionCode");
      /*   const result = await subjectrepo.getSubject(String(campaignCode));
-        if (result.length === 0) throw new Error("no information found in this campaign");*/
+        if (result.length === 0) throw new Error("ไม่พบข้อมูลในแคมเปญนี้");*/
         const result2  = await subjectrepo.addSubjectToSession({
   session_code: sessionCode,
   subject_code: subjectCode,

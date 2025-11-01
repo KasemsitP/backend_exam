@@ -50,13 +50,21 @@ class Authrepo {
 
 
     }
-    async findByUsername(username: string): Promise<RowDataPacket | null> {
-        const [rows] = await this.pool.execute<RowDataPacket[]>(
-            "SELECT * FROM accounts WHERE username = ?",
-            [username]
-        );
-        return rows[0];
-    }
+async findByUsername(username: string): Promise<RowDataPacket | null> {
+    const sql = `
+        SELECT 
+            a.*, 
+            r.code as role_code 
+        FROM 
+            accounts a
+        LEFT JOIN 
+            roles r ON a.role_id = r.id
+        WHERE 
+            a.username = ?
+    `;
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [username]);
+    return rows[0] || null; 
+}
 
 }
 const authrepo = new Authrepo()

@@ -4,11 +4,11 @@ export function checkRole(requiredRole: string) {
     const userRole = req.session.userData?.role; // สมมติเก็บ role ไว้ใน session
 
     if (!userRole) {
-      return res.status(401).send({ message: "Unauthorized" });
+      return res.status(401).send({ message: "ไม่มีสิทธิ์" });
     }
 
     if (userRole !== requiredRole) {
-      return res.status(403).send({ message: "Forbidden: Insufficient role" });
+      return res.status(403).send({ message: "ไม่อนุญาต: สิทธิ์ไม่เพียงพอ" });
     }
 
     next();

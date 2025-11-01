@@ -13,7 +13,7 @@ export class DB {
         password: "root",
         database: "Exam",
       });
-      console.log("MySQL Pool created (Singleton)");
+      console.log("สร้าง MySQL Pool (Singleton) แล้ว");
     }
     return DB.instance;
   }
@@ -23,10 +23,10 @@ export class DB {
       const connection = await pool.getConnection();
       await connection.ping(); 
       connection.release();
-      console.log("MySQL connected successfully");
+      console.log("เชื่อมต่อ MySQL สำเร็จ");
       return true;
     } catch (error) {
-      console.error("MySQL connection failed:", error);
+      console.error("เชื่อมต่อ MySQL ล้มเหลว:", error);
       return false;
     }
   }

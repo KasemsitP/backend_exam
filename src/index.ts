@@ -8,14 +8,20 @@ import {DB} from './model/DB';
 import authrouter from "./Routes/routes.auth"
 import userrouter from "./Routes/router.user"
 import bagrouter from "./Routes/router.bag"
-import subjectrouter from "./Routes/router.subject"
+import examDataRouter from "./Routes/router.exam"
+import sessionRouter from "./Routes/router.session"
+import campaignRouter from './Routes/router.campaign';
+import seesionsubject from './Routes/router.session-subject';
 import { isAuthenticated } from './Middleware/authentication';
 dotenv.config()
 export const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true            
+}));
 app.use(session({
   secret: "your-secret-key",
   resave: false,
@@ -30,8 +36,10 @@ app.use(session({
 app.use("/api/auth/",authrouter)
 app.use("/api/",userrouter)
 app.use("/api/",bagrouter)
-app.use("/api/",subjectrouter)
-
+app.use("/api/",examDataRouter)
+app.use("/api/",sessionRouter)
+app.use("/api/",campaignRouter)
+app.use("/api/",seesionsubject)
 
 app.get("/test",isAuthenticated, async (req, res) => {
   try {
@@ -49,5 +57,5 @@ app.get("/test",isAuthenticated, async (req, res) => {
 
 app.listen(process.env.PORT, async () => {
   await DB.testConnection();
-  console.log("Server started at port 8000");
+  console.log("เซิร์ฟเวอร์เริ่มทำงานที่พอร์ต 8000");
 });

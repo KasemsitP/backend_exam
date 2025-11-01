@@ -1,0 +1,105 @@
+import { DB } from "../model/DB"; // (สมมติว่านี่คือไฟล์ DB Pool ของคุณ)
+import { Pool, RowDataPacket } from "mysql2/promise";
+export interface ExamCampaign {
+  id: number;
+  code: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean; 
+  note?: string;
+}
+
+export interface CampaignSession {
+  id: number;
+  session_code: string;
+  exam_date: string;
+  campaign_id: number;
+  site_id: number;
+  title?: string;
+  day_no?: number; 
+}
+
+export interface CampaignSubject {
+  session_id: number;
+  subject_id: number;
+  start_at: string;
+  end_at: string;
+  question_count: number;
+  question_range?: string;
+  order_no: number;
+  code: string;
+  name: string;
+}
+
+export interface ExamDataPayload {
+  campaigns: ExamCampaign[];
+  sessions: CampaignSession[];
+  subjects: CampaignSubject[];
+}
+
+class ExamDataRepo {
+  private pool: Pool;
+  constructor() {
+    this.pool = DB.getInstance();
+  }
+
+  /**
+   * ดึง Campaigns ที่ยัง Active ทั้งหมด
+   */
+  async fetchActiveCampaigns(): Promise<ExamCampaign[]> {
+    const sql = "SELECT * FROM exam_campaigns WHERE is_active = ?";
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
+    // (เรา cast เป็น ExamCampaign[] เพราะเรารู้ว่า SELECT * ตรงกับ Interface)
+    return rows as ExamCampaign[];
+  }
+
+  /**
+   * ดึง Sessions ทั้งหมดที่อยู่ใน Campaigns ที่ Active
+   */
+  async fetchSessionsForActiveCampaigns(): Promise<CampaignSession[]> {
+    const sql = `
+        SELECT s.* FROM sessions s
+        JOIN exam_campaigns ec ON s.campaign_id = ec.id
+        WHERE ec.is_active = ?
+    `;
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
+    return rows as CampaignSession[];
+  }
+
+  /**
+   * ดึง SessionSubjects ทั้งหมด (ที่ Join ข้อมูลวิชา)
+   * ที่อยู่ใน Campaigns ที่ Active
+   */
+  async fetchSubjectsForActiveCampaigns(): Promise<CampaignSubject[]> {
+    const sql = `
+        SELECT 
+            ss.session_id, 
+            ss.subject_id, 
+            ss.start_at, 
+            ss.end_at, 
+            ss.question_count, 
+            ss.question_range, 
+            ss.order_no,
+            s.code AS code,  -- (Join code จากตาราง subjects)
+            s.name AS name   -- (Join name จากตาราง subjects)
+        FROM 
+            session_subjects ss
+        JOIN 
+            sessions sess ON ss.session_id = sess.id
+        JOIN 
+            exam_campaigns ec ON sess.campaign_id = ec.id
+        JOIN 
+            subjects s ON ss.subject_id = s.id
+        WHERE 
+            ec.is_active = ?
+        ORDER BY 
+            ss.session_id, ss.order_no;
+    `;
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
+    return rows as CampaignSubject[];
+  }
+}
+
+const examDataRepo = new ExamDataRepo();
+export default examDataRepo;

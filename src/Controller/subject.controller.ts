@@ -12,7 +12,7 @@ export class subjectcontroller {
     static insertBySession = async (req: Request, res: Response) => {
         try {
             const result = await subjectservice.insertBySessionSubject(req)
-            res.status(201).send({ message: "ok" });
+            res.status(201).send({ message: "บันทึกข้อมูลสำเร็จ" });
         } catch (error: any) {
             return res.status(400).send({ message: error.message });
         }

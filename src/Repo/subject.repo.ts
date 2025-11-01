@@ -1,100 +1,82 @@
-
-
-
 import { DB } from "../model/DB";
-import { Pool } from "mysql2/promise";
-import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { Pool, PoolConnection, RowDataPacket } from "mysql2/promise";
 
-interface AddSubjectInput {
-  session_code: string;
-  subject_code: string;
-  subject_name: string;
-  start_at: string;   // ISO string e.g. '2025-06-01 09:00:00'
-  end_at: string;
-  q_count: number;
-  q_range: string;
+type DbClient = Pool | PoolConnection;
+
+export interface ApiSubjectMaster extends RowDataPacket {
+  id: number;
+  code: string;
+  name: string;
 }
 
-
-class subjectRepo {
-    private pool: Pool
-    constructor() {
-        this.pool = DB.getInstance();
-    }
-    async getSubject(campaign_code: string): Promise<RowDataPacket[]> {
-
-        const sql = `
-SELECT
-  s.id              AS session_id,
-  s.session_code,
-  s.exam_date,
-  s.day_no,
-  s.title,
-  sub.code          AS subject_code,
-  sub.name          AS subject_name,
-  ss.start_at,
-  ss.end_at,
-  ss.question_count,
-  ss.question_range,
-  ss.order_no
-FROM sessions s
-JOIN exam_campaigns c ON c.id = s.campaign_id
-JOIN exam_sites     e ON e.id = s.site_id
-LEFT JOIN session_subjects ss ON ss.session_id = s.id
-LEFT JOIN subjects sub        ON sub.id = ss.subject_id
-WHERE c.code = ?
-ORDER BY s.day_no, s.exam_date, ss.order_no;
-    `;
-        const params = [
-            campaign_code
-        ];
-        const [result] = await this.pool.execute<RowDataPacket[]>(sql, params);
-        return result;
-    }
-  async addSubjectToSession(input: AddSubjectInput): Promise<void> {
-    const conn = await this.pool.getConnection();
-    try {
-      await conn.beginTransaction();
-
-      // Step 1: Upsert subject
-      await conn.execute(`
-        INSERT INTO subjects (id, code, name)
-        VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE name = VALUES(name)
-      `, [input.subject_code, input.subject_code, input.subject_name]);
-
-      // Step 2: Upsert session_subjects
-      await conn.execute(`
-        INSERT INTO session_subjects
-          (session_id, subject_id, start_at, end_at, question_count, question_range)
-        SELECT s.id, sub.id, ?, ?, ?, ?
-        FROM sessions s
-        JOIN subjects sub ON sub.code = ?
-        WHERE s.session_code = ?
-        ON DUPLICATE KEY UPDATE
-          start_at = VALUES(start_at),
-          end_at = VALUES(end_at),
-          question_count = VALUES(question_count),
-          question_range = VALUES(question_range)
-      `, [
-        input.start_at,
-        input.end_at,
-        input.q_count,
-        input.q_range,
-        input.subject_code,
-        input.session_code
-      ]);
-
-      await conn.commit();
-    } catch (err) {
-      await conn.rollback();
-      throw err; // Re-throw for caller to handle
-    } finally {
-      conn.release();
-    }
+class SubjectRepo {
+  private pool: Pool;
+  constructor() {
+    this.pool = DB.getInstance();
   }
 
+  async findByCode(
+    code: string,
+    dbClient: DbClient = this.pool
+  ): Promise<ApiSubjectMaster | null> {
+    const sql = "SELECT * FROM subjects WHERE code = ?";
+    const [rows] = await dbClient.execute<ApiSubjectMaster[]>(sql, [code]);
+    return rows[0] || null;
+  }
 
+  /**
+   * สร้างวิชาใหม่
+   */
+  async create(
+    payload: { code: string; name: string },
+    dbClient: DbClient = this.pool
+  ): Promise<ApiSubjectMaster> {
+    const sql = "INSERT INTO subjects (code, name) VALUES (?, ?)";
+    const [result] = await dbClient.execute<any>(sql, [
+      payload.code,
+      payload.name || null, // (ป้องกัน 'undefined')
+    ]);
+    const newId = result.insertId;
+    return (await this.findById(newId, dbClient))!;
+  }
+
+  async findById(
+    id: number,
+    dbClient: DbClient = this.pool
+  ): Promise<ApiSubjectMaster | null> {
+    const sql = "SELECT * FROM subjects WHERE id = ?";
+    const [rows] = await dbClient.execute<ApiSubjectMaster[]>(sql, [id]);
+    return rows[0] || null;
+  }
+
+  /**
+   * ⭐️ ค้นหา ถ้าเจอให้คืนค่า, ถ้าไม่เจอให้สร้าง
+   * (นี่คือฟังก์ชันที่ Service เรียกใช้)
+   */
+  async findOrCreateByCode(
+    code: string,
+    name: string,
+    dbClient: DbClient = this.pool
+  ): Promise<ApiSubjectMaster> {
+    const existing = await this.findByCode(code, dbClient);
+    if (existing) {
+      // (TODO: คุณอาจจะต้องเช็คว่า name ที่ส่งมาตรงกับ name ที่มีอยู่หรือไม่)
+      return existing;
+    }
+    // ถ้าไม่เจอ สร้างใหม่
+    return this.create({ code, name }, dbClient);
+  }
+
+  /**
+   * [ ⭐️ ฟังก์ชันใหม่ (หรืออัปเดต) ⭐️ ]
+   * ลบวิชา (รองรับ Transaction)
+   */
+  async delete(id: number, dbClient: DbClient = this.pool): Promise<boolean> {
+    const sql = "DELETE FROM subjects WHERE id = ?";
+    const [result] = await dbClient.execute<any>(sql, [id]);
+    return result.affectedRows > 0;
+  }
 }
-const subjectrepo = new subjectRepo()
-export default subjectrepo
+
+const subjectRepo = new SubjectRepo();
+export default subjectRepo;
