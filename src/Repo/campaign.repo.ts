@@ -72,6 +72,21 @@ class CampaignRepo {
     }
     return rows[0];
   }
+  async findOrCreateByCode(
+    payload: CreateCampaignPayload,
+    dbClient: DbClient
+  ): Promise<{ campaign: ApiCampaign; created: boolean }> {
+    const findSql = "SELECT * FROM exam_campaigns WHERE code = ?";
+    const [rows] = await dbClient.execute<ApiCampaign[]>(findSql, [
+      payload.code,
+    ]);
+
+    if (rows.length > 0) {
+      return { campaign: rows[0], created: false };
+    }
+    const newCampaign = await this.create(payload, dbClient);
+    return { campaign: newCampaign, created: true };
+  }
 }
 
 const campaignRepo = new CampaignRepo();

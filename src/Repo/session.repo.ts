@@ -80,6 +80,22 @@ class SessionRepo {
     const [result] = await dbClient.execute<any>(sql, [id]);
     return result.affectedRows > 0;
   }
+  async findAllLiteByCampaignId(
+    campaignId: number,
+    dbClient: DbClient = this.pool
+  ): Promise<Array<{ id: number; site_id: number }>> {
+    
+    const sql = "SELECT id, site_id FROM sessions WHERE campaign_id = ?";
+    const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [
+      campaignId,
+    ]);
+    
+    // (แปลงผลลัพธ์ให้ถูกต้อง)
+    return rows.map(row => ({
+      id: row.id,
+      site_id: row.site_id
+    }));
+  }
 }
 
 const sessionRepo = new SessionRepo();

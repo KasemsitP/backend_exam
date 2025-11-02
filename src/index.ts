@@ -12,6 +12,8 @@ import examDataRouter from "./Routes/router.exam"
 import sessionRouter from "./Routes/router.session"
 import campaignRouter from './Routes/router.campaign';
 import seesionsubject from './Routes/router.session-subject';
+import importuser from './Routes/router.importuser';
+import key from './Routes/router.key';
 import { isAuthenticated } from './Middleware/authentication';
 dotenv.config()
 export const app = express();
@@ -40,6 +42,8 @@ app.use("/api/",examDataRouter)
 app.use("/api/",sessionRouter)
 app.use("/api/",campaignRouter)
 app.use("/api/",seesionsubject)
+app.use("/api/",importuser)
+app.use("/api/",key)
 
 app.get("/test",isAuthenticated, async (req, res) => {
   try {
