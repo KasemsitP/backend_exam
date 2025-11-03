@@ -7,13 +7,14 @@ import session from 'express-session';
 import {DB} from './model/DB';
 import authrouter from "./Routes/routes.auth"
 import userrouter from "./Routes/router.user"
-import bagrouter from "./Routes/router.bag"
+import bagRouter from './Routes/router.bag';
 import examDataRouter from "./Routes/router.exam"
 import sessionRouter from "./Routes/router.session"
 import campaignRouter from './Routes/router.campaign';
 import seesionsubject from './Routes/router.session-subject';
 import importuser from './Routes/router.importuser';
 import key from './Routes/router.key';
+import usersession from './Routes/router.user-session';
 import { isAuthenticated } from './Middleware/authentication';
 dotenv.config()
 export const app = express();
@@ -37,13 +38,14 @@ app.use(session({
 
 app.use("/api/auth/",authrouter)
 app.use("/api/",userrouter)
-app.use("/api/",bagrouter)
+app.use("/api/",bagRouter)
 app.use("/api/",examDataRouter)
 app.use("/api/",sessionRouter)
 app.use("/api/",campaignRouter)
 app.use("/api/",seesionsubject)
 app.use("/api/",importuser)
 app.use("/api/",key)
+app.use("/api/",usersession)
 
 app.get("/test",isAuthenticated, async (req, res) => {
   try {

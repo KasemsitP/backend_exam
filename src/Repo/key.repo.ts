@@ -74,7 +74,7 @@ class KeyRepo {
     const sql = `
       INSERT INTO campaign_keys (campaign_id, \`key\`, iv, algor) 
       VALUES (?, ?, ?, ?)
-    `; // [ ⭐️ FIX ⭐️ ] (เพิ่ม backticks รอบ `key`)
+    `; 
     const params = [
       payload.campaign_id,
       payload.key, // [ ⭐️ FIX ⭐️ ]

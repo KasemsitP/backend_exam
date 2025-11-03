@@ -9,6 +9,7 @@ keyRouter.post("/keys", keyController.create);
 keyRouter.delete("/keys/:id", keyController.delete);
 keyRouter.get("/keys/prerequisites/:campaignId", keyController.getPrerequisites);
 keyRouter.post("/keys/encrypt-session-bulk", keyController.runBulkEncryption);
+keyRouter.post("/keys/test-decrypt", keyController.testDecrypt);
 
 
 

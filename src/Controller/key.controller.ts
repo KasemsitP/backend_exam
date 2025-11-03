@@ -102,5 +102,19 @@ static getPrerequisites = async (req: Request, res: Response) => {
       res.status(500).send({ message: error.message });
     }
   };
+
+  static testDecrypt = async (req: Request, res: Response) => {
+    try {
+      const { ciphertext, campaignId } = req.body;
+      if (!ciphertext || !campaignId) {
+        return res.status(400).send({ message: "Missing ciphertext or campaignId" });
+      }
+
+      const decrypted = await keyService.decryptQrPayload(ciphertext, campaignId);
+      res.status(200).json(decrypted);
+    } catch (error: any) {
+      res.status(500).send({ message: error.message });
+    }
+  };
 }
 

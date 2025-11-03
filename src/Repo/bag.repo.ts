@@ -1,73 +1,109 @@
-
-
-
 import { DB } from "../model/DB";
-import { Pool } from "mysql2/promise";
-import { RowDataPacket  , ResultSetHeader} from "mysql2";
+import { PoolConnection } from "mysql2/promise";
+import { format } from "mysql2/promise";
+import { RowDataPacket } from "mysql2/promise";
 
-
-
-class bagRepo {
-    private pool: Pool
-    constructor() {
-        this.pool = DB.getInstance();
-    }
-    async getBags(campaign_code: string): Promise<RowDataPacket[]> {
-
-        const sql = `
-      SELECT
-  b.*,
-  s.session_code,
-  c.code AS campaign_code
-FROM bags b
-JOIN sessions s        ON s.id = b.session_id
-JOIN exam_campaigns c  ON c.id = s.campaign_id
-WHERE c.code = ?                  
-ORDER BY s.session_code, b.bag_no;
-    `;
-        const params = [
-            campaign_code
-        ];
-        const [result] = await this.pool.execute<RowDataPacket[]>(sql, params);
-        return result;
-    }
-    async getNumberBags(campaign_code: string): Promise<RowDataPacket[]> {
-        const sql = `
-SELECT
-  c.code AS campaign_code,
-  s.session_code,
-  b.bag_no,
-  COUNT(bk.id) AS booklet_count
-FROM bags b
-JOIN sessions s        ON s.id = b.session_id
-JOIN exam_campaigns c  ON c.id = s.campaign_id
-LEFT JOIN booklets bk  ON bk.session_id = b.session_id AND bk.bag_no = b.bag_no
-WHERE c.code = ?                      -- 'Y68-T2'
-GROUP BY c.code, s.session_code, b.bag_no
-ORDER BY s.session_code, b.bag_no;
-
-    `;
-        const params = [
-            campaign_code
-        ];
-        const [result] = await this.pool.execute<RowDataPacket[]>(sql, params);
-        return result;
-    }
-    async insertBag(session_code: string , bag_num : Number, count_item : Number ): Promise<ResultSetHeader> {
-        const sql = `
-INSERT INTO bags (session_id, bag_no, sid_start, sid_end, count_items, status)
-SELECT s.id, ?, NULL, NULL, ?, 'CREATED'
-FROM sessions s WHERE s.session_code = ?;
-    `;
-        const params = [
-            bag_num,
-            count_item,
-            session_code
-        ];
-        const [result] = await this.pool.execute<ResultSetHeader>(sql, params);
-        return result;
-    }
-
+// ⭐️ (FIX 1) แก้ไข Interface ให้ตรงกับ Schema
+interface NewBagData {
+    session_id: number; // (INT)
+    bag_no: number;   // (INT)
+    count_items: number;
+    status: "draft" | "ready" | "incomplete";
 }
-const bagrepo = new bagRepo()
-export default bagrepo
+
+interface DbBagRow extends RowDataPacket {
+    id: number; // (PK)
+    campaign_id: string;
+    session_id: string;
+    session_label: string;
+    subject_code: string | null;
+    subject_name: string | null;
+    bag_no: string; // (VARCHAR)
+    count_items: number;
+    status: "draft" | "ready" | "incomplete";
+}
+
+class BagRepo {
+    async findAllByCampaignId(campaignId: string, connection: PoolConnection): Promise<DbBagRow[]> {
+        // (แปลง "camp-1" เป็น 1)
+        const campaignIdNumeric = parseInt(campaignId.replace("camp-", ""));
+
+        const sql = `
+      SELECT 
+        b.id, 
+        s.campaign_id as campaign_id_db, 
+        b.session_id as session_id_db,
+        s.session_label, 
+        sj.code as subject_code, 
+        sj.name as subject_name,
+        b.bag_no, 
+        b.count_items, 
+        b.status,
+        
+        -- (แปลง ID กลับเป็น String ให้ Service)
+        CONCAT('camp-', s.campaign_id) as campaign_id,
+        CONCAT('sess-', b.session_id) as session_id
+
+      FROM bags b
+      JOIN sessions s ON b.session_id = s.id
+      LEFT JOIN subjects sj ON s.subject_id = sj.id -- (สมมติว่า session link กับ subject)
+      WHERE s.campaign_id = ?
+      ORDER BY b.bag_no ASC;
+    `;
+        try {
+            const [rows] = await connection.execute(sql, [campaignIdNumeric]);
+            return rows as DbBagRow[];
+        } catch (error) {
+            console.error("Repo Error (Bag FindAll):", error);
+            throw error;
+        }
+    }
+    async bulkCreate(bags: NewBagData[], connection: PoolConnection) {
+        if (bags.length === 0) return;
+
+        const values = bags.map(b => [b.session_id, b.bag_no, b.count_items, b.status]);
+
+        const sql = format(
+            "INSERT INTO bags (session_id, bag_no, count_items, status) VALUES ?",
+            [values]
+        );
+
+        try {
+            const [result] = await connection.query(sql);
+            return result;
+        } catch (error) {
+            console.error("Repo Error (Bag Bulk Create):", error);
+            throw error;
+        }
+    }
+
+    /**
+     * (Update Bag Status)
+     */
+    async updateStatus(bagId: string, status: string, connection: PoolConnection) {
+        // ⭐️ (FIX 4) อัปเดตโดยใช้ bag_no (ที่เป็น String ID)
+        const sql = `UPDATE bags SET status = ? WHERE bag_no = ?;`;
+        try {
+            const [result] = await connection.execute(sql, [status, bagId]);
+            return result;
+        } catch (error) {
+            console.error("Repo Error (Bag Update Status):", error);
+            throw error;
+        }
+    }
+    async deleteById(bagNo: string, connection: PoolConnection) {
+        // (ลบโดยใช้ bag_no ที่เป็น VARCHAR)
+        const sql = `DELETE FROM bags WHERE bag_no = ?;`;
+        try {
+            const [result] = await connection.execute(sql, [bagNo]);
+            return result;
+        } catch (error) {
+            console.error("Repo Error (Bag Delete):", error);
+            throw error;
+        }
+    }
+}
+
+const bagRepo = new BagRepo();
+export default bagRepo;
+
