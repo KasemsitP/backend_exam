@@ -9,8 +9,6 @@ interface BulkCreatePayload {
   campaignId: string;
   sessionId: string; // (e.g., "sess-10")
   sessionLabel: string;
-  subjectCode?: string;
-  subjectName?: string;
   prefix: string; // (e.g., "BAG-")
   count: number;
   capacity: number; // (e.g., 30)
@@ -52,14 +50,11 @@ export class bagService {
           status: "draft" as "draft",
         });
 
-        // ⭐️ (FIX 4) เตรียมข้อมูลสำหรับ Redux (ตาม Interface 'Bag')
         bagsToReturnRedux.push({
           id: bagStringId, // (Redux ID)
           campaignId: payload.campaignId,
           sessionId: payload.sessionId,
           sessionLabel: payload.sessionLabel,
-          subjectCode: payload.subjectCode,
-          subjectName: payload.subjectName,
           capacity: payload.capacity,
           scanned: [],
           status: "draft",

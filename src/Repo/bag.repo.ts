@@ -3,61 +3,59 @@ import { PoolConnection } from "mysql2/promise";
 import { format } from "mysql2/promise";
 import { RowDataPacket } from "mysql2/promise";
 
-// ⭐️ (FIX 1) แก้ไข Interface ให้ตรงกับ Schema
 interface NewBagData {
-    session_id: number; // (INT)
-    bag_no: number;   // (INT)
-    count_items: number;
-    status: "draft" | "ready" | "incomplete";
+  session_id: number; // (INT)
+  bag_no: number;   // (INT)
+  count_items: number;
+  status: "draft" | "ready" | "incomplete";
 }
 
+// ⭐️ (FIX 2: Interface นี้สำหรับ SELECT JOIN)
 interface DbBagRow extends RowDataPacket {
-    id: number; // (PK)
-    campaign_id: string;
-    session_id: string;
-    session_label: string;
-    subject_code: string | null;
-    subject_name: string | null;
-    bag_no: string; // (VARCHAR)
-    count_items: number;
-    status: "draft" | "ready" | "incomplete";
+  id: number; // (PK)
+  campaign_id: string; // (ได้มาจาก JOIN)
+  session_id: string; // (ได้มาจาก JOIN)
+  session_label: string; // (ได้มาจาก JOIN - s.title)
+  bag_no: number; // (INT) ⭐️ (FIX: เปลี่ยนเป็น number)
+  bag_no_str: string; // (ID ที่แปลงเป็น "BAG-001" แล้ว)
+  count_items: number;
+  status: "draft" | "ready" | "incomplete";
 }
 
 class BagRepo {
-    async findAllByCampaignId(campaignId: string, connection: PoolConnection): Promise<DbBagRow[]> {
-        // (แปลง "camp-1" เป็น 1)
-        const campaignIdNumeric = parseInt(campaignId.replace("camp-", ""));
 
-        const sql = `
-      SELECT 
-        b.id, 
-        s.campaign_id as campaign_id_db, 
-        b.session_id as session_id_db,
-        s.session_label, 
-        sj.code as subject_code, 
-        sj.name as subject_name,
-        b.bag_no, 
-        b.count_items, 
-        b.status,
-        
-        -- (แปลง ID กลับเป็น String ให้ Service)
-        CONCAT('camp-', s.campaign_id) as campaign_id,
-        CONCAT('sess-', b.session_id) as session_id
+  // ⭐️ (FIX 3: REPO GET ต้อง JOIN sessions เพื่อหา campaign_id)
+  async findAllByCampaignId(campaignId: string, connection: PoolConnection): Promise<DbBagRow[]> {
+    // (แปลง "camp-1" เป็น 1)
+    const campaignIdNumeric = parseInt(campaignId.replace("camp-", ""));
+    
+    // ⭐️ (FIX 7: ลบการขึ้นบรรทัดใหม่ (Newline) หน้า SELECT)
+const sql = `SELECT
+    b.id,
+    s.campaign_id as campaign_id_db,
+    b.session_id as session_id_db,
+    s.title as session_label,
+    b.bag_no,
+    b.count_items,
+    b.status,
+    CONCAT('camp-', s.campaign_id) as campaign_id,
+    CONCAT('sess-', b.session_id) as session_id,
+    CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) as bag_no_str
+FROM bags b
+JOIN sessions s ON b.session_id = s.id
+LEFT JOIN session_subjects ss ON s.id = ss.session_id 
+LEFT JOIN subjects sj ON ss.subject_id = sj.id
+WHERE s.campaign_id = ?
+ORDER BY b.bag_no ASC;`;
 
-      FROM bags b
-      JOIN sessions s ON b.session_id = s.id
-      LEFT JOIN subjects sj ON s.subject_id = sj.id -- (สมมติว่า session link กับ subject)
-      WHERE s.campaign_id = ?
-      ORDER BY b.bag_no ASC;
-    `;
-        try {
-            const [rows] = await connection.execute(sql, [campaignIdNumeric]);
-            return rows as DbBagRow[];
-        } catch (error) {
-            console.error("Repo Error (Bag FindAll):", error);
-            throw error;
-        }
-    }
+    try {
+      const [rows] = await connection.execute(sql, [campaignIdNumeric]);
+      return rows as DbBagRow[];
+    } catch (error) {
+      console.error("Repo Error (Bag FindAll):", error);
+      throw error;
+    }
+  }
     async bulkCreate(bags: NewBagData[], connection: PoolConnection) {
         if (bags.length === 0) return;
 

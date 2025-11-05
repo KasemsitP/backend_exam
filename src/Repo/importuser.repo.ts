@@ -20,7 +20,7 @@ interface UserSession extends RowDataPacket {
   session_id: number;
 }
 interface UserSessionLink {
-  user_id: number;
+  user_code: number;
   user_campaign_id: number;
   user_session_id: number;
 }
@@ -173,7 +173,7 @@ async countByCampaignId(
   ): Promise<UserSessionLink[]> {
     const sql = `
       SELECT 
-        u.id AS user_id,
+        u.user_code AS user_id,
         uc.id AS user_campaign_id,
         us.id AS user_session_id
       FROM 

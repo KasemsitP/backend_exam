@@ -10,8 +10,6 @@ const PAYLOAD_ENCODING = "utf8";
 const CIPHER_ENCODING = "base64"; 
 const IV_LENGTH = 16; // IV ต้องยาว 16 ไบต์ (128 bits)
 
-// ⭐️ FIX: กำหนด Static IV ตามที่คุณต้องการ (จากโค้ด Demo)
-// เราใช้ Buffer.from(string, encoding) เพื่อให้ได้ 16 ไบต์
 const STATIC_IV_STRING = "encryptionivgodz"; // 16 bytes
 const STATIC_IV_BUFFER = Buffer.from(STATIC_IV_STRING, PAYLOAD_ENCODING);
 
@@ -21,12 +19,12 @@ function aesEncrypt(
   key: Buffer,
   iv: Buffer
 ): Buffer {
-  // ตรวจสอบ IV length เพื่อ Debug
+
   if (iv.length !== IV_LENGTH) {
     console.error(`IV length is ${iv.length}, expected ${IV_LENGTH}`);
     throw new Error("Invalid IV length passed to aesEncrypt.");
   }
-  // ⭐️ FIX: ตรวจสอบ Key length (ต้อง 16 ไบต์)
+
   if (key.length !== 16) {
     console.error(`Key length is ${key.length}, expected 16`);
     throw new Error("Invalid Key length passed to aesEncrypt (must be 16 bytes for AES-128).");
@@ -46,7 +44,6 @@ function aesDecrypt(
     console.error(`IV length is ${iv.length}, expected ${IV_LENGTH}`);
     throw new Error("Invalid IV length passed to aesDecrypt.");
   }
-  // ⭐️ FIX: ตรวจสอบ Key length (ต้อง 16 ไบต์)
   if (key.length !== 16) {
     console.error(`Key length is ${key.length}, expected 16`);
     throw new Error("Invalid Key length passed to aesDecrypt (must be 16 bytes for AES-128).");
@@ -57,12 +54,8 @@ function aesDecrypt(
 
 export class keyService {
 
-  /**
-   * ⭐️ FIX: (Create Key)
-   * ไม่ต้องยุ่งกับ IV เพราะเราใช้ค่า Static
-   */
+
   static create = async (campaignId: number, key: string) => { 
-    // (เพิ่มการตรวจสอบความยาว 16 ไบต์ที่นี่ด้วย เพื่อความปลอดภัย)
     if (Buffer.from(key, PAYLOAD_ENCODING).length !== 16) {
         throw new Error("Key must be exactly 16 characters (16 bytes).");
     }
@@ -80,7 +73,7 @@ export class keyService {
         {
           campaign_id: campaignId,
           key: key, 
-          iv: STATIC_IV_STRING, // ⭐️ FIX: เก็บ IV ที่ใช้ (เผื่อ Debug)
+          iv: STATIC_IV_STRING, 
           algor: ALGORITHM, 
         },
         connection
@@ -147,12 +140,11 @@ static runBulkEncryptionForSession = async (
         throw new Error("Key check failed: Campaign must have exactly 2 keys.");
       }
       
-      // 2. ⭐️ FIX: แปลง "Key" (16 ตัวอักษร) เป็น Buffer (16 ไบต์)
       const [key1, key2] = keys;
       const key1Buffer = Buffer.from(key1.key, PAYLOAD_ENCODING); 
       const key2Buffer = Buffer.from(key2.key, PAYLOAD_ENCODING);
       
-      // ⭐️ FIX: ใช้ Static IV Buffer ที่กำหนดไว้
+      // Static IV Buffer ที่กำหนดไว้
       const iv1Buffer = STATIC_IV_BUFFER;
       const iv2Buffer = STATIC_IV_BUFFER; // (ใช้ตัวเดียวกันสำหรับ Layer 2 ตามโค้ด Demo)
 
@@ -169,15 +161,11 @@ static runBulkEncryptionForSession = async (
 
 
       for (const userLink of allUserLinks) {
-        // (ลบการสร้าง IV แบบสุ่ม)
       
         const payload = {
           cid: campaignId,
           sid: sessionId,
-          uid: userLink.user_id,
-          // ⭐️ FIX: ลบฟิลด์ตามที่คุณต้องการ (ตรงตาม Thesis)
-          // ucid: userLink.user_campaign_id, 
-          // usid: userLink.user_session_id, 
+          uid: userLink.user_code,
         };
         console.log(payload)
         const plainTextBuffer = Buffer.from(JSON.stringify(payload), PAYLOAD_ENCODING);

@@ -15,7 +15,11 @@ import seesionsubject from './Routes/router.session-subject';
 import importuser from './Routes/router.importuser';
 import key from './Routes/router.key';
 import usersession from './Routes/router.user-session';
+import { accountRouter } from './Routes/router.account';
 import { isAuthenticated } from './Middleware/authentication';
+import { roleRouter } from './Routes/router.roles';
+import examroomRouter from'./Routes/router.examroom';
+import verifyRouter from './Routes/router.verify'
 dotenv.config()
 export const app = express();
 
@@ -46,6 +50,11 @@ app.use("/api/",seesionsubject)
 app.use("/api/",importuser)
 app.use("/api/",key)
 app.use("/api/",usersession)
+app.use("/api/", accountRouter);
+app.use("/api/", roleRouter);
+app.use("/api", examroomRouter)
+app.use("/api",verifyRouter)
+
 
 app.get("/test",isAuthenticated, async (req, res) => {
   try {

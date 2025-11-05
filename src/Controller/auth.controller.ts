@@ -51,6 +51,44 @@ static getMe = (req: Request, res: Response) => {
             res.send({ message: "ออกจากระบบเรียบร้อยแล้ว" });
         });
     };
+    static getAll = async (req: Request, res: Response) => {
+        try {
+            const accounts = await authservice.getAllAccounts();
+            res.status(200).json(accounts);
+        } catch (error: any) {
+            res.status(500).send({ message: error.message });
+        }
+    }
+    
+    static getRoles = async (req: Request, res: Response) => {
+        try {
+            const roles = await authservice.getAllRoles();
+            res.status(200).json(roles);
+        } catch (error: any) {
+            res.status(500).send({ message: error.message });
+        }
+    }
+
+    static update = async (req: Request, res: Response) => {
+        try {
+            const id = parseInt(req.params.id, 10);
+            const data = req.body;
+            const updatedAccount = await authservice.updateAccount(id, data);
+            res.status(200).json(updatedAccount);
+        } catch (error: any) {
+            res.status(500).send({ message: error.message });
+        }
+    }
+
+    static delete = async (req: Request, res: Response) => {
+        try {
+            const id = parseInt(req.params.id, 10);
+            await authservice.deleteAccount(id);
+            res.status(200).json({ id: id });
+        } catch (error: any) {
+            res.status(500).send({ message: error.message });
+        }
+    }
 
 
 }

@@ -1,7 +1,7 @@
 
 import { DB } from "../model/DB";
 import { Pool } from "mysql2/promise";
-import { RowDataPacket  } from "mysql2";
+import { RowDataPacket } from "mysql2";
 
 export interface UserData {
     username: string;
@@ -50,8 +50,8 @@ class Authrepo {
 
 
     }
-async findByUsername(username: string): Promise<RowDataPacket | null> {
-    const sql = `
+    async findByUsername(username: string): Promise<RowDataPacket | null> {
+        const sql = `
         SELECT 
             a.*, 
             r.code as role_code 
@@ -62,9 +62,67 @@ async findByUsername(username: string): Promise<RowDataPacket | null> {
         WHERE 
             a.username = ?
     `;
-    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [username]);
-    return rows[0] || null; 
-}
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [username]);
+        return rows[0] || null;
+    }
+    async findAllAccountsWithRoles(): Promise<RowDataPacket[]> {
+        const sql = `
+SELECT 
+    a.id, a.username, a.full_name, a.email, a.active, a.role_id,
+    r.code as role_code,
+    r.name as role_name
+FROM 
+    accounts a
+LEFT JOIN 
+    roles r ON a.role_id = r.id
+ORDER BY a.id ASC;
+`;
+
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql);
+        return rows;
+    }
+
+    async findAllRoles(): Promise<RowDataPacket[]> {
+        const sql = `SELECT * FROM roles WHERE active = true ORDER BY id ASC;`;
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql);
+        return rows;
+    }
+
+    async updateAccount(
+        id: number,
+        data: { full_name: string; email: string; role_id: number; active: boolean; password_hash?: string }
+    ): Promise<RowDataPacket[]> {
+
+        let sql: string;
+        let params: any[];
+
+        if (data.password_hash) {
+            // (ถ้ามีรหัสใหม่)
+    sql = `
+        UPDATE accounts
+        SET full_name = ?, email = ?, role_id = ?, active = ?, password_hash = ?
+        WHERE id = ?;
+    `;
+            params = [data.full_name, data.email, data.role_id, data.active, data.password_hash, id];
+        } else {
+            // (ถ้าไม่มีรหัสใหม่)
+    sql = `
+        UPDATE accounts
+        SET full_name = ?, email = ?, role_id = ?, active = ?
+        WHERE id = ?;
+    `;
+            params = [data.full_name, data.email, data.role_id, data.active, id];
+        }
+
+        const [result] = await this.pool.execute<RowDataPacket[]>(sql, params);
+        return result;
+    }
+
+    async deleteAccount(id: number): Promise<RowDataPacket[]> {
+        const sql = `DELETE FROM accounts WHERE id = ?;`;
+        const [result] = await this.pool.execute<RowDataPacket[]>(sql, [id]);
+        return result;
+    }
 
 }
 const authrepo = new Authrepo()

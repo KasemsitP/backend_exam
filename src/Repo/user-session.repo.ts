@@ -94,6 +94,36 @@ WHERE us.session_id = ?;
         }
         // (ไม่ต้อง release connection ที่นี่ เพราะ Service จัดการ)
     };
+  async findByUserCodeAndSessionId(
+    userCode: string, 
+    sessionId: number, 
+    connection: PoolConnection
+  ): Promise<UserSessionData | undefined> {
+    console.log(userCode)
+const sql = `
+SELECT 
+    us.id AS user_session_id,
+    u.id AS user_id,
+    u.user_code AS userCode,
+    u.full_name AS firstName,
+    '' AS lastName,
+    us.room_code AS roomName,
+    us.qr_payload
+FROM user_sessions us
+JOIN user_campaigns uc ON us.user_campaign_id = uc.id
+JOIN users u ON uc.user_id = u.id
+WHERE 
+    u.user_code = ? AND us.session_id = ?
+LIMIT 1;
+`;
+    try {
+      const [rows] = (await connection.execute(sql, [userCode, sessionId])) as [UserSessionData[], any];
+      return rows[0];
+    } catch (error) {
+      console.error("Repo Error (findByUserCodeAndSessionId):", error);
+      throw error;
+    }
+  }
 }
 
 const userSessionsRepo = new UserSessionsRepo();
