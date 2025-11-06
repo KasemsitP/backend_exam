@@ -1,0 +1,83 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const DB_1 = require("../model/DB");
+class SessionRepo {
+    constructor() {
+        this.pool = DB_1.DB.getInstance();
+    }
+    create(payload_1) {
+        return __awaiter(this, arguments, void 0, function* (payload, dbClient = this.pool) {
+            const sql = `
+      INSERT INTO sessions 
+        (campaign_id, session_code, title, exam_date, site_id, day_no) 
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+            const params = [
+                payload.campaign_id,
+                payload.session_code,
+                payload.title,
+                payload.exam_date,
+                payload.site_id,
+                payload.day_no,
+            ];
+            const [result] = yield dbClient.execute(sql, params);
+            const newId = result.insertId;
+            // คืนค่า Session ที่สร้างใหม่ (รวม ID)
+            return this.findById(newId, dbClient);
+        });
+    }
+    findById(id_1) {
+        return __awaiter(this, arguments, void 0, function* (id, dbClient = this.pool) {
+            const sql = "SELECT * FROM sessions WHERE id = ?";
+            const [rows] = yield dbClient.execute(sql, [id]);
+            if (rows.length === 0) {
+                throw new Error(`Session with ID ${id} not found.`);
+            }
+            return rows[0];
+        });
+    }
+    deleteByCampaignId(campaignId_1) {
+        return __awaiter(this, arguments, void 0, function* (campaignId, dbClient = this.pool) {
+            const sql = "DELETE FROM sessions WHERE campaign_id = ?";
+            const [result] = yield dbClient.execute(sql, [campaignId]);
+            // ไม่จำเป็นต้องเช็ค affectedRows เพราะถ้าไม่มี session ให้ลบ (0 rows)
+            // ก็ไม่ถือว่าเป็น Error
+            return true;
+        });
+    }
+    /**
+     * (โค้ดเดิม)
+     * ลบ Session เดียว (รองรับ Transaction)
+     */
+    delete(id_1) {
+        return __awaiter(this, arguments, void 0, function* (id, dbClient = this.pool) {
+            const sql = "DELETE FROM sessions WHERE id = ?";
+            const [result] = yield dbClient.execute(sql, [id]);
+            return result.affectedRows > 0;
+        });
+    }
+    findAllLiteByCampaignId(campaignId_1) {
+        return __awaiter(this, arguments, void 0, function* (campaignId, dbClient = this.pool) {
+            const sql = "SELECT id, site_id FROM sessions WHERE campaign_id = ?";
+            const [rows] = yield dbClient.execute(sql, [
+                campaignId,
+            ]);
+            // (แปลงผลลัพธ์ให้ถูกต้อง)
+            return rows.map(row => ({
+                id: row.id,
+                site_id: row.site_id
+            }));
+        });
+    }
+}
+const sessionRepo = new SessionRepo();
+exports.default = sessionRepo;

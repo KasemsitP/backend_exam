@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.accountRouter = void 0;
+const express_1 = require("express");
+const auth_controller_1 = require("../Controller/auth.controller");
+const accountRouter = (0, express_1.Router)();
+exports.accountRouter = accountRouter;
+accountRouter.get("/accounts/", auth_controller_1.authcontroller.getAll);
+accountRouter.put("/accounts/:id", auth_controller_1.authcontroller.update);
+accountRouter.delete("/accounts/:id", auth_controller_1.authcontroller.delete);
