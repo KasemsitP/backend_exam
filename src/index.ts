@@ -25,21 +25,11 @@ export const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
-const allowedOrigins = [
-  'http://localhost:5173',               // frontend dev
-  'https://exam-management-uyce.onrender.com', // frontend prod
-];
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow Postman / curl
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: 'https://exam-management-uyce.onrender.com' ,
   credentials: true
 }));
+//'http://localhost:5173'
 app.use(session({
   secret: "your-secret-key",
   resave: false,
