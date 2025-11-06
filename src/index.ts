@@ -38,7 +38,7 @@ app.use(session({
     httpOnly: true,
 //    secure: false
 //เพิ่มลองดูก่อนว่าได้ไหม
-    secure: false,           // dev ไม่มี HTTPS
+    secure: true,           // dev ไม่มี HTTPS
     sameSite: 'lax'  
   }
 }));
