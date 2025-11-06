@@ -36,7 +36,10 @@ app.use(session({
   cookie: {
     maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
     httpOnly: true,
-    secure: false
+//    secure: false
+//เพิ่มลองดูก่อนว่าได้ไหม
+    secure: false,           // dev ไม่มี HTTPS
+    sameSite: 'lax'  
   }
 }));
 
