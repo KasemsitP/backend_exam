@@ -52,7 +52,7 @@ const keyService = __importStar(require("./key.service"));
 const user_session_repo_1 = __importDefault(require("../Repo/user-session.repo")); // (Import Repo จาก Canvas)
 function parseId(id) {
     if (typeof id === "number") {
-        return id; // (ถ้าเป็น 1 ➜ 1)
+        return id;
     }
     return parseInt(id.replace(/\D/g, ""));
 }
@@ -63,27 +63,22 @@ _a = verifyService;
 verifyService.verifyQrPayload = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     const connection = yield DB_1.DB.getInstance().getConnection();
     try {
-        // (แปลง ID)
         const campaignIdNumeric = parseId(payload.campaignId);
-        const sessionIdNumeric = parseId(payload.sessionId);
-        console.log(payload.qrPayload, campaignIdNumeric, " ", sessionIdNumeric);
-        // 1. ถอดรหัส (Decrypt)
+        console.log(payload.qrPayload, campaignIdNumeric);
         const decryptedPayload = yield keyService.keyService.decryptQrPayload(payload.qrPayload, campaignIdNumeric);
+        console.log(decryptedPayload);
         if (!decryptedPayload || !decryptedPayload.uid || !decryptedPayload.sid) {
             throw new Error(`QR Code ไม่ถูกต้อง หรือถอดรหัสล้มเหลว`);
         }
         console.log(decryptedPayload);
-        // 2. ⭐️ (ตรวจสอบความปลอดภัย) ⭐️
-        // (เช็คว่า QR Code นี้ ตรงกับ Session ที่เจ้าหน้าที่กำลังคุมสอบหรือไม่)
-        if (decryptedPayload.sid !== sessionIdNumeric) {
-            throw new Error(`QR Code นี้สำหรับ Session อื่น (Expected: ${sessionIdNumeric}, Got: ${decryptedPayload.sid})`);
-        }
         // 3. ดึงข้อมูลผู้สอบ (ใช้ฟังก์ชันใน Canvas)
         const userSession = yield user_session_repo_1.default.findByUserCodeAndSessionId(decryptedPayload.uid, decryptedPayload.sid, connection);
         if (!userSession) {
             throw new Error(`ไม่พบข้อมูลผู้สอบ (UserCode: ${decryptedPayload.ucode})`);
         }
-        return userSession; // (ส่งข้อมูลผู้สอบกลับไป)
+        const userSessionWithExtra = Object.assign(Object.assign({}, userSession), { session_id: decryptedPayload.sid });
+        console.log(userSessionWithExtra);
+        return userSessionWithExtra;
     }
     catch (error) {
         // (ไม่ต้อง Rollback เพราะนี่คือ Read-only)

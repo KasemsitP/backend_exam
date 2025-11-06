@@ -19,10 +19,11 @@ _a = verifyController;
 verifyController.verify = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const payload = req.body;
-        if (!payload.qrPayload || !payload.campaignId || !payload.sessionId) {
+        if (!payload.qrPayload) {
             return res.status(400).send({ message: "Missing required fields" });
         }
         const userSessionData = yield verify_service_1.verifyService.verifyQrPayload(payload);
+        console.log(userSessionData);
         res.status(200).json(userSessionData);
     }
     catch (error) {

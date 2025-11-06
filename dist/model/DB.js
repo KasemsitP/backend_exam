@@ -18,22 +18,22 @@ class DB {
     constructor() { } // ป้องกันไม่ให้ new ตรงๆ
     static getInstance() {
         if (!DB.instance) {
-            // DB.instance = mysql.createPool({
-            //   host: "localhost",
-            //   user: "root",
-            //   password: "root",
-            //   database: "Exam",
-            // });
             DB.instance = promise_1.default.createPool({
-                host: "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",
-                user: "bjQWWoB3iN7jDv7.root",
-                password: "yKIXdDTrXIh0M0T5",
-                database: "exam",
-                port: 4000,
-                ssl: {
-                    rejectUnauthorized: true, // ✅ ต้องเป็น object แบบนี้
-                },
+                host: "localhost",
+                user: "root",
+                password: "root",
+                database: "Exam",
             });
+            // DB.instance = mysql.createPool({
+            //   host: "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",
+            //   user: "bjQWWoB3iN7jDv7.root",
+            //   password: "yKIXdDTrXIh0M0T5",
+            //   database: "exam",
+            //   port: 4000,
+            //   ssl: {
+            //     rejectUnauthorized: true, // ✅ ต้องเป็น object แบบนี้
+            //   },
+            // });
             console.log("สร้าง MySQL Pool (Singleton) แล้ว");
         }
         return DB.instance;

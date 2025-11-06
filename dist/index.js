@@ -40,11 +40,24 @@ exports.app = (0, express_1.default)();
 exports.app.set('trust proxy', 1);
 exports.app.use(express_1.default.json());
 exports.app.use((0, cookie_parser_1.default)());
+const allowedOrigins = [
+    'http://localhost:5173', // frontend dev
+    'https://exam-management-uyce.onrender.com', // frontend prod
+];
 exports.app.use((0, cors_1.default)({
-    origin: 'https://exam-management-uyce.onrender.com',
+    origin: function (origin, callback) {
+        // ถ้าไม่มี origin (เช่น request จาก Postman) ให้อนุญาต
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true); // อนุญาต origin นี้
+        }
+        else {
+            callback(new Error('Not allowed by CORS')); // ไม่อนุญาต
+        }
+    },
     credentials: true
 }));
-//'http://localhost:5173'
 exports.app.use((0, express_session_1.default)({
     secret: "your-secret-key",
     resave: false,
@@ -53,9 +66,9 @@ exports.app.use((0, express_session_1.default)({
         maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
         httpOnly: true,
         //    secure: false
-        //เพิ่มลองดูก่อนว่าได้ไหม
-        secure: true, // dev ไม่มี HTTPS
-        sameSite: 'none'
+        //  เพิ่มลองดูก่อนว่าได้ไหม
+        secure: true, // dev ไม่มี HTTPS //true  //ต้องเปิด true
+        sameSite: 'none' // ต้อง none 
     }
 }));
 exports.app.use("/api/auth/", routes_auth_1.default);

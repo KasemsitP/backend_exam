@@ -51,7 +51,7 @@ app.use(session({
     maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
     httpOnly: true,
 //    secure: false
-//เพิ่มลองดูก่อนว่าได้ไหม
+//  เพิ่มลองดูก่อนว่าได้ไหม
     secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
     sameSite: 'none'          // ต้อง none 
   }
