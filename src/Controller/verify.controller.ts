@@ -5,11 +5,12 @@ export class verifyController {
   static verify = async (req: Request, res: Response) => {
     try {
       const payload = req.body;
-      if (!payload.qrPayload || !payload.campaignId || !payload.sessionId) {
+      if (!payload.qrPayload ) {
         return res.status(400).send({ message: "Missing required fields" });
       }
       
       const userSessionData = await verifyService.verifyQrPayload(payload);
+    console.log(userSessionData)
       res.status(200).json(userSessionData);
     
     } catch (error: any) {

@@ -158,6 +158,7 @@ static runBulkEncryptionForSession = async (
           "User list check failed: No users found in this session."
         );
       }
+    console.log(allUserLinks)
 
 
       for (const userLink of allUserLinks) {
@@ -165,7 +166,7 @@ static runBulkEncryptionForSession = async (
         const payload = {
           cid: campaignId,
           sid: sessionId,
-          uid: userLink.user_code,
+          uid: userLink.user_id,
         };
         console.log(payload)
         const plainTextBuffer = Buffer.from(JSON.stringify(payload), PAYLOAD_ENCODING);

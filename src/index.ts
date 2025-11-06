@@ -25,11 +25,24 @@ export const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
 app.use(cookieParser());
+const allowedOrigins = [
+  'http://localhost:5173',               // frontend dev
+  'https://exam-management-uyce.onrender.com', // frontend prod
+];
+
 app.use(cors({
-  origin: 'https://exam-management-uyce.onrender.com' ,
+  origin: function (origin, callback) {
+    // ถ้าไม่มี origin (เช่น request จาก Postman) ให้อนุญาต
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true); // อนุญาต origin นี้
+    } else {
+      callback(new Error('Not allowed by CORS')); // ไม่อนุญาต
+    }
+  },
   credentials: true
 }));
-//'http://localhost:5173'
 app.use(session({
   secret: "your-secret-key",
   resave: false,
@@ -39,8 +52,8 @@ app.use(session({
     httpOnly: true,
 //    secure: false
 //เพิ่มลองดูก่อนว่าได้ไหม
-    secure: true,           // dev ไม่มี HTTPS
-    sameSite: 'none'  
+    secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
+    sameSite: 'none'          // ต้อง none 
   }
 }));
 

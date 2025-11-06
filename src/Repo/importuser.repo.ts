@@ -20,7 +20,7 @@ interface UserSession extends RowDataPacket {
   session_id: number;
 }
 interface UserSessionLink {
-  user_code: number;
+  user_id: number;
   user_campaign_id: number;
   user_session_id: number;
 }
