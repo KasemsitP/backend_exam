@@ -37,6 +37,7 @@ const router_examroom_1 = __importDefault(require("./Routes/router.examroom"));
 const router_verify_1 = __importDefault(require("./Routes/router.verify"));
 dotenv_1.default.config();
 exports.app = (0, express_1.default)();
+exports.app.set('trust proxy', 1);
 exports.app.use(express_1.default.json());
 exports.app.use((0, cookie_parser_1.default)());
 exports.app.use((0, cors_1.default)({

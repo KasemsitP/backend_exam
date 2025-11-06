@@ -22,7 +22,7 @@ import examroomRouter from'./Routes/router.examroom';
 import verifyRouter from './Routes/router.verify'
 dotenv.config()
 export const app = express();
-
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
