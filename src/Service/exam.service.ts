@@ -2,14 +2,13 @@ import examDataRepo from "../Repo/exam.repo";
 
 import { ExamDataPayload } from "../Repo/exam.repo";
 
-
 export class examDataService {
   static getInitialData = async (): Promise<ExamDataPayload> => {
     try {
       const [campaigns, sessions, subjects] = await Promise.all([
-        examDataRepo.fetchActiveCampaigns(),
-        examDataRepo.fetchSessionsForActiveCampaigns(),
-        examDataRepo.fetchSubjectsForActiveCampaigns(),
+      examDataRepo.fetchCampaigns(),
+      examDataRepo.fetchSessions(),
+      examDataRepo.fetchSubjects(),
       ]);
 
       return {

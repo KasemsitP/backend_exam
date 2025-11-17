@@ -1,13 +1,17 @@
 import campaignRepo from "../Repo/campaign.repo";
 import sessionRepo from "../Repo/session.repo";
 import { DB } from "../model/DB";
-// [FIX] แก้ไข Import ให้นำเข้า Type จากไฟล์ types.ts
 import { ApiCampaign, CreateCampaignPayload } from "../Repo/campaign.repo";
 
 export class campaignService {
   static create = async (payload: CreateCampaignPayload): Promise<ApiCampaign> => {
     const newCampaign = await campaignRepo.create(payload);
     return newCampaign;
+  };
+
+  static  update = async (payload: CreateCampaignPayload): Promise<ApiCampaign> => {
+    const updatedCampaign = await campaignRepo.update(payload);
+    return updatedCampaign;
   };
 
   static delete = async (id: number): Promise<boolean> => {

@@ -20,6 +20,9 @@ import { isAuthenticated } from './Middleware/authentication';
 import { roleRouter } from './Routes/router.roles';
 import examroomRouter from'./Routes/router.examroom';
 import verifyRouter from './Routes/router.verify'
+import bagHandover from './Routes/router.baghandover';
+import graderRouter from './Routes/router.grader';
+import gradingslotRouter from './Routes/router.gradingslot';
 dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
@@ -50,10 +53,10 @@ app.use(session({
   cookie: {
     maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
     httpOnly: true,
-//    secure: false
+    secure: false
 //  เพิ่มลองดูก่อนว่าได้ไหม
-    secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
-    sameSite: 'none'          // ต้อง none 
+    // secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
+    // sameSite: 'none'          // ต้อง none 
   }
 }));
 
@@ -71,6 +74,9 @@ app.use("/api/", accountRouter);
 app.use("/api/", roleRouter);
 app.use("/api", examroomRouter)
 app.use("/api",verifyRouter)
+app.use("/api", bagHandover)
+app.use("/api/",graderRouter)
+app.use("/api/",gradingslotRouter)
 
 
 app.get("/test",isAuthenticated, async (req, res) => {

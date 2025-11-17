@@ -1,6 +1,6 @@
 import { DB } from "../model/DB"; // (สมมติว่านี่คือไฟล์ DB Pool ของคุณ)
-import { Pool ,PoolConnection} from "mysql2/promise";
-import { RowDataPacket  } from "mysql2";
+import { Pool, PoolConnection } from "mysql2/promise";
+import { RowDataPacket } from "mysql2";
 
 export type ApiBoolean = boolean | 0 | 1;
 
@@ -27,7 +27,7 @@ class CampaignRepo {
 
   async create(
     payload: CreateCampaignPayload,
-    dbClient: DbClient = this.pool 
+    dbClient: DbClient = this.pool
   ): Promise<ApiCampaign> {
     const sql = `
       INSERT INTO exam_campaigns 
@@ -47,6 +47,35 @@ class CampaignRepo {
     const newId = result.insertId;
 
     return this.findById(newId, dbClient); // 👈 ส่ง dbClient ต่อ
+  }
+  async update(
+    payload: CreateCampaignPayload,
+    dbClient: DbClient = this.pool
+  ): Promise<ApiCampaign> {
+    const sql = `
+    UPDATE exam_campaigns
+    SET code = ?, 
+        name = ?, 
+        start_date = ?, 
+        end_date = ?, 
+        is_active = ?, 
+        note = ?
+    WHERE id = ?
+  `;
+
+    const params = [
+      payload.code,
+      payload.name,
+      payload.start_date,
+      payload.end_date,
+      payload.is_active,
+      payload.note,
+      payload.id, 
+    ];
+
+    await dbClient.execute<any>(sql, params);
+
+    return this.findById(payload.id, dbClient);
   }
 
   /**

@@ -13,6 +13,16 @@ export class campaignController {
       res.status(400).send({ message: error.message });
     }
   };
+  static update = async (req: Request, res: Response) => {
+    try {
+      const payload: CreateCampaignPayload = req.body;
+      const updatedCampaign = await campaignService.update(payload);
+      res.status(201).json(updatedCampaign); 
+      
+    } catch (error: any) {
+      res.status(400).send({ message: error.message });
+    }
+  };
 
   static delete = async (req: Request, res: Response) => {
     try {

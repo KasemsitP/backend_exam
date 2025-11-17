@@ -37,6 +37,7 @@ export interface ExamDataPayload {
   sessions: CampaignSession[];
   subjects: CampaignSubject[];
 }
+type FetchOpts = { includeInactive?: boolean };
 
 class ExamDataRepo {
   private pool: Pool;
@@ -44,60 +45,125 @@ class ExamDataRepo {
     this.pool = DB.getInstance();
   }
 
-  /**
-   * ดึง Campaigns ที่ยัง Active ทั้งหมด
-   */
-  async fetchActiveCampaigns(): Promise<ExamCampaign[]> {
-    const sql = "SELECT * FROM exam_campaigns WHERE is_active = ?";
-    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
-    // (เรา cast เป็น ExamCampaign[] เพราะเรารู้ว่า SELECT * ตรงกับ Interface)
+  // /**
+  //  * ดึง Campaigns ที่ยัง Active ทั้งหมด
+  //  */
+  // async fetchActiveCampaigns(): Promise<ExamCampaign[]> {
+  //   const sql = "SELECT * FROM exam_campaigns WHERE is_active = ?";
+  //   const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
+  //   // (เรา cast เป็น ExamCampaign[] เพราะเรารู้ว่า SELECT * ตรงกับ Interface)
+  //   return rows as ExamCampaign[];
+  // }
+
+  // /**
+  //  * ดึง Sessions ทั้งหมดที่อยู่ใน Campaigns ที่ Active
+  //  */
+  // async fetchSessionsForActiveCampaigns(): Promise<CampaignSession[]> {
+  //   const sql = `
+  //       SELECT s.* FROM sessions s
+  //       JOIN exam_campaigns ec ON s.campaign_id = ec.id
+  //       WHERE ec.is_active = ?
+  //   `;
+  //   const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
+  //   return rows as CampaignSession[];
+  // }
+
+  // /**
+  //  * ดึง SessionSubjects ทั้งหมด (ที่ Join ข้อมูลวิชา)
+  //  * ที่อยู่ใน Campaigns ที่ Active
+  //  */
+  // async fetchSubjectsForActiveCampaigns(): Promise<CampaignSubject[]> {
+  //   const sql = `
+  //       SELECT 
+  //           ss.session_id, 
+  //           ss.subject_id, 
+  //           ss.start_at, 
+  //           ss.end_at, 
+  //           ss.question_count, 
+  //           ss.question_range, 
+  //           ss.order_no,
+  //           s.code AS code,  -- (Join code จากตาราง subjects)
+  //           s.name AS name   -- (Join name จากตาราง subjects)
+  //       FROM 
+  //           session_subjects ss
+  //       JOIN 
+  //           sessions sess ON ss.session_id = sess.id
+  //       JOIN 
+  //           exam_campaigns ec ON sess.campaign_id = ec.id
+  //       JOIN 
+  //           subjects s ON ss.subject_id = s.id
+  //       WHERE 
+  //           ec.is_active = ?
+  //       ORDER BY 
+  //           ss.session_id, ss.order_no;
+  //   `;
+  //   const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
+  //   return rows as CampaignSubject[];
+  // }
+  private buildActiveWhere(opts?: FetchOpts) {
+    // ถ้าไม่ส่ง opts หรือระบุ includeInactive = true → ไม่กรอง is_active
+    if (!opts || opts.includeInactive) return { where: "1=1", params: [] as any[] };
+    // includeInactive = false → กรองเฉพาะ active
+    return { where: "ec.is_active = 1", params: [] as any[] };
+  }
+
+  async fetchCampaigns(opts?: FetchOpts): Promise<ExamCampaign[]> {
+    // หมายเหตุ: แนะนำให้ไม่ส่งรายการที่ถูกลบ (ถ้ามี soft delete)
+    const { where, params } = this.buildActiveWhere(opts);
+    const sql = `
+      SELECT ec.id, ec.code, ec.name, ec.start_date, ec.end_date, ec.is_active, ec.note
+      FROM exam_campaigns ec
+      WHERE ${where}
+      ORDER BY ec.id
+    `;
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
     return rows as ExamCampaign[];
   }
 
-  /**
-   * ดึง Sessions ทั้งหมดที่อยู่ใน Campaigns ที่ Active
-   */
-  async fetchSessionsForActiveCampaigns(): Promise<CampaignSession[]> {
+  async fetchSessions(opts?: FetchOpts): Promise<CampaignSession[]> {
+    const { where, params } = this.buildActiveWhere(opts);
     const sql = `
-        SELECT s.* FROM sessions s
-        JOIN exam_campaigns ec ON s.campaign_id = ec.id
-        WHERE ec.is_active = ?
+      SELECT s.*
+      FROM sessions s
+      JOIN exam_campaigns ec ON s.campaign_id = ec.id
+      WHERE ${where}
+      ORDER BY s.id
     `;
-    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
     return rows as CampaignSession[];
   }
 
-  /**
-   * ดึง SessionSubjects ทั้งหมด (ที่ Join ข้อมูลวิชา)
-   * ที่อยู่ใน Campaigns ที่ Active
-   */
-  async fetchSubjectsForActiveCampaigns(): Promise<CampaignSubject[]> {
+  async fetchSubjects(opts?: FetchOpts): Promise<CampaignSubject[]> {
+    const { where, params } = this.buildActiveWhere(opts);
     const sql = `
-        SELECT 
-            ss.session_id, 
-            ss.subject_id, 
-            ss.start_at, 
-            ss.end_at, 
-            ss.question_count, 
-            ss.question_range, 
-            ss.order_no,
-            s.code AS code,  -- (Join code จากตาราง subjects)
-            s.name AS name   -- (Join name จากตาราง subjects)
-        FROM 
-            session_subjects ss
-        JOIN 
-            sessions sess ON ss.session_id = sess.id
-        JOIN 
-            exam_campaigns ec ON sess.campaign_id = ec.id
-        JOIN 
-            subjects s ON ss.subject_id = s.id
-        WHERE 
-            ec.is_active = ?
-        ORDER BY 
-            ss.session_id, ss.order_no;
+      SELECT 
+        ss.session_id,
+        ss.subject_id,
+        ss.start_at,
+        ss.end_at,
+        ss.question_count,
+        ss.question_range,
+        ss.order_no,
+        s.code AS code,
+        s.name AS name
+      FROM session_subjects ss
+      JOIN sessions sess ON ss.session_id = sess.id
+      JOIN exam_campaigns ec ON sess.campaign_id = ec.id
+      JOIN subjects s ON ss.subject_id = s.id
+      WHERE ${where}
+      ORDER BY ss.session_id, ss.order_no
     `;
-    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [true]);
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
     return rows as CampaignSubject[];
+  }
+
+  async fetchExamData(opts?: FetchOpts): Promise<ExamDataPayload> {
+    const [campaigns, sessions, subjects] = await Promise.all([
+      this.fetchCampaigns(opts),
+      this.fetchSessions(opts),
+      this.fetchSubjects(opts),
+    ]);
+    return { campaigns, sessions, subjects };
   }
 }
 

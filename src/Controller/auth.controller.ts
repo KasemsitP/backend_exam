@@ -24,17 +24,20 @@ export class authcontroller {
             return res.status(400).send({ message: error.message });
         }
     }
-    static login = async (req: Request, res: Response) => {
-        const { username, password } = req.body;
-        try {
-            const result = await authservice.CheckUsername(username, password)
-            req.session.userId = result.id
-            req.session.userData = result
-            res.status(201).send({ message: "เข้าสู่ระบบสำเร็จ" });
-        } catch (error: any) {
-            return res.status(400).send({ message: error.message });
-        }
-    }
+static login = async (req: Request, res: Response) => {
+  const { username, password } = req.body;
+  try {
+    const result = await authservice.CheckUsername(username, password)
+    req.session.userId = Number(result.id);
+    req.session.userData = result;
+    res.status(200).json({
+      message: "เข้าสู่ระบบสำเร็จ",
+      user: result,
+    });
+  } catch (error: any) {
+    return res.status(400).send({ message: error.message });
+  }
+}
 static getMe = (req: Request, res: Response) => {
         if (req.session.userData) {
             res.status(200).json(req.session.userData);
