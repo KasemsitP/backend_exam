@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { gradingService } from "../Service/gradingslot.service";
-import {keyService} from "../Service/key.service"
 
 export class gradingslotController {
   static CreateSlot = async (req: Request, res: Response) => {

@@ -23,6 +23,7 @@ import verifyRouter from './Routes/router.verify'
 import bagHandover from './Routes/router.baghandover';
 import graderRouter from './Routes/router.grader';
 import gradingslotRouter from './Routes/router.gradingslot';
+import gradingscoreRouter from './Routes/router.gradingscore';
 dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
@@ -77,6 +78,7 @@ app.use("/api",verifyRouter)
 app.use("/api", bagHandover)
 app.use("/api/",graderRouter)
 app.use("/api/",gradingslotRouter)
+app.use("/api/",gradingscoreRouter)
 
 
 app.get("/test",isAuthenticated, async (req, res) => {

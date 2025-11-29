@@ -44,7 +44,7 @@ LEFT JOIN exam_rooms er
  AND er.room_code  = us.room_code
 WHERE us.session_id = ?;
     `;
-  
+
 
       const [rows] = (await connection.execute(sql, [sessionId])) as [
         UserSessionData[],
@@ -59,48 +59,48 @@ WHERE us.session_id = ?;
     }
   }
   async findByUserIdAndSessionId(
-        userId: number, 
-        sessionId: number, 
-        connection: PoolConnection
-    ): Promise<UserSessionData | undefined> {
-        try {
-            const sql = `
-        SELECT
-            us.id as user_session_id,
-            u.id as user_id,
-            u.user_code as userCode,
-            u.full_name as firstName, 
-            '' as lastName, 
-            er.name as roomName, 
-            us.qr_payload
-        FROM
-            user_sessions us
-        JOIN
-            users u ON us.user_id = u.id
-        LEFT JOIN
-            exam_rooms er ON us.exam_room_id = er.id
-        WHERE
-            us.user_id = ? AND us.exam_session_id = ?
-        LIMIT 1;
-      `;
-            const [rows] = (await connection.execute(sql, [userId, sessionId])) as [
-                UserSessionData[],
-                any
-            ];
-            return rows[0]; // (คืนค่าตัวแรกที่เจอ หรือ undefined)
-        } catch (error) {
-            console.error("Repo Error (findByUserIdAndSessionId):", error);
-            throw error;
-        }
-        // (ไม่ต้อง release connection ที่นี่ เพราะ Service จัดการ)
-    };
-  async findByUserCodeAndSessionId(
-    userCode: string, 
-    sessionId: number, 
-    connection: PoolConnection
-  ): Promise<UserSessionData | undefined> {
-    console.log(userCode)
-const sql = `
+    userId: number,
+    sessionId: number,
+    connection: PoolConnection
+  ): Promise<UserSessionData | undefined> {
+    try {
+      const sql = `
+SELECT
+    us.id as user_session_id,
+    u.id as user_id,
+    u.user_code as userCode,
+    u.full_name as firstName, 
+    '' as lastName, 
+    er.name as roomName, 
+    us.qr_payload
+FROM
+    user_sessions us
+JOIN
+    users u ON us.user_id = u.id
+LEFT JOIN
+    exam_rooms er ON us.exam_room_id = er.id
+WHERE
+    us.user_id = ? AND us.exam_session_id = ?
+LIMIT 1;
+`;
+      const [rows] = (await connection.execute(sql, [userId, sessionId])) as [
+        UserSessionData[],
+        any
+      ];
+      return rows[0]; // (คืนค่าตัวแรกที่เจอ หรือ undefined)
+    } catch (error) {
+      console.error("Repo Error (findByUserIdAndSessionId):", error);
+      throw error;
+    }
+    // (ไม่ต้อง release connection ที่นี่ เพราะ Service จัดการ)
+  };
+  async findByUserCodeAndSessionId(
+    userCode: string,
+    sessionId: number,
+    connection: PoolConnection
+  ): Promise<UserSessionData | undefined> {
+    console.log(userCode)
+    const sql = `
 SELECT 
     us.id AS user_session_id,
     u.id AS user_id,
@@ -116,14 +116,14 @@ WHERE
     u.user_code = ? AND us.session_id = ?
 LIMIT 1;
 `;
-    try {
-      const [rows] = (await connection.execute(sql, [userCode, sessionId])) as [UserSessionData[], any];
-      return rows[0];
-    } catch (error) {
-      console.error("Repo Error (findByUserCodeAndSessionId):", error);
-      throw error;
-    }
-  }
+    try {
+      const [rows] = (await connection.execute(sql, [userCode, sessionId])) as [UserSessionData[], any];
+      return rows[0];
+    } catch (error) {
+      console.error("Repo Error (findByUserCodeAndSessionId):", error);
+      throw error;
+    }
+  }
 }
 
 const userSessionsRepo = new UserSessionsRepo();

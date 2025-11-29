@@ -34,6 +34,31 @@ class CampaignRepo {
             return this.findById(newId, dbClient); // 👈 ส่ง dbClient ต่อ
         });
     }
+    update(payload_1) {
+        return __awaiter(this, arguments, void 0, function* (payload, dbClient = this.pool) {
+            const sql = `
+    UPDATE exam_campaigns
+    SET code = ?, 
+        name = ?, 
+        start_date = ?, 
+        end_date = ?, 
+        is_active = ?, 
+        note = ?
+    WHERE id = ?
+  `;
+            const params = [
+                payload.code,
+                payload.name,
+                payload.start_date,
+                payload.end_date,
+                payload.is_active,
+                payload.note,
+                payload.id,
+            ];
+            yield dbClient.execute(sql, params);
+            return this.findById(payload.id, dbClient);
+        });
+    }
     /**
      * [FIX] อัปเดต 'delete' ให้รับ dbClient (โค้ดนี้ถูกต้องอยู่แล้ว)
      */

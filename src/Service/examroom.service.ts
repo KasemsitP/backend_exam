@@ -25,10 +25,9 @@ export class examRoomService {
     try {
       const sessionId = parseInt(sessionIdStr.replace("sess-", ""));
       if (isNaN(sessionId)) throw new Error("Invalid Session ID format");
-
+   
       const dbRooms = await examRoomRepo.findBySessionId(sessionId, connection);
-      
-      // (แปลง DB -> Frontend)
+
       return dbRooms.map(toFrontendRoom);
       
     } catch (error) {

@@ -22,9 +22,9 @@ _a = examDataService;
 examDataService.getInitialData = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const [campaigns, sessions, subjects] = yield Promise.all([
-            exam_repo_1.default.fetchActiveCampaigns(),
-            exam_repo_1.default.fetchSessionsForActiveCampaigns(),
-            exam_repo_1.default.fetchSubjectsForActiveCampaigns(),
+            exam_repo_1.default.fetchCampaigns(),
+            exam_repo_1.default.fetchSessions(),
+            exam_repo_1.default.fetchSubjects(),
         ]);
         return {
             campaigns,

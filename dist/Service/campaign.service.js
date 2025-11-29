@@ -25,6 +25,10 @@ campaignService.create = (payload) => __awaiter(void 0, void 0, void 0, function
     const newCampaign = yield campaign_repo_1.default.create(payload);
     return newCampaign;
 });
+campaignService.update = (payload) => __awaiter(void 0, void 0, void 0, function* () {
+    const updatedCampaign = yield campaign_repo_1.default.update(payload);
+    return updatedCampaign;
+});
 campaignService.delete = (id) => __awaiter(void 0, void 0, void 0, function* () {
     const connection = yield DB_1.DB.getInstance().getConnection();
     try {

@@ -26,6 +26,16 @@ campaignController.create = (req, res) => __awaiter(void 0, void 0, void 0, func
         res.status(400).send({ message: error.message });
     }
 });
+campaignController.update = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const payload = req.body;
+        const updatedCampaign = yield campaign_service_1.campaignService.update(payload);
+        res.status(201).json(updatedCampaign);
+    }
+    catch (error) {
+        res.status(400).send({ message: error.message });
+    }
+});
 campaignController.delete = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const id = parseInt(req.params.id, 10);

@@ -1,8 +1,8 @@
 // src/Repo/gradingslot.repo.ts
 import { PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
-export interface BookletSubjectLookupRow extends RowDataPacket {
-  booklet_subject_id: number;
+
+export interface BookletLookupRow extends RowDataPacket {
   booklet_id: number;
   user_session_id: number;
   user_campaign_id: number;
@@ -12,29 +12,29 @@ export interface BookletSubjectLookupRow extends RowDataPacket {
 
 export interface GradingSlotRow extends RowDataPacket {
   id: number;
-  booklet_subject_id: number;
+  booklet_id: number;
+  subject_id: number;
   question_no: number;
   grader_order: number;
   status: string;
   grader_id: number | null;
 }
 
+
 class GradingslotRepo {
   /**
    * หา booklet_subject สำหรับผู้เข้าสอบ 1 คน ใน campaign+session+subject ที่กำหนด
    * ใช้จาก decoded QR => {cid, sid, uid} + subjectId
    */
-  async findBookletSubjectForUser(
+  async findBookletForUser(
     conn: PoolConnection,
     campaignId: number,
     sessionId: number,
-    subjectId: number,
     userCode: string
-  ): Promise<BookletSubjectLookupRow | null> {
+  ): Promise<BookletLookupRow | null> {
     const sql = `
       SELECT
-        bs.id             AS booklet_subject_id,
-        bs.booklet_id     AS booklet_id,
+        b.id              AS booklet_id,
         b.user_session_id AS user_session_id,
         us.user_campaign_id,
         u.id              AS user_id,
@@ -42,31 +42,20 @@ class GradingslotRepo {
       FROM users u
       JOIN user_campaigns uc
         ON uc.user_id = u.id
-        AND uc.campaign_id = ?
+       AND uc.campaign_id = ?
       JOIN user_sessions us
         ON us.user_campaign_id = uc.id
-        AND us.session_id = ?
-        AND us.campaign_id = ?
+       AND us.session_id = ?
+       AND us.campaign_id = ?
       JOIN booklets b
         ON b.user_session_id = us.id
-      JOIN booklet_subjects bs
-        ON bs.booklet_id = b.id
-        AND bs.subject_id = ?
-        AND bs.session_id = ?
       WHERE u.user_code = ?
       LIMIT 1;
     `;
 
-    const params = [
-      campaignId,
-      sessionId,
-      campaignId,
-      subjectId,
-      sessionId,
-      userCode,
-    ];
+    const params = [campaignId, sessionId, campaignId, userCode];
 
-    const [rows] = await conn.execute<BookletSubjectLookupRow[]>(sql, params);
+    const [rows] = await conn.execute<BookletLookupRow[]>(sql, params);
     return rows[0] || null;
   }
 
@@ -76,18 +65,20 @@ class GradingslotRepo {
    */
   async findSlotsByBookletAndQuestion(
     conn: PoolConnection,
-    bookletSubjectId: number,
+    bookletId: number,
+    subjectId: number,
     questionNo: number,
     forUpdate: boolean = false
   ): Promise<GradingSlotRow[]> {
     const sql = `
-      SELECT id, booklet_subject_id, question_no, grader_order, status, grader_id
+      SELECT id, booklet_id, subject_id, question_no, grader_order, status, grader_id
       FROM grading_slots
-      WHERE booklet_subject_id = ? AND question_no = ?
+      WHERE booklet_id = ? AND subject_id = ? AND question_no = ?
       ${forUpdate ? "FOR UPDATE" : ""}
     `;
     const [rows] = await conn.execute<GradingSlotRow[]>(sql, [
-      bookletSubjectId,
+      bookletId,
+      subjectId,
       questionNo,
     ]);
     return rows;
@@ -98,23 +89,26 @@ class GradingslotRepo {
    */
   async insertSlot(
     conn: PoolConnection,
-    bookletSubjectId: number,
+    bookletId: number,
+    subjectId: number,
     questionNo: number,
     graderOrder: number,
     graderId: number
   ): Promise<GradingSlotRow> {
     const insertSql = `
       INSERT INTO grading_slots (
-        booklet_subject_id,
+        booklet_id,
+        subject_id,
         question_no,
         grader_order,
         status,
         grader_id
       )
-      VALUES (?, ?, ?, 'ASSIGNED', ?)
+      VALUES (?, ?, ?, ?, 'ASSIGNED', ?)
     `;
     const [result] = await conn.execute<ResultSetHeader>(insertSql, [
-      bookletSubjectId,
+      bookletId,
+      subjectId,
       questionNo,
       graderOrder,
       graderId,
@@ -124,7 +118,7 @@ class GradingslotRepo {
 
     const [rows] = await conn.execute<GradingSlotRow[]>(
       `
-      SELECT id, booklet_subject_id, question_no, grader_order, status, grader_id
+      SELECT id, booklet_id, subject_id, question_no, grader_order, status, grader_id
       FROM grading_slots
       WHERE id = ?
       `,
@@ -137,7 +131,10 @@ class GradingslotRepo {
 
     return rows[0];
   }
+
+
 }
+
 
 const gradingslotRepo = new GradingslotRepo();
 export default gradingslotRepo;

@@ -1,6 +1,5 @@
 import { PoolConnection, RowDataPacket } from "mysql2/promise";
 
-// Interface ต้องตรงกับ DB Schema 'exam_rooms'
 export interface ExamRoom {
   session_id: number;
   room_code: string;
@@ -9,7 +8,7 @@ export interface ExamRoom {
 
 class ExamRoomRepo {
   
-  // ดึงข้อมูลห้องสอบตาม session_id
+
   async findBySessionId(sessionId: number, connection: PoolConnection): Promise<ExamRoom[]> {
     const sql = "SELECT * FROM exam_rooms WHERE session_id = ? ORDER BY room_code ASC;";
     try {

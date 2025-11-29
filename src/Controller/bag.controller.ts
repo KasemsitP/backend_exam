@@ -52,6 +52,7 @@ export class bagController {
         return res.status(400).send({ message: "Missing Bag ID" });
       }
       const result = await bagService.deleteById(bagId);
+        console.log(result)
       res.status(200).json(result);
     } catch (error: any) {
       res.status(500).send({ message: error.message });

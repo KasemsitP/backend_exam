@@ -35,6 +35,9 @@ const authentication_1 = require("./Middleware/authentication");
 const router_roles_1 = require("./Routes/router.roles");
 const router_examroom_1 = __importDefault(require("./Routes/router.examroom"));
 const router_verify_1 = __importDefault(require("./Routes/router.verify"));
+const router_baghandover_1 = __importDefault(require("./Routes/router.baghandover"));
+const router_grader_1 = __importDefault(require("./Routes/router.grader"));
+const router_gradingslot_1 = __importDefault(require("./Routes/router.gradingslot"));
 dotenv_1.default.config();
 exports.app = (0, express_1.default)();
 exports.app.set('trust proxy', 1);
@@ -65,10 +68,10 @@ exports.app.use((0, express_session_1.default)({
     cookie: {
         maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
         httpOnly: true,
-        //    secure: false
+        secure: false
         //  เพิ่มลองดูก่อนว่าได้ไหม
-        secure: true, // dev ไม่มี HTTPS //true  //ต้องเปิด true
-        sameSite: 'none' // ต้อง none 
+        // secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
+        // sameSite: 'none'          // ต้อง none 
     }
 }));
 exports.app.use("/api/auth/", routes_auth_1.default);
@@ -85,6 +88,9 @@ exports.app.use("/api/", router_account_1.accountRouter);
 exports.app.use("/api/", router_roles_1.roleRouter);
 exports.app.use("/api", router_examroom_1.default);
 exports.app.use("/api", router_verify_1.default);
+exports.app.use("/api", router_baghandover_1.default);
+exports.app.use("/api/", router_grader_1.default);
+exports.app.use("/api/", router_gradingslot_1.default);
 exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const conn = DB_1.DB.getInstance();
