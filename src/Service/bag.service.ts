@@ -1,8 +1,10 @@
 import { DB } from "../model/DB";
-import * as keyService from "./key.service";
+import { keyService } from "./key.service";
 import userSessionsRepo from "../Repo/user-session.repo";
-import bookletRepo from "../Repo/booklet.repo";
 import bagRepo from "../Repo/bag.repo"; // (Import Repo ที่แก้ไขแล้ว)
+import bookletsRepo from "../Repo/booklets.repo";
+import { DbBookletInBagRow } from "../Repo/booklets.repo";
+import { BagScannedCountResult } from "../Repo/bag.repo";
 
 // (Interface จาก Frontend)
 interface BulkCreatePayload {
@@ -14,10 +16,29 @@ interface BulkCreatePayload {
     capacity: number; // (e.g., 30)
 }
 
-interface FinalizeLinkPayload {
+interface InsertBookletsPayload {
     campaignId: string;
-    bagId: string; // (e.g., "BAG-001")
+    bag_no: string; // (e.g., "BAG-001")
     scannedCodes: string[];
+}
+export interface ApiBookletLinked {
+    id: number;
+    sessionId: number;
+    bagNo: number;
+    userSessionId: number;
+    seqInBag: number;
+    userCode: string;
+}
+
+export interface ApiBagBooklet {
+    id: number;
+    sessionId: number;
+    bagNo: number;
+    seqInBag: number | null;
+    status: string;
+    userCode: string;
+    fullName: string;
+    qrPayload: string | null;
 }
 
 export class bagService {
@@ -33,12 +54,14 @@ export class bagService {
             const bagsToCreateRepo: any[] = [];
             const bagsToReturnRedux: any[] = [];
 
-            // ✅ sessionId เป็นเลขดิบแล้ว เช่น "10"
             const sessionIdInt = parseInt(payload.sessionId, 10);
 
-            for (let i = 1; i <= payload.count; i++) {
-                const bagNoInt = i;              // เลขถุงจริง
-                const bagIdString = String(i);   // id ที่จะใช้ใน Redux
+            const maxNo = await bagRepo.getMaxBagNoForSession(sessionIdInt, connection);
+            const startNo = maxNo + 1;
+
+            for (let i = 0; i < payload.count; i++) {
+                const bagNoInt = startNo + i;
+                const bagIdString = String(bagNoInt);
 
                 // สำหรับ DB
                 bagsToCreateRepo.push({
@@ -48,15 +71,16 @@ export class bagService {
                     status: "draft" as const,
                 });
 
-                // สำหรับ Redux
+                // สำหรับ Redux (ฝั่ง frontend)
                 bagsToReturnRedux.push({
-                    id: bagIdString,               // "1", "2", "3", ...
+                    id: bagIdString,                // "101", "102", ...
                     campaignId: payload.campaignId, // "1"
-                    sessionId: payload.sessionId,   // "10"
+                    sessionId: payload.sessionId,   // "10" (แบบ string ตามเดิม)
                     sessionLabel: payload.sessionLabel,
                     capacity: payload.capacity,
                     scanned: [],
                     status: "draft" as const,
+                    // ถ้าอยากเก็บเลขจริงแยกด้วยก็เพิ่ม field bagNo: bagNoInt ได้
                 });
             }
 
@@ -72,69 +96,90 @@ export class bagService {
             connection.release();
         }
     };
-
     /**
      * [POST] Finalize และ Link Booklets (สมองหลัก)
      */
-    static finalizeAndLink = async (payload: FinalizeLinkPayload) => {
+    static InsertBooklets = async (payload: InsertBookletsPayload) => {
         const connection = await DB.getInstance().getConnection();
         try {
             await connection.beginTransaction();
+            const campaignIdNum = parseInt(payload.campaignId, 10);
+            const bagNo = parseInt(payload.bag_no, 10);
 
-            const { campaignId, bagId, scannedCodes } = payload;
-            const newBooklets = [];
-            const campaignIdNumeric = parseInt(campaignId.replace("camp-", ""));
+            // 1) หา bag จริงใน DB จาก campaign + bag_no
+            const bagRow = await bagRepo.findByCampaignAndBagNo(
+                connection,
+                campaignIdNum,
+                bagNo
+            );
+            console.log(bagRow)
+            if (!bagRow) {
+                throw new Error("ไม่พบถุงในแคมเปญนี้");
+            }
+            console.log(bagRow)
 
-            for (const code of scannedCodes) {
-                const decryptedPayload = await keyService.keyService.decryptQrPayloadConnection(code, campaignIdNumeric, connection);
+            const bagDbId = bagRow.id;
+            const sessionId = Number(bagRow.session_id);
 
-                if (!decryptedPayload || !decryptedPayload.uid || !decryptedPayload.sid) {
-                    throw new Error(`QR Code ไม่ถูกต้อง หรือถอดรหัสล้มเหลว: ${code}`);
+            const results: ApiBookletLinked[] = [];
+            let seq = 1
+
+            for (const qr of payload.scannedCodes) {
+                // 2.1 ถอด QR → ได้ { cid, sid, uid }
+                const decoded = await keyService.decryptQrPayload(qr, campaignIdNum);
+                // decoded: { cid: number; sid: number; uid: string }
+
+                if (decoded.cid !== campaignIdNum) {
+                    throw new Error(
+                        `QR ไม่ตรงกับแคมเปญ (cid=${decoded.cid}, current=${campaignIdNum})`
+                    );
                 }
 
-                const userSession = await userSessionsRepo.findByUserIdAndSessionId(
-                    decryptedPayload.uid,
-                    decryptedPayload.sid,
-                    connection
+                if (decoded.sid !== sessionId) {
+                    throw new Error(
+                        `QR ไม่ตรงกับ session ของถุงนี้ (sid=${decoded.sid}, sessionId=${sessionId})`
+                    );
+                }
+
+                // 2.2 หา user_session จาก cid + sid + uid
+                const userSession = await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
+                    connection,
+                    {
+                        campaignId: campaignIdNum,
+                        sessionId,
+                        userCode: decoded.uid,   // user_code, ไม่ใช่ id
+                    }
                 );
 
                 if (!userSession) {
-                    throw new Error(`ไม่พบ User Session ที่ตรงกับ UID: ${decryptedPayload.uid}, SID: ${decryptedPayload.sid}`);
+                    throw new Error(`ไม่พบ user_session ของผู้เข้าสอบ ${decoded.uid}`);
                 }
 
-                // ⭐️ (FIX 5) ตรวจสอบ Schema 'booklets'
-                // (Schema 'booklets' ต้องการ bag_no (int) แต่เรามี bagId (string "BAG-001"))
-                // (Schema 'booklets' FK อ้างอิง 'bags(session_id, bag_no)')
-                // (นี่คือปัญหา Schema Conflict ที่ใหญ่กว่า)
-
-                // ⭐️ (ASSUMPTION) สมมติว่า 'booklets.bag_no' ถูกเปลี่ยนเป็น VARCHAR(32) เพื่อเก็บ 'BAG-001'
-                newBooklets.push({
-                    bag_id_string: bagId, // (ส่ง String ID "BAG-001")
-                    user_session_id: userSession.user_session_id,
-                    qr_payload_raw: code,
-                    session_id: decryptedPayload.sid,
-                    status: 'bagged',
+                console.log(bagDbId)
+                const bookletId = await bookletsRepo.insertOne(connection, {
+                    sessionId,
+                    userSessionId: userSession.id,
+                    bagNo,
+                    seqInBag: seq,
+                    status: "CREATED", // ตามรูปที่คุณใช้ตอนแพ็คถุง
                 });
-            }
 
-            if (newBooklets.length > 0) {
-                // ⭐️ (FIX 6) เราต้องแก้ bookletRepo.bulkCreate ให้รับ 'bag_id_string'
-                // await bookletRepo.bulkCreate(newBooklets, connection);
-                console.warn("TODO: bookletRepo.bulkCreate needs schema update (bag_no INT vs bag_id VARCHAR)");
-            }
+                await bagRepo.updateStatus(bagNo,"SEALED" , sessionId,connection)
 
-            const newStatus = "ready";
-            // (Repo 'updateStatus' ถูกแก้ให้ใช้ bag_no (varchar) แล้ว)
-            await bagRepo.updateStatus(bagId, newStatus, connection);
+                results.push({
+                    id: bookletId,
+                    sessionId,
+                    bagNo,
+                    userSessionId: userSession.id,
+                    seqInBag: seq,
+                    userCode: userSession.user_code,
+                });
+
+                seq++;
+            }
 
             await connection.commit();
-
-            return {
-                bagId: bagId,
-                bookletsCreated: newBooklets.length,
-                status: newStatus,
-            };
-
+            return results;
         } catch (error) {
             await connection.rollback();
             console.error("Service Error (Finalize & Link):", error);
@@ -150,16 +195,18 @@ export class bagService {
 
             const reduxBags = dbBags.map(dbBag => {
                 return {
-                    id: dbBag.bag_no,
+                    // จะใช้ id = bag_no หรือ id = b.id แล้วแต่ดีไซน์คุณ
+                    id: dbBag.id,                             // แนะนำใช้ pk จริง
+                    bag_no : dbBag.bag_no,
                     campaignId: dbBag.campaign_id,
                     sessionId: dbBag.session_id,
                     sessionLabel: dbBag.session_label,
-                    subjectCode: dbBag.subject_code,
-                    subjectName: dbBag.subject_name,
                     capacity: dbBag.count_items,
-                    scanned: [],
+                    scanned: dbBag.scanned_payloads,                              // frontend local state
                     status: dbBag.status,
+                    scannedCount: dbBag.scanned_count ?? 0,   // 👈 อันใหม่
                 };
+
             });
 
             return reduxBags;
@@ -193,5 +240,52 @@ export class bagService {
             connection.release();
         }
     };
+    static async getBookletsInBag(params: {
+        campaignId: number;
+        sessionId: number;
+        bagNo: number;
+    }): Promise<ApiBagBooklet[]> {
+        const { campaignId, sessionId, bagNo } = params;
+        const connection = await DB.getInstance().getConnection();
+
+        try {
+            const rows: DbBookletInBagRow[] =
+                await bookletsRepo.findByCampaignSessionAndBag(
+                    connection,
+                    campaignId,
+                    sessionId,
+                    bagNo
+                );
+
+            return rows.map((r) => ({
+                id: r.booklet_id,
+                sessionId: r.session_id,
+                bagNo: r.bag_no,
+                seqInBag: r.seq_in_bag,
+                status: r.status,
+                userCode: r.user_code,
+                fullName: r.full_name,
+                qrPayload: r.qr_payload,
+            }));
+        } finally {
+            connection.release();
+        }
+    }
+    static async getBookScannedCount(params: {
+        campaignId: number;
+    }): Promise<BagScannedCountResult[]> {
+        const { campaignId } = params;
+        const connection = await DB.getInstance().getConnection();
+
+        try {
+            const rows: BagScannedCountResult[] =
+                (await bagRepo.findScannCountByCampaign(connection, campaignId)) || [];
+
+            return rows
+
+        } finally {
+            connection.release();
+        }
+    }
 }
 

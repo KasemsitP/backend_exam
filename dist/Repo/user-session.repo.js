@@ -58,24 +58,24 @@ WHERE us.session_id = ?;
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const sql = `
-        SELECT
-            us.id as user_session_id,
-            u.id as user_id,
-            u.user_code as userCode,
-            u.full_name as firstName, 
-            '' as lastName, 
-            er.name as roomName, 
-            us.qr_payload
-        FROM
-            user_sessions us
-        JOIN
-            users u ON us.user_id = u.id
-        LEFT JOIN
-            exam_rooms er ON us.exam_room_id = er.id
-        WHERE
-            us.user_id = ? AND us.exam_session_id = ?
-        LIMIT 1;
-      `;
+SELECT
+    us.id as user_session_id,
+    u.id as user_id,
+    u.user_code as userCode,
+    u.full_name as firstName, 
+    '' as lastName, 
+    er.name as roomName, 
+    us.qr_payload
+FROM
+    user_sessions us
+JOIN
+    users u ON us.user_id = u.id
+LEFT JOIN
+    exam_rooms er ON us.exam_room_id = er.id
+WHERE
+    us.user_id = ? AND us.exam_session_id = ?
+LIMIT 1;
+`;
                 const [rows] = (yield connection.execute(sql, [userId, sessionId]));
                 return rows[0]; // (คืนค่าตัวแรกที่เจอ หรือ undefined)
             }
@@ -114,6 +114,34 @@ LIMIT 1;
                 console.error("Repo Error (findByUserCodeAndSessionId):", error);
                 throw error;
             }
+        });
+    }
+    findUserSessionByCampaignSessionAndUserCode(conn, params) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { campaignId, sessionId, userCode } = params;
+            const sql = `
+      SELECT
+        us.id         AS id,
+        u.id          AS user_id,
+        u.user_code   AS user_code
+      FROM users u
+      JOIN user_campaigns uc
+        ON uc.user_id = u.id
+       AND uc.campaign_id = ?
+      JOIN user_sessions us
+        ON us.user_campaign_id = uc.id
+       AND us.session_id = ?
+       AND us.campaign_id = ?
+      WHERE u.user_code = ?
+      LIMIT 1;
+    `;
+            const [rows] = yield conn.execute(sql, [
+                campaignId,
+                sessionId,
+                campaignId,
+                userCode,
+            ]);
+            return rows[0] || null;
         });
     }
 }

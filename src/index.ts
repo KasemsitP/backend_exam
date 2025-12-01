@@ -94,7 +94,6 @@ app.get("/test",isAuthenticated, async (req, res) => {
 
 
 
-
 app.listen(process.env.PORT, async () => {
   await DB.testConnection();
   console.log("เซิร์ฟเวอร์เริ่มทำงานที่พอร์ต 8000");

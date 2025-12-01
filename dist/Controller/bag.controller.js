@@ -30,19 +30,18 @@ bagController.bulkCreate = (req, res) => __awaiter(void 0, void 0, void 0, funct
         res.status(500).send({ message: error.message });
     }
 });
-bagController.finalizeAndLink = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+bagController.InsertBooklets = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const payload = req.body;
-        // (Validation)
-        if (!payload.campaignId || !payload.bagId || !payload.scannedCodes || !Array.isArray(payload.scannedCodes)) {
-            return res.status(400).send({ message: "Missing required fields for finalize" });
+        // console.log(payload)
+        if (!payload.campaignId || !payload.bagId || !payload.scannedCodes) {
+            return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
         }
-        const result = yield bag_service_1.bagService.finalizeAndLink(payload);
-        res.status(200).json(result);
+        const result = yield bag_service_1.bagService.InsertBooklets(payload);
+        res.status(200).json(payload);
     }
     catch (error) {
         console.error("Controller Error (Finalize & Link):", error);
-        // (ส่ง Error Message ที่ Key Service ถอดรหัสไม่สำเร็จกลับไป)
         res.status(400).send({ message: error.message });
     }
 });
@@ -66,9 +65,31 @@ bagController.deleteById = (req, res) => __awaiter(void 0, void 0, void 0, funct
             return res.status(400).send({ message: "Missing Bag ID" });
         }
         const result = yield bag_service_1.bagService.deleteById(bagId);
+        console.log(result);
         res.status(200).json(result);
     }
     catch (error) {
         res.status(500).send({ message: error.message });
+    }
+});
+bagController.getBookletsInBag = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    console.log("HIT /api/bags/:bagNo/booklets", req.params, req.query);
+    try {
+        const bagNo = Number(req.params.bagNo);
+        const campaignId = Number(req.query.campaignId);
+        const sessionId = Number(req.query.sessionId);
+        if (!bagNo || !campaignId || !sessionId) {
+            return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
+        }
+        const list = yield bag_service_1.bagService.getBookletsInBag({
+            campaignId,
+            sessionId,
+            bagNo,
+        });
+        res.json(list);
+    }
+    catch (err) {
+        console.error("Controller Error (getBookletsInBag):", err);
+        res.status(500).send({ message: err.message || "ไม่สามารถดึงข้อมูลถุงได้" });
     }
 });

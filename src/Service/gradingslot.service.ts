@@ -52,7 +52,7 @@ export class gradingService {
       const decoded = await keyService.decryptQrPayload(qrPayload, campaignId);
       console.log(decoded);
 
-      if (decoded.cid !== campaignId || decoded.sid !== sessionId) {
+      if (decoded.cid !== campaignId|| decoded.sid !== sessionId ) {   //if (decoded.cid !== campaignId || decoded.sid !== sessionId) 
         throw new Error("QR ไม่ตรงกับ campaign/session ที่กำลังตรวจ");
       }
 

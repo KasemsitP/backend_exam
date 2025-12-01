@@ -10,7 +10,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 class ExamRoomRepo {
-    // ดึงข้อมูลห้องสอบตาม session_id
     findBySessionId(sessionId, connection) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = "SELECT * FROM exam_rooms WHERE session_id = ? ORDER BY room_code ASC;";

@@ -19,6 +19,7 @@ export interface ApiGrader {
   subject_id: number;
   subject_code: string;
   subject_name: string;
+  grader_name: string;
 
   question_no: number | null;
 }
@@ -46,7 +47,7 @@ export class graderService {
         session_id: r.session_id,
         session_code: r.session_code,
         exam_date: r.exam_date,
-
+        grader_name: r.grader_name,
         subject_id: r.subject_id,
         subject_code: r.subject_code,
         subject_name: r.subject_name,

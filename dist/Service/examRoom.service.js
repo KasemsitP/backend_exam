@@ -35,7 +35,6 @@ examRoomService.getAllBySession = (sessionIdStr) => __awaiter(void 0, void 0, vo
         if (isNaN(sessionId))
             throw new Error("Invalid Session ID format");
         const dbRooms = yield examRoom_repo_1.default.findBySessionId(sessionId, connection);
-        // (แปลง DB -> Frontend)
         return dbRooms.map(toFrontendRoom);
     }
     catch (error) {

@@ -13,11 +13,10 @@ export interface DbGraderAssignmentRow {
   session_id: number;
   session_code: string;
   exam_date: string; // หรือ Date ถ้าคุณตั้งให้ mysql2 แปลงให้
-
   subject_id: number;
   subject_code: string;
   subject_name: string;
-
+  grader_name:string
   question_no: number | null;
 }
 
@@ -41,7 +40,8 @@ async findAllAssignmentsByCampaignId(
         ga.subject_id,
         subj.code  AS subject_code,
         subj.name  AS subject_name,
-        ga.question_no
+        ga.question_no,
+        a.full_name AS grader_name
     FROM grader_assignments ga
     JOIN graders g
       ON ga.grader_id = g.id

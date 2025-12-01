@@ -12,6 +12,12 @@ interface UserSessionData {
   qr_payload: string | null;
 }
 
+export interface DbUserSessionRow extends RowDataPacket {
+  id: number;       // user_sessions.id
+  user_id: number;
+  user_code: string;
+}
+
 class UserSessionsRepo {
   private pool: Pool;
   constructor() {
@@ -123,6 +129,38 @@ LIMIT 1;
       console.error("Repo Error (findByUserCodeAndSessionId):", error);
       throw error;
     }
+  }
+  async findUserSessionByCampaignSessionAndUserCode(
+    conn: PoolConnection,
+    params: { campaignId: number; sessionId: number; userCode: string }
+  ): Promise<DbUserSessionRow | null> {
+    const { campaignId, sessionId, userCode } = params;
+
+    const sql = `
+      SELECT
+        us.id         AS id,
+        u.id          AS user_id,
+        u.user_code   AS user_code
+      FROM users u
+      JOIN user_campaigns uc
+        ON uc.user_id = u.id
+       AND uc.campaign_id = ?
+      JOIN user_sessions us
+        ON us.user_campaign_id = uc.id
+       AND us.session_id = ?
+       AND us.campaign_id = ?
+      WHERE u.user_code = ?
+      LIMIT 1;
+    `;
+
+    const [rows] = await conn.execute<DbUserSessionRow[]>(sql, [
+      campaignId,
+      sessionId,
+      campaignId,
+      userCode,
+    ]);
+
+    return rows[0] || null;
   }
 }
 

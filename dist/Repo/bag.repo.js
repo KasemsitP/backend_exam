@@ -19,21 +19,35 @@ class BagRepo {
             // ⭐️ (FIX 7: ลบการขึ้นบรรทัดใหม่ (Newline) หน้า SELECT)
             const sql = `SELECT
     b.id,
-    s.campaign_id as campaign_id_db,
-    b.session_id as session_id_db,
-    s.title as session_label,
+    s.campaign_id,
+    b.session_id,
+    s.title AS session_label,
     b.bag_no,
     b.count_items,
     b.status,
-    CONCAT('camp-', s.campaign_id) as campaign_id,
-    CONCAT('sess-', b.session_id) as session_id,
-    CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) as bag_no_str
+    CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) AS bag_no_str,
+    MIN(sj.code) AS subject_code,    -- ถ้ามีหลายวิชา เลือกตัวแรกๆมา
+    MIN(sj.name) AS subject_name
 FROM bags b
-JOIN sessions s ON b.session_id = s.id
-LEFT JOIN session_subjects ss ON s.id = ss.session_id 
-LEFT JOIN subjects sj ON ss.subject_id = sj.id
+JOIN sessions s 
+  ON b.session_id = s.id
+LEFT JOIN session_subjects ss 
+  ON s.id = ss.session_id 
+LEFT JOIN subjects sj 
+  ON ss.subject_id = sj.id
 WHERE s.campaign_id = ?
-ORDER BY b.bag_no ASC;`;
+GROUP BY
+    b.id,
+    s.campaign_id,
+    b.session_id,
+    s.title,
+    b.bag_no,
+    b.count_items,
+    b.status
+ORDER BY
+    b.bag_no ASC;
+
+`;
             try {
                 const [rows] = yield connection.execute(sql, [campaignIdNumeric]);
                 return rows;
@@ -42,6 +56,20 @@ ORDER BY b.bag_no ASC;`;
                 console.error("Repo Error (Bag FindAll):", error);
                 throw error;
             }
+        });
+    }
+    getMaxBagNoForSession(sessionId, connection) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            const sql = `
+      SELECT COALESCE(MAX(bag_no), 0) AS max_no
+      FROM bags
+      WHERE session_id = ?
+      FOR UPDATE;
+    `;
+            const [rows] = yield connection.execute(sql, [sessionId]);
+            const row = rows[0];
+            return (_a = row === null || row === void 0 ? void 0 : row.max_no) !== null && _a !== void 0 ? _a : 0;
         });
     }
     bulkCreate(bags, connection) {
@@ -89,6 +117,21 @@ ORDER BY b.bag_no ASC;`;
                 console.error("Repo Error (Bag Delete):", error);
                 throw error;
             }
+        });
+    }
+    findByCampaignAndBagNo(conn, campaignId, bagNo) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+      SELECT b.id, b.session_id, b.bag_no
+      FROM bags b
+      JOIN sessions s
+        ON b.session_id = s.id
+      WHERE s.campaign_id = ?
+        AND b.bag_no = ?
+      LIMIT 1;
+    `;
+            const [rows] = yield conn.execute(sql, [campaignId, bagNo]);
+            return rows[0] || null;
         });
     }
 }

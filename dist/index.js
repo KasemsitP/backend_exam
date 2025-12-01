@@ -38,6 +38,7 @@ const router_verify_1 = __importDefault(require("./Routes/router.verify"));
 const router_baghandover_1 = __importDefault(require("./Routes/router.baghandover"));
 const router_grader_1 = __importDefault(require("./Routes/router.grader"));
 const router_gradingslot_1 = __importDefault(require("./Routes/router.gradingslot"));
+const router_gradingscore_1 = __importDefault(require("./Routes/router.gradingscore"));
 dotenv_1.default.config();
 exports.app = (0, express_1.default)();
 exports.app.set('trust proxy', 1);
@@ -91,6 +92,7 @@ exports.app.use("/api", router_verify_1.default);
 exports.app.use("/api", router_baghandover_1.default);
 exports.app.use("/api/", router_grader_1.default);
 exports.app.use("/api/", router_gradingslot_1.default);
+exports.app.use("/api/", router_gradingscore_1.default);
 exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const conn = DB_1.DB.getInstance();
@@ -101,6 +103,9 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
         res.status(500).send({ message: error.message });
     }
 }));
+exports.app.get("/api/ping", (req, res) => {
+    res.send("pong");
+});
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     yield DB_1.DB.testConnection();
     console.log("เซิร์ฟเวอร์เริ่มทำงานที่พอร์ต 8000");
