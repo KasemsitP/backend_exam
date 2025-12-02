@@ -1,4 +1,5 @@
 import mysql, { Pool } from "mysql2/promise";
+import "dotenv/config";
 
 export class DB {
   private static instance: Pool;
@@ -7,11 +8,17 @@ export class DB {
 
   public static getInstance(): Pool {
     if (!DB.instance) {
+      // DB.instance = mysql.createPool({
+      //   host: "localhost", 
+      //   user: "root",
+      //   password: "root",
+      //   database: "Exam",
+      // });
       DB.instance = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "root",
-        database: "Exam",
+        host: process.env.host, 
+        user: process.env.user,
+        password: process.env.password,
+        database: process.env.database,
       });
       // DB.instance = mysql.createPool({
       //   host: "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",

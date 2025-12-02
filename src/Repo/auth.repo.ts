@@ -1,7 +1,7 @@
 
 import { DB } from "../model/DB";
 import { Pool } from "mysql2/promise";
-import { RowDataPacket } from "mysql2";
+import { RowDataPacket , ResultSetHeader } from "mysql2";
 
 export interface UserData {
     username: string;
@@ -121,6 +121,13 @@ ORDER BY a.id ASC;
     async deleteAccount(id: number): Promise<RowDataPacket[]> {
         const sql = `DELETE FROM accounts WHERE id = ?;`;
         const [result] = await this.pool.execute<RowDataPacket[]>(sql, [id]);
+        return result;
+    }
+
+    async updateAuthsession(id: number , sessionid  : string): Promise<ResultSetHeader> {
+        console.log(id , sessionid)
+        const sql = `UPDATE auth_sessions SET account_id = ? WHERE sid = ?`;
+        const [result] = await this.pool.execute<ResultSetHeader>(sql, [id ,sessionid]);
         return result;
     }
 

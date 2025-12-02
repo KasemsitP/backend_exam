@@ -3,7 +3,9 @@ import "dotenv/config";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import dotenv from "dotenv"
+import MySQLStoreFactory from "express-mysql-session";
 import session from 'express-session';
+import csrf from "tiny-csrf"; 
 import {DB} from './model/DB';
 import authrouter from "./Routes/routes.auth"
 import userrouter from "./Routes/router.user"
@@ -28,7 +30,8 @@ dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
-app.use(cookieParser());
+app.use(express.urlencoded({ extended: true })); 
+app.use(cookieParser(process.env.COOKIE_SECRET));
 const allowedOrigins = [
   'http://localhost:5173',               // frontend dev
   'https://exam-management-uyce.onrender.com', // frontend prod
@@ -47,19 +50,61 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(session({
-  secret: "your-secret-key",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
-    httpOnly: true,
-    secure: false
-//  เพิ่มลองดูก่อนว่าได้ไหม
-    // secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
-    // sameSite: 'none'          // ต้อง none 
-  }
-}));
+
+const MySQLStore = MySQLStoreFactory(session);
+
+const sessionStore = new MySQLStore({
+        host: process.env.host, 
+        user: process.env.user,
+        password: process.env.password,
+        database: process.env.database,
+
+  schema: {
+    tableName: "auth_sessions",
+    columnNames: {
+      session_id: "sid",
+      expires: "expires",
+      data: "data",
+    },
+  },
+});
+
+app.use(
+  session({
+    name: "sid",
+    secret: process.env.SESSION_SECRET || "dev-secret",
+    resave: false,
+    saveUninitialized: false,
+    store: sessionStore,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 1000 * 60 * 60, // 1 ชม.
+    },
+  })
+);
+// app.use(session({
+//   secret: "your-secret-key",
+//   resave: false,
+//   saveUninitialized: false,
+//   cookie: {
+//     maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
+//     httpOnly: true,
+//     secure: false
+// //  เพิ่มลองดูก่อนว่าได้ไหม
+//     // secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
+//     // sameSite: 'none'          // ต้อง none 
+//   }
+// }));
+// const CSRF_SECRET =
+//   process.env.CSRF_SECRET || "12345678901234567890123456789012"; // 32 ตัวขึ้นไป
+// app.use(csrf(CSRF_SECRET, ["POST", "PUT", "PATCH", "DELETE"]));
+
+// app.get("/api/csrf-token", (req: Request, res: Response) => {
+//   const token = (req as any).csrfToken();
+//   res.json({ csrfToken: token });
+// });
+
 
 app.use("/api/auth/",authrouter)
 app.use("/api/",userrouter)
