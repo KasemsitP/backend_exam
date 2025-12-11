@@ -11,17 +11,15 @@ export interface CreateSessionSubjectLinkPayload {
     order_no?: number | null;
 }
 export interface CreateSessionSubjectPayload {
-    session_id: number;
-    // (ข้อมูลสำหรับ Find/Create 'subjects')
-    code: string;
-    name: string;
-    // (ข้อมูลสำหรับ 'session_subjects')
-    start_at: string;
-    end_at: string;
-    question_count: number;
-    question_range?: string;
-    order_no?: number;
+  session_id: number;
+  subject_id: number;      
+  start_at: string;
+  end_at: string;
+  question_count: number;
+  question_range?: string;
+  order_no?: number;
 }
+
 export interface ApiSessionSubject extends RowDataPacket {
     session_id: number;
     subject_id: number;

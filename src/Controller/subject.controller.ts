@@ -1,20 +1,73 @@
-// import { Request, Response } from "express"
-// // import { subjectservice } from "../Service/subject.service";
-// export class subjectcontroller {
-//     static getSubject = async (req: Request, res: Response) => {
-//         try {
-//             const result = await subjectservice.getSubjectByCampaign(req)
-//             res.status(201).json(result);
-//         } catch (error: any) {
-//             return res.status(400).send({ message: error.message });
-//         }
-//     }
-//     static insertBySession = async (req: Request, res: Response) => {
-//         try {
-//             const result = await subjectservice.insertBySessionSubject(req)
-//             res.status(201).send({ message: "บันทึกข้อมูลสำเร็จ" });
-//         } catch (error: any) {
-//             return res.status(400).send({ message: error.message });
-//         }
-//     }
-// }
+import { Request, Response } from "express";
+import { SubjectService } from "../Service/subject.service";
+
+export class SubjectController {
+  static async getAll(req: Request, res: Response) {
+    try {
+      const subjects = await SubjectService.getAllSubjects(req);
+      res.json(subjects);
+    } catch (err) {
+      console.error("Error getAll subjects:", err);
+      res.status(500).json({ message: "Failed to fetch subjects" });
+    }
+  }
+
+  static async create(req: Request, res: Response) {
+    try {
+      const subject = await SubjectService.createSubject(req);
+      res.status(201).json(subject);
+    } catch (err: any) {
+      console.error("Error create subject:", err);
+      res
+        .status(400)
+        .json({ message: err?.message || "Failed to create subject" });
+    }
+  }
+
+  static async update(req: Request, res: Response) {
+    try {
+      const subject = await SubjectService.updateSubject(req);
+      if (!subject) {
+        return res.status(404).json({ message: "Subject not found" });
+      }
+      res.json(subject);
+    } catch (err: any) {
+      console.error("Error update subject:", err);
+      res
+        .status(400)
+        .json({ message: err?.message || "Failed to update subject" });
+    }
+  }
+
+  static async remove(req: Request, res: Response) {
+    try {
+      await SubjectService.deleteSubject(req);
+      res.status(204).send(); // no content
+    } catch (err: any) {
+      console.error("Error delete subject:", err);
+      res
+        .status(400)
+        .json({ message: err?.message || "Failed to delete subject" });
+    }
+  }
+static async addQuestion(req: Request, res: Response) {
+  try {
+    const subject = await SubjectService.addQuestion(req);
+    res.status(201).json(subject);
+  } catch (err: any) {
+    console.error("Error add question:", err);
+    res.status(400).json({ message: err?.message || "Failed to add question" });
+  }
+}
+
+static async deleteQuestion(req: Request, res: Response) {
+  try {
+    const subject = await SubjectService.deleteQuestion(req);
+    res.json(subject);
+  } catch (err: any) {
+    console.error("Error delete question:", err);
+    res.status(400).json({ message: err?.message || "Failed to delete question" });
+  }
+}
+
+}

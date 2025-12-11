@@ -7,13 +7,10 @@ import { PoolConnection } from "mysql2/promise";
 interface CreateSlotFromQrPayload {
   qrPayload: string;
   campaignId: number;
-  sessionId: number;
-  subjectId: number;
-  questionNo: number;
   graderId: number;
 }
 
-// แยก type สำหรับ allocateSlot เผื่ออยากใช้ที่อื่นด้วย
+
 interface AllocateSlotParams {
   bookletId: number;
   subjectId: number;
@@ -23,15 +20,7 @@ interface AllocateSlotParams {
 
 
 export class gradingService {
-  /**
-   * STEP 1: decode QR + หา booklet_subject_id จาก cid, sid, uid, subjectId
-   * STEP 2: ใช้ allocateSlotForQuestion สร้าง grading_slot ตาม rule:
-   *   - ยังไม่มี slot => grader_order = 1
-   *   - มีแล้ว 1 slot (ของคนอื่น) => grader_order = 2
-   *   - ถ้ามี >= 2 slot => error
-   *   - ถ้า grader คนเดิมมี slot อยู่แล้วในข้อนี้ => error
-   */
-    static async createSlotFromQr(
+  static async createSlotFromQr(
     payload: CreateSlotFromQrPayload
   ): Promise<{
     slotId: number;
@@ -40,39 +29,63 @@ export class gradingService {
     bookletId: number;
     userId: number;
     userCode: string;
+    subjectId: number;
+    questionNo: number;
   }> {
-    const { qrPayload, campaignId, sessionId, subjectId, questionNo, graderId } =
-      payload;
+    const { qrPayload, campaignId, graderId } = payload;
 
     const connection = await DB.getInstance().getConnection();
 
     try {
       await connection.beginTransaction();
 
+      // 1) ถอด QR
       const decoded = await keyService.decryptQrPayload(qrPayload, campaignId);
-      console.log(decoded);
+      // decoded: { cid, sid, uid, ... }
+      const { cid, sid, uid } = decoded;
+      console.log(decoded)
 
-      if (decoded.cid !== campaignId|| decoded.sid !== sessionId ) {   //if (decoded.cid !== campaignId || decoded.sid !== sessionId) 
-        throw new Error("QR ไม่ตรงกับ campaign/session ที่กำลังตรวจ");
+      if (cid !== campaignId) {
+        throw new Error("QR ไม่ตรงกับแคมเปญที่กำลังตรวจ");
       }
 
-      // 🔁 ใช้ findBookletForUser แทน findBookletSubjectForUser
+      // 2) ดูว่า grader คนนี้ใน session นี้ ถูก assign ข้ออะไร
+      const assignment =
+        await gradingslotRepo.findAssignmentForGraderInSession(
+          connection,
+          graderId,
+          sid
+        );
+        console.log(assignment)
+      if (!assignment) {
+        throw new Error(
+          "ผู้ตรวจคนนี้ไม่ได้ถูกมอบหมายให้ตรวจในรอบสอบนี้ (หรือยังไม่ได้เซ็ต assignment)"
+        );
+      }
+
+      const subjectId = assignment.subject_id;
+      const questionNo = assignment.question_no;
+      const subjectQuestionId = assignment.subject_question_id;
+
+      // 3) หาเล่มของผู้เข้าสอบ (จาก user_code / uid ใน QR)
       const bookletRow = await gradingslotRepo.findBookletForUser(
         connection,
         campaignId,
-        sessionId,
-        decoded.uid // user_code
+        sid,
+        uid // user_code
       );
 
       if (!bookletRow) {
         throw new Error("ไม่พบเล่มข้อสอบของผู้เข้าสอบรายนี้ใน session นี้");
       }
 
+      // 4) จอง slot ตามวิชากับข้อที่ assign ไว้
       const slot = await gradingService.allocateSlotForQuestion(
         {
           bookletId: bookletRow.booklet_id,
           subjectId,
           questionNo,
+          // หรือใช้ subjectQuestionId ถ้า grading_slots เก็บอ้างถึง subject_questions โดยตรง
           graderId,
         },
         connection
@@ -87,6 +100,8 @@ export class gradingService {
         bookletId: bookletRow.booklet_id,
         userId: bookletRow.user_id,
         userCode: bookletRow.user_code,
+        subjectId,
+        questionNo,
       };
     } catch (err) {
       await connection.rollback();
@@ -96,11 +111,12 @@ export class gradingService {
     }
   }
 
+
   /**
    * core logic: 1 ข้อ = 2 slot, ห้ามคนเดิมซ้ำ
    * แยกออกมาเผื่ออยาก reuse ในกรณีที่ไม่ได้มาจาก QR
    */
-   static async allocateSlotForQuestion(
+  static async allocateSlotForQuestion(
     params: AllocateSlotParams,
     conn?: PoolConnection
   ): Promise<{ slotId: number; graderOrder: number; status: string }> {

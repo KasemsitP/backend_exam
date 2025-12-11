@@ -5,29 +5,32 @@ import { CreateSessionSubjectPayload } from "../Repo/session-subject.repo";
 export class sessionSubjectController {
   static create = async (req: Request, res: Response) => {
     try {
-      const payload: CreateSessionSubjectPayload = req.body;
-      payload.session_id = parseInt(payload.session_id as any, 10);
-      if (isNaN(payload.session_id)) {
-        return res.status(400).send({ message: "Invalid session_id" });
-      }
-      if (!payload.code || !payload.name) {
-        return res
-          .status(400)
-          .send({ message: "Missing subject code or name" });
+      const sessionId = parseInt(req.body.session_id, 10);
+      const subjectId = parseInt(req.body.subject_id, 10);
+
+      if (isNaN(sessionId) || isNaN(subjectId)) {
+        return res.status(400).send({ message: "Invalid session_id or subject_id" });
       }
 
-      // 3. ส่งให้ Service จัดการ (Find/Create + Link)
+      const payload: CreateSessionSubjectPayload = {
+        session_id: sessionId,
+        subject_id: subjectId,
+        start_at: req.body.start_at,                 
+        end_at: req.body.end_at,                   
+        question_count: Number(req.body.question_count),
+        question_range: req.body.question_range,
+        order_no: req.body.order_no,
+      };
+
       const data = await sessionSubjectService.create(payload);
-
-      // 4. ส่งผลลัพธ์ (ที่ Join แล้ว) กลับไป
-      res.status(201).json(data);
+      return res.status(201).json(data);
     } catch (error: any) {
       if (error.code === "ER_DUP_ENTRY") {
         return res
           .status(409)
           .send({ message: "วิชานี้ถูกเพิ่มในรอบสอบนี้แล้ว" });
       }
-      res.status(500).send({ message: error.message });
+      return res.status(500).send({ message: error.message });
     }
   };
 
@@ -43,9 +46,9 @@ export class sessionSubjectController {
       }
 
       await sessionSubjectService.delete(sessionId, subjectId);
-      res.status(204).send(); // 204 No Content
+      return res.status(204).send();
     } catch (error: any) {
-      res.status(500).send({ message: error.message });
+      return res.status(500).send({ message: error.message });
     }
   };
 }

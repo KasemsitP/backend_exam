@@ -1,13 +1,16 @@
-// import express from "express";
-// import { isAuthenticated } from "../Middleware/authentication";
-// import { subjectcontroller } from "../Controller/subject.controller";
-// const router = express.Router();
+import { Router } from "express";
+import { SubjectController } from "../Controller/subject.controller";
 
-// router.get("/subjectByCampaign",subjectcontroller.getSubject)
-// router.post("/insertBySessionSubject",subjectcontroller.insertBySession)
+const subjectRouter = Router();
 
-// export default router;
+subjectRouter.get("/subjects", SubjectController.getAll);
+subjectRouter.post("/subjects", SubjectController.create);
+subjectRouter.put("/subjects/:id", SubjectController.update);
+subjectRouter.delete("/subjects/:id", SubjectController.remove);
+subjectRouter.post("/subjects/:id/questions", SubjectController.addQuestion);
+subjectRouter.delete(
+    "/subjects/:id/questions/:questionId",
+    SubjectController.deleteQuestion
+);
 
-
-
-
+export default subjectRouter;

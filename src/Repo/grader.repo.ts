@@ -16,8 +16,10 @@ export interface DbGraderAssignmentRow {
   subject_id: number;
   subject_code: string;
   subject_name: string;
-  grader_name:string
-  question_no: number | null;
+  grader_name: string
+  subject_question_id: number;
+  question_no: number
+  question_label?: string;
 }
 
 class GraderRepo {
@@ -25,46 +27,97 @@ class GraderRepo {
    * ดึง "ข้อที่ถูก assign ให้ตรวจแล้ว" ของ campaign หนึ่ง
    * ใช้ join grading_slots + graders
    */
-async findAllAssignmentsByCampaignId(
-  campaignIdNumeric: number,
-  connection: PoolConnection
-): Promise<DbGraderAssignmentRow[]> {
-  const sql = `
-    SELECT
-        ga.grader_id,
-        g.account_id,
-        g.campaign_id,
-        ga.session_id,
-        s.session_code,
-        s.exam_date,
-        ga.subject_id,
-        subj.code  AS subject_code,
-        subj.name  AS subject_name,
-        ga.question_no,
-        a.full_name AS grader_name
-    FROM grader_assignments ga
-    JOIN graders g
-      ON ga.grader_id = g.id
-    JOIN sessions s
-      ON ga.session_id = s.id
-    JOIN subjects subj
-      ON ga.subject_id = subj.id
-    LEFT JOIN accounts a
-      ON g.account_id = a.id
-    WHERE g.campaign_id = ?      -- campaign ปัจจุบัน
-    ORDER BY ga.question_no ASC; -- จะใส่ order by เพิ่มก็ได้
+  async findAllAssignmentsByCampaignId(
+    campaignIdNumeric: number,
+    connection: PoolConnection
+  ): Promise<DbGraderAssignmentRow[]> {
+    const sql = `
+SELECT
+    ga.grader_id,
+    g.account_id,
+    g.campaign_id,
+
+    ga.session_id,
+    s.session_code,
+    s.exam_date,
+
+    ga.subject_id,
+    subj.code  AS subject_code,
+    subj.name  AS subject_name,
+
+    ga.subject_question_id,
+    sq.question_no,          -- << ดึงเลขข้อจาก subject_questions
+    sq.label AS question_label
+
+FROM grader_assignments ga
+JOIN graders g
+  ON ga.grader_id = g.id
+JOIN sessions s
+  ON ga.session_id = s.id
+JOIN subjects subj
+  ON ga.subject_id = subj.id
+JOIN subject_questions sq
+  ON ga.subject_question_id = sq.id
+WHERE g.campaign_id = ?
+ORDER BY sq.question_no ASC;
   `;
 
-  try {
-    const [rows] = await connection.execute(sql, [campaignIdNumeric]);
-    return rows as DbGraderAssignmentRow[];
-  } catch (error) {
-    console.error("Repo Error (Grader findAllAssignmentsByCampaignId):", error);
-    throw error;
+    try {
+      const [rows] = await connection.execute(sql, [campaignIdNumeric]);
+      return rows as DbGraderAssignmentRow[];
+    } catch (error) {
+      console.error("Repo Error (Grader findAllAssignmentsByCampaignId):", error);
+      throw error;
+    }
   }
-}
 
-  // ----- ด้านล่างยังเก็บ helper เดิมไว้ เผื่อใช้ manage grader ภายหลัง -----
+
+  async findAllAssignmentsByCampaignIdByGrader(
+    campaignIdNumeric: number,
+    connection: PoolConnection
+  ): Promise<DbGraderAssignmentRow[]> {
+    const sql = `
+SELECT
+    ga.grader_id,
+    g.account_id,
+    g.campaign_id,
+
+    ga.session_id,
+    s.session_code,
+    s.exam_date,
+
+    ga.subject_id,
+    subj.code  AS subject_code,
+    subj.name  AS subject_name,
+
+    ga.subject_question_id,
+    sq.question_no,
+    sq.label AS question_label
+
+FROM grader_assignments ga
+JOIN graders g
+  ON ga.grader_id = g.id
+JOIN sessions s
+  ON ga.session_id = s.id
+JOIN subjects subj
+  ON ga.subject_id = subj.id
+JOIN subject_questions sq
+  ON ga.subject_question_id = sq.id
+WHERE g.campaign_id = ?
+  AND ga.grader_id = ?      
+ORDER BY sq.question_no ASC;
+
+  `;
+
+    try {
+      const [rows] = await connection.execute(sql, [campaignIdNumeric]);
+      return rows as DbGraderAssignmentRow[];
+    } catch (error) {
+      console.error("ดึงข้อมูลวิชาตรวจสำหรับผู้ตรวจผิดพลาด", error);
+      throw error;
+    }
+  }
+
 
   async create(
     data: {

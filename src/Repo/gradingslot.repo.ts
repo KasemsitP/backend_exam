@@ -133,6 +133,39 @@ class GradingslotRepo {
   }
 
 
+
+
+
+  //ยังไม่มีใช้นะ
+
+  async  findAssignmentForGraderInSession(
+  conn: PoolConnection,
+  graderId: number,
+  sessionId: number
+) {
+  const [rows] = await conn.query(
+    `
+      SELECT 
+        ga.grader_id,
+        ga.session_id,
+        ga.subject_id,
+        ga.subject_question_id,
+        sq.question_no,
+        sq.label AS question_label
+      FROM grader_assignments ga
+      JOIN subject_questions sq
+        ON ga.subject_question_id = sq.id
+      WHERE ga.grader_id = ?
+        AND ga.session_id = ?
+    `,
+    [graderId, sessionId]
+  );
+
+  // กรณี 1 grader มีได้แค่ 1 ข้อใน 1 session (ตามที่คุณเลือก)
+  return (rows as any[])[0] ?? null;
+}
+
+
 }
 
 

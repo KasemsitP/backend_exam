@@ -5,18 +5,15 @@ import gradingscoreRepo from "../Repo/gradingscore.repo";
 export class gradingscoreController {
   static SubmitScore = async (req: Request, res: Response) => {
     try {
-      const { qrPayload, campaignId, sessionId, slotId, subjectId, questionNo, graderId, score } = req.body;
+      const { qrPayload, campaignId,  slotId,   graderId, score } = req.body;
 
-      if (!qrPayload || !campaignId || !sessionId || !subjectId || !questionNo || !graderId || !slotId || score === undefined) {
+      if (!qrPayload || !campaignId || !graderId || !slotId || score === undefined) {
         return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
       }
 
       const payload = {
         qrPayload,
         campaignId: Number(campaignId),
-        sessionId: Number(sessionId),
-        subjectId: Number(subjectId),
-        questionNo: Number(questionNo),
         graderId: Number(graderId),
         slotId: Number(slotId),
         score: Number(score),

@@ -24,55 +24,35 @@ class GradingScoreRepo {
   constructor() {
     this.pool = DB.getInstance();
   }
-  async verifySlotContext(
-    conn: PoolConnection,
-    params: {
-      slotId: number;
-      campaignId: number;
-      sessionId: number;
-      subjectId: number;
-      questionNo: number;
-      graderId: number;
-    }
-  ): Promise<boolean> {
-    const {
-      slotId,
-      campaignId,
-      sessionId,
-      subjectId,
-      questionNo,
-      graderId,
-    } = params;
-
-    const sql = `
-      SELECT
-        s.id AS slot_id
-      FROM grading_slots s
-      JOIN booklets b
-        ON s.booklet_id = b.id
-      JOIN user_sessions us
-        ON b.user_session_id = us.id
-      WHERE s.id = ?
-        AND s.question_no = ?
-        AND s.subject_id = ?
-        AND us.campaign_id = ?
-        AND us.session_id = ?
-        AND s.grader_id = ?
-      LIMIT 1;
-    `;
-
-    const paramsArr = [
-      slotId,
-      questionNo,
-      subjectId,
-      campaignId,
-      sessionId,
-      graderId,
-    ];
-
-    const [rows] = await conn.execute<RowDataPacket[]>(sql, paramsArr);
-    return rows.length > 0;
+async verifySlotContext(
+  conn: PoolConnection,
+  params: {
+    slotId: number;
+    campaignId: number;
+    graderId: number;
   }
+): Promise<boolean> {
+  const { slotId, campaignId, graderId } = params;
+
+  const sql = `
+    SELECT
+      s.id AS slot_id
+    FROM grading_slots s
+    JOIN booklets b
+      ON s.booklet_id = b.id
+    JOIN user_sessions us
+      ON b.user_session_id = us.id
+    WHERE s.id = ?
+      AND us.campaign_id = ?
+      AND s.grader_id = ?
+    LIMIT 1;
+  `;
+
+  const paramsArr = [slotId, campaignId, graderId];
+
+  const [rows] = await conn.execute<RowDataPacket[]>(sql, paramsArr);
+  return rows.length > 0;
+}
 
   /**
    * INSERT ลง grading_scores

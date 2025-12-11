@@ -26,6 +26,7 @@ import bagHandover from './Routes/router.baghandover';
 import graderRouter from './Routes/router.grader';
 import gradingslotRouter from './Routes/router.gradingslot';
 import gradingscoreRouter from './Routes/router.gradingscore';
+import subjectRouter from './Routes/router.subject'
 dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
@@ -117,6 +118,7 @@ app.use("/api/",importuser)
 app.use("/api/",key)
 app.use("/api/",usersession)
 app.use("/api/", accountRouter);
+app.use("/api",subjectRouter)
 app.use("/api/", roleRouter);
 app.use("/api", examroomRouter)
 app.use("/api",verifyRouter)

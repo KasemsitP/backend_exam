@@ -2,11 +2,7 @@
 import { DB } from "../model/DB";
 import graderRepo, { DbGraderAssignmentRow } from "../Repo/grader.repo";
 
-/**
- * shape ที่จะส่งให้ frontend
- * ✅ ไม่มี name แล้ว แต่ใช้ question_no แทน
- * และยังมี grader_name เผื่อเอาไปแสดงชื่อคนตรวจได้
- */
+
 export interface ApiGrader {
   grader_id: number;
   account_id: number;
@@ -19,9 +15,12 @@ export interface ApiGrader {
   subject_id: number;
   subject_code: string;
   subject_name: string;
+
   grader_name: string;
 
-  question_no: number | null;
+  subject_question_id: number;   
+  question_no: number
+  question_label?: string;       
 }
 
 
@@ -51,8 +50,9 @@ export class graderService {
         subject_id: r.subject_id,
         subject_code: r.subject_code,
         subject_name: r.subject_name,
-
+        subject_question_id: r.subject_question_id,
         question_no: r.question_no,
+        question_label: r.question_label
       }));
 
       return assignments;
