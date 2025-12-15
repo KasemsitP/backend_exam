@@ -142,7 +142,7 @@ class SubjectRepo {
     try {
       await conn.beginTransaction();
 
-      // 1) insert subjects
+
       const insertSubjectSql = `
         INSERT INTO subjects (code, name)
         VALUES (?, ?)
@@ -153,16 +153,16 @@ class SubjectRepo {
       );
       const subjectId = subjectResult.insertId;
 
-      // 2) insert subject_questions (ถ้ามี)
+
       const questions = input.questions ?? [];
       if (questions.length > 0) {
         const placeholders = questions.map(() => "(?, ?, ?)").join(", ");
         const params: (number | string)[] = [];
 
         for (const q of questions) {
-          params.push(subjectId);        // subject_id
-          params.push(q.questionNo);     // question_no
-          params.push(q.label);          // label
+          params.push(subjectId);
+          params.push(q.questionNo);
+          params.push(q.label);
         }
 
         const insertQuestionsSql = `
@@ -176,7 +176,7 @@ class SubjectRepo {
 
       const subject = await this.getSubjectWithQuestionsById(conn, subjectId);
       if (!subject) {
-        // fallback กรณีแปลก ๆ
+
         return {
           id: subjectId,
           code: input.code,
@@ -200,7 +200,7 @@ class SubjectRepo {
     try {
       await conn.beginTransaction();
 
-      // 1) update ชื่อ/รหัสวิชา
+
       const updateSql = `
         UPDATE subjects
         SET code = ?, name = ?
@@ -212,7 +212,7 @@ class SubjectRepo {
         input.id,
       ]);
 
-      // 2) ถ้ามี questions มา → replace ใหม่ทั้งหมด
+
       if (Array.isArray(input.questions)) {
         const deleteSql = `DELETE FROM subject_questions WHERE subject_id = ?`;
         await conn.query(deleteSql, [input.id]);
@@ -253,7 +253,7 @@ class SubjectRepo {
     try {
       await conn.beginTransaction();
 
-      // ถ้า FK ตั้ง ON DELETE CASCADE แล้ว ตัวนี้ไม่จำเป็น แต่เขียนไว้เผื่อ
+
       const deleteQuestionsSql = `DELETE FROM subject_questions WHERE subject_id = ?`;
       await conn.query(deleteQuestionsSql, [id]);
 
@@ -268,59 +268,59 @@ class SubjectRepo {
       conn.release();
     }
   }
- async addQuestion(
-  subjectId: number,
-  label: string,
-  targetNo?: number
-): Promise<Subject> {
-  const conn = await this.pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const [rows] = await conn.query<RowDataPacket[]>(
-      "SELECT COALESCE(MAX(question_no), 0) AS max_no FROM subject_questions WHERE subject_id = ?",
-      [subjectId]
-    );
+  async addQuestion(
+    subjectId: number,
+    label: string,
+    targetNo?: number
+  ): Promise<Subject> {
+    const conn = await this.pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query<RowDataPacket[]>(
+        "SELECT COALESCE(MAX(question_no), 0) AS max_no FROM subject_questions WHERE subject_id = ?",
+        [subjectId]
+      );
 
-    const maxNo = Number(rows[0].max_no);
-    let safeNo =
-      typeof targetNo === "number" && !Number.isNaN(targetNo)
-        ? targetNo
-        : maxNo + 1;
+      const maxNo = Number(rows[0].max_no);
+      let safeNo =
+        typeof targetNo === "number" && !Number.isNaN(targetNo)
+          ? targetNo
+          : maxNo + 1;
 
-    if (safeNo < 1) safeNo = 1;
-    if (safeNo > maxNo + 1) safeNo = maxNo + 1;
+      if (safeNo < 1) safeNo = 1;
+      if (safeNo > maxNo + 1) safeNo = maxNo + 1;
 
-    // เลื่อนข้อที่อยู่ >= safeNo ลงไป 1
-    await conn.query(
-      `
+
+      await conn.query(
+        `
         UPDATE subject_questions
         SET question_no = question_no + 1
         WHERE subject_id = ?
           AND question_no >= ?
       `,
-      [subjectId, safeNo]
-    );
+        [subjectId, safeNo]
+      );
 
-    await conn.query(
-      `
+      await conn.query(
+        `
         INSERT INTO subject_questions (subject_id, question_no, label)
         VALUES (?, ?, ?)
       `,
-      [subjectId, safeNo, label]
-    );
+        [subjectId, safeNo, label]
+      );
 
-    await conn.commit();
+      await conn.commit();
 
-    const subject = await this.getSubjectWithQuestionsById(conn, subjectId);
-    if (!subject) throw new Error("Subject not found after insert question");
-    return subject;
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
+      const subject = await this.getSubjectWithQuestionsById(conn, subjectId);
+      if (!subject) throw new Error("Subject not found after insert question");
+      return subject;
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   }
-}
 
   async deleteQuestion(subjectId: number, questionId: number): Promise<Subject> {
     const conn = await this.pool.getConnection();
@@ -355,6 +355,8 @@ class SubjectRepo {
       conn.release();
     }
   }
+
+
 }
 
 export const subjectRepo = new SubjectRepo();

@@ -108,6 +108,7 @@ class BagLogRepo {
     await connection.execute(sql, params);
   }
 
+
   /**
    * อัปเดตสถานะถุงในตาราง bags
    * status: CREATED | ISSUED | RETURNED (ตาม DDL)

@@ -3,6 +3,7 @@ import { sessionService } from "../Service/session.service";
 import { CreateSessionPayload } from "../Repo/session.repo";
 
 export class sessionController {
+  
   static create = async (req: Request, res: Response) => {
     try {
       const payload: CreateSessionPayload = req.body;

@@ -1,6 +1,7 @@
 // src/Service/baghandover.service.ts
 import { DB } from "../model/DB";
 import bagLogRepo, { BagLogDbRow } from "../Repo/baghandover.repo";
+import bagRepo from "../Repo/bag.repo";          // 👈 เพิ่ม import นี้ (ใช้หา session_id จาก bag)
 
 export type BagActionType = "CHECK_OUT" | "CHECK_IN";
 
@@ -26,10 +27,10 @@ export interface BagLogDTO {
   note?: string | null;
 }
 
+// ✅ ตัด sessionId ออกจาก payload ฝั่ง service
 interface CheckInPayload {
   campaignId: string;   // "camp-1"
-  sessionId: number;    // sessions.id
-  bagNo: number;        // bags.bag_no
+  bagId: number;          // bags.bag_no
   graderId: number;     // graders.id
   operatorId: number;   // accounts.id
   note?: string;
@@ -37,14 +38,12 @@ interface CheckInPayload {
 
 interface CheckOutPayload {
   campaignId: string;   // "camp-1"
-  sessionId: number;
-  bagNo: number;
+  bagId: number;        // 👈 ใช้ PK ของ bags
   operatorId: number;
   note?: string;
 }
 
 const parseCampaignId = (id: string): number => {
-  // รองรับทั้ง "camp-1" หรือ "1"
   if (id.startsWith("camp-")) {
     return parseInt(id.replace("camp-", ""), 10);
   }
@@ -56,9 +55,6 @@ const toCampaignString = (id: number): string => `camp-${id}`;
 const mapDbRowToLogDto = (row: BagLogDbRow): BagLogDTO => {
   const campaignIdStr = toCampaignString(row.campaign_id);
 
-  // mapping action DB → frontend
-  // ISSUE/TRANSFER = "ถุงกำลังถูกถือ" → CHECK_OUT
-  // RETURN         = "ถุงคืนแล้ว"      → CHECK_IN
   const action: BagActionType =
     row.action === "RETURN" ? "CHECK_IN" : "CHECK_OUT";
 
@@ -79,28 +75,18 @@ const mapDbRowToLogDto = (row: BagLogDbRow): BagLogDTO => {
   };
 };
 
-/**
- * สร้าง locks จาก log ทั้งหมด:
- * - group ตาม (session_id, bag_no)
- * - เอาแถวสุดท้ายของแต่ละถุง
- * - ถ้า action สุดท้ายเป็น ISSUE/TRANSFER → ถือว่าถุงกำลังถูกตรวจ (locked)
- * - ถ้า RETURN → ถุงว่าง (ไม่ lock)
- */
 const deriveLocksFromLogs = (rows: BagLogDbRow[]): BagLockDTO[] => {
   const lastByBagKey = new Map<string, BagLogDbRow>();
 
   for (const row of rows) {
     const key = `${row.session_id}-${row.bag_no}`;
-    // rows มาตามเวลา ASC อยู่แล้ว แค่ override ก็ได้ last
     lastByBagKey.set(key, row);
   }
 
   const locks: BagLockDTO[] = [];
 
   for (const row of lastByBagKey.values()) {
-    if (row.action === "RETURN") {
-      continue; // คืนแล้ว ไม่ lock
-    }
+    if (row.action === "RETURN") continue;
 
     const campaignIdStr = toCampaignString(row.campaign_id);
     const ts =
@@ -124,53 +110,61 @@ const deriveLocksFromLogs = (rows: BagLogDbRow[]): BagLockDTO[] => {
 };
 
 export class BagHandoverService {
-  /**
-   * GET ทั้ง locks + logs สำหรับ 1 campaign
-   */
-  static async getForCampaign(campaignId: string): Promise<{
+  static async getForCampaign(
+    campaignId: string
+  ): Promise<{
     locks: BagLockDTO[];
     logs: BagLogDTO[];
   }> {
     const connection = await DB.getInstance().getConnection();
+
     try {
+      // แปลง campaignId จาก string เป็น number
       const campaignIdNumeric = parseCampaignId(campaignId);
 
+      // ดึง log ทั้งหมดของ campaign
       const rows = await bagLogRepo.findByCampaignId(
         campaignIdNumeric,
         connection
       );
 
       const locks = deriveLocksFromLogs(rows);
-      const logs = rows.map(mapDbRowToLogDto).reverse(); // ให้ log ใหม่อยู่บนสุด
+
+      const logs = rows
+        .map(mapDbRowToLogDto)
+        .reverse();
 
       return { locks, logs };
     } finally {
+      // ปิด connection ไม่ว่าจะ success หรือ error
       connection.release();
     }
   }
 
-  /**
-   * Check-in = ลงทะเบียนถุงให้ผู้ตรวจ (action = ISSUE)
-   */
+
   static async checkIn(payload: CheckInPayload) {
     const connection = await DB.getInstance().getConnection();
     try {
       await connection.beginTransaction();
 
-      const { sessionId, bagNo, graderId, operatorId, note } = payload;
+      const { campaignId, bagId, graderId, operatorId, note } = payload;
+      const campaignIdNumeric = parseCampaignId(campaignId);
 
-      // optional: ตรวจว่าถุงนี้มีจริงไหม
-      const exists = await bagLogRepo.ensureBagExists(
-        sessionId,
-        bagNo,
-        connection
-      );
-      if (!exists) {
+      // 1) หา bag จาก PK
+      const bagRow = await bagRepo.findById(connection, bagId);   // 👈 เดี๋ยวดูต่อด้านล่าง
+      if (!bagRow) {
+        throw new Error(`ไม่พบถุง id=${bagId}`);
+      }
+      if (Number(bagRow.campaign_id) !== campaignIdNumeric) {
         throw new Error(
-          `ไม่พบถุงใน session_id=${sessionId}, bag_no=${bagNo}`
+          `ถุงไม่ได้อยู่ในแคมเปญนี้ (campaign_id=${bagRow.campaign_id}, current=${campaignIdNumeric})`
         );
       }
 
+      const sessionId = Number(bagRow.session_id);
+      const bagNo = Number(bagRow.bag_no);   // 👈 อันนี้แหละที่ FK ต้องการ
+
+      // 2) insert ISSUE log
       await bagLogRepo.insertIssueLog(
         {
           session_id: sessionId,
@@ -182,6 +176,7 @@ export class BagHandoverService {
         connection
       );
 
+      // 3) update bag status
       await bagLogRepo.updateBagStatus(
         sessionId,
         bagNo,
@@ -190,36 +185,36 @@ export class BagHandoverService {
       );
 
       await connection.commit();
-
       return { success: true };
     } catch (err) {
       await connection.rollback();
+      console.error("Service Error (BagHandoverService.checkIn):", err);
       throw err;
     } finally {
       connection.release();
     }
   }
 
-  /**
-   * Check-out = รับคืนถุง (action = RETURN)
-   */
   static async checkOut(payload: CheckOutPayload) {
     const connection = await DB.getInstance().getConnection();
     try {
       await connection.beginTransaction();
 
-      const { sessionId, bagNo, operatorId, note } = payload;
+      const { campaignId, bagId, operatorId, note } = payload;
+      const campaignIdNumeric = parseCampaignId(campaignId);
 
-      const exists = await bagLogRepo.ensureBagExists(
-        sessionId,
-        bagNo,
-        connection
-      );
-      if (!exists) {
+      const bagRow = await bagRepo.findById(connection, bagId);
+      if (!bagRow) {
+        throw new Error(`ไม่พบถุง id=${bagId}`);
+      }
+      if (Number(bagRow.campaign_id) !== campaignIdNumeric) {
         throw new Error(
-          `ไม่พบถุงใน session_id=${sessionId}, bag_no=${bagNo}`
+          `ถุงไม่ได้อยู่ในแคมเปญนี้ (campaign_id=${bagRow.campaign_id}, current=${campaignIdNumeric})`
         );
       }
+
+      const sessionId = Number(bagRow.session_id);
+      const bagNo = Number(bagRow.bag_no);
 
       await bagLogRepo.insertReturnLog(
         {
@@ -239,10 +234,10 @@ export class BagHandoverService {
       );
 
       await connection.commit();
-
       return { success: true };
     } catch (err) {
       await connection.rollback();
+      console.error("Service Error (BagHandoverService.checkOut):", err);
       throw err;
     } finally {
       connection.release();

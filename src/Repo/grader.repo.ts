@@ -1,5 +1,6 @@
 // src/Repo/grader.repo.ts
-import { PoolConnection, RowDataPacket } from "mysql2/promise";
+import { DB } from "../model/DB";
+import { Pool, PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
 /**
  * แถวที่ได้จาก join grading_slots + graders
@@ -22,11 +23,21 @@ export interface DbGraderAssignmentRow {
   question_label?: string;
 }
 
+export interface DbGrader extends RowDataPacket {
+  id: number;
+  campaign_id: number;
+  account_id: number | null;
+  active: number;
+}
+
+type DbClient = Pool | PoolConnection;
+
 class GraderRepo {
-  /**
-   * ดึง "ข้อที่ถูก assign ให้ตรวจแล้ว" ของ campaign หนึ่ง
-   * ใช้ join grading_slots + graders
-   */
+  private pool: Pool;
+
+  constructor() {
+    this.pool = DB.getInstance();
+  }
   async findAllAssignmentsByCampaignId(
     campaignIdNumeric: number,
     connection: PoolConnection
@@ -119,33 +130,41 @@ ORDER BY sq.question_no ASC;
   }
 
 
-  async create(
-    data: {
-      campaign_id: number;
-      name: string;
-      active?: boolean;
-      account_id?: number | null;
-    },
-    connection: PoolConnection
-  ) {
-    const sql = `
-      INSERT INTO graders (campaign_id, name, active, account_id)
-      VALUES (?, ?, ?, ?);
-    `;
-
-    try {
-      const [result] = await connection.execute(sql, [
-        data.campaign_id,
-        data.name,
-        data.active ?? true,
-        data.account_id ?? null,
-      ]);
-      return result;
-    } catch (error) {
-      console.error("Repo Error (Grader create):", error);
-      throw error;
+  async findById(
+    id: number,
+    dbClient: DbClient = this.pool
+  ): Promise<DbGrader> {
+    const sql = `SELECT * FROM graders WHERE id = ? LIMIT 1`;
+    const [rows] = await dbClient.execute<DbGrader[]>(sql, [id]);
+    if (!rows[0]) {
+      throw new Error(`Grader ${id} not found`);
     }
+    return rows[0];
   }
+
+async create(
+  payload: {
+    campaign_id: number;
+    account_id: number | null;
+    active?: number;
+  },
+  dbClient: DbClient = this.pool
+): Promise<DbGrader> {
+  const sql = `
+    INSERT INTO graders (campaign_id, account_id, active)
+    VALUES (?, ?, ?)
+  `;
+  const params = [
+    payload.campaign_id,
+    payload.account_id,
+    payload.active ?? 1,
+  ];
+
+  const [result] = await dbClient.execute<ResultSetHeader>(sql, params);
+  const newId = result.insertId;
+  return this.findById(newId, dbClient);
+}
+
 
   async updateById(
     id: number,
@@ -188,6 +207,23 @@ ORDER BY sq.question_no ASC;
       console.error("Repo Error (Grader deleteById):", error);
       throw error;
     }
+  }
+  async findByCampaignAndAccount(
+    campaignId: number,
+    accountId: number,
+    dbClient: DbClient = this.pool
+  ): Promise<DbGrader | null> {
+    const sql = `
+      SELECT *
+      FROM graders
+      WHERE campaign_id = ? AND account_id = ?
+      LIMIT 1
+    `;
+    const [rows] = await dbClient.execute<DbGrader[]>(sql, [
+      campaignId,
+      accountId,
+    ]);
+    return rows[0] ?? null;
   }
 }
 

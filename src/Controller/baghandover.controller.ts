@@ -38,20 +38,13 @@ export class BagHandoverController {
     try {
       const {
         campaignId,
-        sessionId,
-        bagNo,
+        bagId,        // 👈 เปลี่ยนจาก bagNo → bagId
         graderId,
         operatorId,
         note,
       } = req.body ?? {};
 
-      if (
-        !campaignId ||
-        !sessionId ||
-        !bagNo ||
-        !graderId ||
-        !operatorId
-      ) {
+      if (!campaignId || !bagId || !graderId || !operatorId) {
         return res
           .status(400)
           .json({ message: "Missing required fields for check-in" });
@@ -59,8 +52,7 @@ export class BagHandoverController {
 
       await BagHandoverService.checkIn({
         campaignId,
-        sessionId: Number(sessionId),
-        bagNo: Number(bagNo),
+        bagId: Number(bagId),
         graderId: Number(graderId),
         operatorId: Number(operatorId),
         note,
@@ -73,22 +65,11 @@ export class BagHandoverController {
     }
   }
 
-  /**
-   * POST /api/bag-handover/check-out
-   * body:
-   * {
-   *   campaignId: "camp-1",
-   *   sessionId: 10,
-   *   bagNo: 3,
-   *   operatorId: 1,
-   *   note?: "..."
-   * }
-   */
   static async checkOut(req: Request, res: Response) {
     try {
-      const { campaignId, sessionId, bagNo, operatorId, note } = req.body ?? {};
+      const { campaignId, bagId, operatorId, note } = req.body ?? {};
 
-      if (!campaignId || !sessionId || !bagNo || !operatorId) {
+      if (!campaignId || !bagId || !operatorId) {
         return res
           .status(400)
           .json({ message: "Missing required fields for check-out" });
@@ -96,8 +77,7 @@ export class BagHandoverController {
 
       await BagHandoverService.checkOut({
         campaignId,
-        sessionId: Number(sessionId),
-        bagNo: Number(bagNo),
+        bagId: Number(bagId),
         operatorId: Number(operatorId),
         note,
       });

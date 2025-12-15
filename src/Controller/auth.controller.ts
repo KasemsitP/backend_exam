@@ -18,7 +18,7 @@ export class authcontroller {
       const hash = await utills.hash(password)
       const userData = { username, password: hash, full_name, email, role };
       const result = await authrepo.createAccount(userData)
-      res.status(201).send({ message: "ลงทะเบียนสำเร็จ" });
+      res.status(201).send({ message: "ลงทะเบียนสำเร็จ" , id:result });
 
     } catch (error: any) {
       return res.status(400).send({ message: error.message });

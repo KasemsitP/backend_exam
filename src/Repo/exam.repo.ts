@@ -135,24 +135,38 @@ class ExamDataRepo {
 
   async fetchSubjects(opts?: FetchOpts): Promise<CampaignSubject[]> {
     const { where, params } = this.buildActiveWhere(opts);
-    const sql = `
-      SELECT 
-        ss.session_id,
-        ss.subject_id,
-        ss.start_at,
-        ss.end_at,
-        ss.question_count,
-        ss.question_range,
-        ss.order_no,
-        s.code AS code,
-        s.name AS name
-      FROM session_subjects ss
-      JOIN sessions sess ON ss.session_id = sess.id
-      JOIN exam_campaigns ec ON sess.campaign_id = ec.id
-      JOIN subjects s ON ss.subject_id = s.id
-      WHERE ${where}
-      ORDER BY ss.session_id, ss.order_no
-    `;
+  const sql = `
+    SELECT 
+      ss.session_id,
+      ss.subject_id,
+      ss.start_at,
+      ss.end_at,
+      COALESCE(COUNT(sq.id), 0) AS question_count,   -- ✅ นับจาก subject_questions
+      ss.question_range,
+      ss.order_no,
+      s.code AS code,
+      s.name AS name
+    FROM session_subjects ss
+    JOIN sessions sess 
+      ON ss.session_id = sess.id
+    JOIN exam_campaigns ec 
+      ON sess.campaign_id = ec.id
+    JOIN subjects s 
+      ON ss.subject_id = s.id
+    LEFT JOIN subject_questions sq
+      ON sq.subject_id = ss.subject_id
+    WHERE ${where}
+    GROUP BY
+      ss.session_id,
+      ss.subject_id,
+      ss.start_at,
+      ss.end_at,
+      ss.question_range,
+      ss.order_no,
+      s.code,
+      s.name
+    ORDER BY ss.session_id, ss.order_no
+  `;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
     return rows as CampaignSubject[];
   }

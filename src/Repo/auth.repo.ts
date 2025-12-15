@@ -1,7 +1,7 @@
 
 import { DB } from "../model/DB";
 import { Pool } from "mysql2/promise";
-import { RowDataPacket , ResultSetHeader } from "mysql2";
+import { RowDataPacket, ResultSetHeader } from "mysql2";
 
 export interface UserData {
     username: string;
@@ -28,27 +28,22 @@ class Authrepo {
 
 
     }
-    async createAccount(userdata: UserData): Promise<RowDataPacket[]> {
-
+    async createAccount(userdata: UserData): Promise<number> {
         const sql = `
-      INSERT INTO accounts (username, password_hash, full_name, email, role_id, active)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE full_name = VALUES(full_name);
-    `;
+    INSERT INTO accounts (username, password_hash, full_name, email, role_id, active)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `;
         const params = [
             userdata.username,
             userdata.password,
             userdata.full_name,
             userdata.email,
             userdata.role,
-            1
+            1,
         ];
 
-        const [result] = await this.pool.execute<RowDataPacket[]>(sql, params);
-        return result;
-
-
-
+        const [result] = await this.pool.execute<ResultSetHeader>(sql, params);
+        return result.insertId;       
     }
     async findByUsername(username: string): Promise<RowDataPacket | null> {
         const sql = `
@@ -98,7 +93,7 @@ ORDER BY a.id ASC;
 
         if (data.password_hash) {
             // (ถ้ามีรหัสใหม่)
-    sql = `
+            sql = `
         UPDATE accounts
         SET full_name = ?, email = ?, role_id = ?, active = ?, password_hash = ?
         WHERE id = ?;
@@ -106,7 +101,7 @@ ORDER BY a.id ASC;
             params = [data.full_name, data.email, data.role_id, data.active, data.password_hash, id];
         } else {
             // (ถ้าไม่มีรหัสใหม่)
-    sql = `
+            sql = `
         UPDATE accounts
         SET full_name = ?, email = ?, role_id = ?, active = ?
         WHERE id = ?;
@@ -124,10 +119,10 @@ ORDER BY a.id ASC;
         return result;
     }
 
-    async updateAuthsession(id: number , sessionid  : string): Promise<ResultSetHeader> {
-        console.log(id , sessionid)
+    async updateAuthsession(id: number, sessionid: string): Promise<ResultSetHeader> {
+        console.log(id, sessionid)
         const sql = `UPDATE auth_sessions SET account_id = ? WHERE sid = ?`;
-        const [result] = await this.pool.execute<ResultSetHeader>(sql, [id ,sessionid]);
+        const [result] = await this.pool.execute<ResultSetHeader>(sql, [id, sessionid]);
         return result;
     }
 

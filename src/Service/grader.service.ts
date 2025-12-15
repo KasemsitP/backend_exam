@@ -18,9 +18,9 @@ export interface ApiGrader {
 
   grader_name: string;
 
-  subject_question_id: number;   
+  subject_question_id: number;
   question_no: number
-  question_label?: string;       
+  question_label?: string;
 }
 
 
@@ -63,12 +63,13 @@ export class graderService {
       connection.release();
     }
   };
-  // ---- ด้านล่างยังเก็บ create/update/delete เดิมไว้ได้เหมือนเดิม ----
+
 
   static create = async (payload: {
     campaignId: number;
     name: string;
-    active?: boolean;
+    max_load?: number | null;
+    active?: number;
     accountId?: number | null;
   }) => {
     const connection = await DB.getInstance().getConnection();
@@ -78,9 +79,8 @@ export class graderService {
       const result = await graderRepo.create(
         {
           campaign_id: payload.campaignId,
-          name: payload.name,
-          active: payload.active,
-          account_id: payload.accountId,
+          account_id: payload.accountId ?? null, // << สำคัญ
+          active: 1,
         },
         connection
       );
@@ -95,6 +95,8 @@ export class graderService {
       connection.release();
     }
   };
+
+
 
   static updateById = async (
     id: number,

@@ -6,6 +6,7 @@ import dotenv from "dotenv"
 import MySQLStoreFactory from "express-mysql-session";
 import session from 'express-session';
 import csrf from "tiny-csrf"; 
+import { Logging } from './Middleware/logging';
 import {DB} from './model/DB';
 import authrouter from "./Routes/routes.auth"
 import userrouter from "./Routes/router.user"
@@ -27,12 +28,14 @@ import graderRouter from './Routes/router.grader';
 import gradingslotRouter from './Routes/router.gradingslot';
 import gradingscoreRouter from './Routes/router.gradingscore';
 import subjectRouter from './Routes/router.subject'
+import graderAssignmentRouter from './Routes/router.grader-assignment'
 dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); 
 app.use(cookieParser(process.env.COOKIE_SECRET));
+app.use(Logging);
 const allowedOrigins = [
   'http://localhost:5173',               // frontend dev
   'https://exam-management-uyce.onrender.com', // frontend prod
@@ -126,6 +129,7 @@ app.use("/api", bagHandover)
 app.use("/api/",graderRouter)
 app.use("/api/",gradingslotRouter)
 app.use("/api/",gradingscoreRouter)
+app.use("/api",graderAssignmentRouter)
 
 
 app.get("/test",isAuthenticated, async (req, res) => {
