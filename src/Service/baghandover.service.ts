@@ -30,16 +30,17 @@ export interface BagLogDTO {
 // ✅ ตัด sessionId ออกจาก payload ฝั่ง service
 interface CheckInPayload {
   campaignId: string;   // "camp-1"
-  bagId: number;          // bags.bag_no
+  bagId: number
   graderId: number;     // graders.id
   operatorId: number;   // accounts.id
   note?: string;
 }
 
 interface CheckOutPayload {
-  campaignId: string;   // "camp-1"
-  bagId: number;        // 👈 ใช้ PK ของ bags
+  campaignId: string;   
+  bagNo: number;       
   operatorId: number;
+  sessionId: number;
   note?: string;
 }
 
@@ -141,8 +142,7 @@ export class BagHandoverService {
     }
   }
 
-
-  static async checkIn(payload: CheckInPayload) {
+static async checkIn(payload: CheckInPayload) {
     const connection = await DB.getInstance().getConnection();
     try {
       await connection.beginTransaction();
@@ -151,24 +151,22 @@ export class BagHandoverService {
       const campaignIdNumeric = parseCampaignId(campaignId);
 
       // 1) หา bag จาก PK
-      const bagRow = await bagRepo.findById(connection, bagId);   // 👈 เดี๋ยวดูต่อด้านล่าง
+      const bagRow = await bagRepo.findById(connection, bagId);
       if (!bagRow) {
         throw new Error(`ไม่พบถุง id=${bagId}`);
       }
+      
+      // Check Campaign
       if (Number(bagRow.campaign_id) !== campaignIdNumeric) {
         throw new Error(
           `ถุงไม่ได้อยู่ในแคมเปญนี้ (campaign_id=${bagRow.campaign_id}, current=${campaignIdNumeric})`
         );
       }
 
-      const sessionId = Number(bagRow.session_id);
-      const bagNo = Number(bagRow.bag_no);   // 👈 อันนี้แหละที่ FK ต้องการ
-
-      // 2) insert ISSUE log
+      // 2) insert ISSUE log (ส่ง bagId แทน session/bag_no)
       await bagLogRepo.insertIssueLog(
         {
-          session_id: sessionId,
-          bag_no: bagNo,
+          bag_id: bagId, // ✅ ใช้ bagId ตาม Schema
           grader_id: graderId,
           operator_id: operatorId,
           note: note ?? null,
@@ -176,10 +174,9 @@ export class BagHandoverService {
         connection
       );
 
-      // 3) update bag status
+      // 3) update bag status (ส่ง bagId)
       await bagLogRepo.updateBagStatus(
-        sessionId,
-        bagNo,
+        bagId, // ✅ ใช้ bagId Update ตรงๆ
         "ISSUED",
         connection
       );
@@ -195,40 +192,44 @@ export class BagHandoverService {
     }
   }
 
-  static async checkOut(payload: CheckOutPayload) {
+static async checkOut(payload: CheckOutPayload) {
     const connection = await DB.getInstance().getConnection();
     try {
       await connection.beginTransaction();
 
-      const { campaignId, bagId, operatorId, note } = payload;
+      // 2. รับ sessionId และ bagNo มาแทน bagId
+      const { campaignId, sessionId, bagNo, operatorId, note } = payload;
       const campaignIdNumeric = parseCampaignId(campaignId);
 
-      const bagRow = await bagRepo.findById(connection, bagId);
+      // 3. ค้นหาถุงจาก Session + BagNo เพื่อเอา ID (PK)
+      const bagRow = await bagRepo.findBySessionAndNo(connection, sessionId, bagNo);
+
       if (!bagRow) {
-        throw new Error(`ไม่พบถุง id=${bagId}`);
+        throw new Error(`ไม่พบถุงหมายเลข ${bagNo} ใน Session ${sessionId}`);
       }
+
+      // 4. ตรวจสอบ Campaign (Validation)
       if (Number(bagRow.campaign_id) !== campaignIdNumeric) {
         throw new Error(
           `ถุงไม่ได้อยู่ในแคมเปญนี้ (campaign_id=${bagRow.campaign_id}, current=${campaignIdNumeric})`
         );
       }
 
-      const sessionId = Number(bagRow.session_id);
-      const bagNo = Number(bagRow.bag_no);
+      const bagId = bagRow.id; // ✅ ได้ ID ของจริงมาแล้ว (PK)
 
+      // 5. Insert Log (ใช้ bagId ที่หามาได้)
       await bagLogRepo.insertReturnLog(
         {
-          session_id: sessionId,
-          bag_no: bagNo,
+          bag_id: bagId, // ส่ง PK ลง DB
           operator_id: operatorId,
           note: note ?? null,
         },
         connection
       );
 
+      // 6. Update Status (ใช้ bagId ที่หามาได้)
       await bagLogRepo.updateBagStatus(
-        sessionId,
-        bagNo,
+        bagId, // ส่ง PK เพื่อ update
         "RETURNED",
         connection
       );

@@ -45,8 +45,50 @@ class BagRepo {
     const campaignIdNumeric = parseInt(campaignId.replace("camp-", ""));
 
     // ⭐️ (FIX 7: ลบการขึ้นบรรทัดใหม่ (Newline) หน้า SELECT)
-    const sql = `
-SELECT
+//     const sql = `
+// SELECT
+//   b.id,
+//   s.campaign_id,
+//   b.session_id,
+//   s.title AS session_label,
+//   b.bag_no,
+//   b.count_items,
+//   b.status,
+//   CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) AS bag_no_str,
+//   MIN(sj.code) AS subject_code,
+//   MIN(sj.name) AS subject_name,
+//   COALESCE(bs.scanned_count, 0) AS scanned_count   -- 👈 เพิ่มตรงนี้
+// FROM bags b
+// JOIN sessions s 
+//   ON b.session_id = s.id
+// LEFT JOIN session_subjects ss 
+//   ON s.id = ss.session_id 
+// LEFT JOIN subjects sj 
+//   ON ss.subject_id = sj.id
+// LEFT JOIN (                                      -- 👈 นับจำนวนเล่มในแต่ละถุง
+//   SELECT
+//     session_id,
+//     bag_no,
+//     COUNT(*) AS scanned_count
+//   FROM booklets
+//   GROUP BY session_id, bag_no
+// ) bs
+//   ON bs.session_id = b.session_id
+//  AND bs.bag_no     = b.bag_no
+// WHERE s.campaign_id = ?
+// GROUP BY
+//   b.id,
+//   s.campaign_id,
+//   b.session_id,
+//   s.title,
+//   b.bag_no,
+//   b.count_items,
+//   b.status,
+//   bs.scanned_count
+// ORDER BY
+//   b.bag_no ASC;
+// `;
+const sql = `SELECT
   b.id,
   s.campaign_id,
   b.session_id,
@@ -57,7 +99,7 @@ SELECT
   CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) AS bag_no_str,
   MIN(sj.code) AS subject_code,
   MIN(sj.name) AS subject_name,
-  COALESCE(bs.scanned_count, 0) AS scanned_count   -- 👈 เพิ่มตรงนี้
+  MAX(COALESCE(bs.scanned_count, 0)) AS scanned_count
 FROM bags b
 JOIN sessions s 
   ON b.session_id = s.id
@@ -65,16 +107,15 @@ LEFT JOIN session_subjects ss
   ON s.id = ss.session_id 
 LEFT JOIN subjects sj 
   ON ss.subject_id = sj.id
-LEFT JOIN (                                      -- 👈 นับจำนวนเล่มในแต่ละถุง
+LEFT JOIN (
   SELECT
-    session_id,
-    bag_no,
+    bag_id,
     COUNT(*) AS scanned_count
   FROM booklets
-  GROUP BY session_id, bag_no
+  WHERE bag_id IS NOT NULL
+  GROUP BY bag_id
 ) bs
-  ON bs.session_id = b.session_id
- AND bs.bag_no     = b.bag_no
+  ON bs.bag_id = b.id
 WHERE s.campaign_id = ?
 GROUP BY
   b.id,
@@ -83,11 +124,10 @@ GROUP BY
   s.title,
   b.bag_no,
   b.count_items,
-  b.status,
-  bs.scanned_count
+  b.status
 ORDER BY
   b.bag_no ASC;
-`;
+`
     ;
 
     try {
@@ -233,6 +273,27 @@ ORDER BY b.bag_no ASC;
     const arr = rows as DbBagRow[];
     return arr[0] ?? null;
   }
+
+async findBySessionAndNo(
+  connection: PoolConnection,
+  sessionId: number,
+  bagNo: number
+): Promise<any | null> {
+  // แก้ไข SQL: เพิ่ม JOIN sessions เพื่อเอา campaign_id
+  const sql = `
+    SELECT
+      b.*,
+      s.campaign_id
+    FROM bags b
+    JOIN sessions s ON b.session_id = s.id
+    WHERE b.session_id = ? AND b.bag_no = ?
+    LIMIT 1;
+  `;
+
+  const [rows] = await connection.execute(sql, [sessionId, bagNo]);
+  const arr = rows as any[];
+  return arr.length > 0 ? arr[0] : null;
+}
 }
 
 const bagRepo = new BagRepo();

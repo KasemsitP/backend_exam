@@ -11,6 +11,7 @@ export class bagController {
             if (!payload.campaignId || !payload.sessionId || !payload.prefix || !payload.count || !payload.capacity) {
                 return res.status(400).send({ message: "Missing required fields for bulk create" });
             }
+  
             const newBags = await bagService.bulkCreate(payload);
             res.status(201).json(newBags);
         } catch (error: any) {
@@ -22,7 +23,7 @@ export class bagController {
     static InsertBooklets = async (req: Request, res: Response) => {
         try {
             const payload = req.body;
-             //console.log(payload)
+             console.log(payload)
             if (!payload.campaignId || !payload.bag_no || !payload.scannedCodes) {
                 //console.log(payload)
                 return res.status(400).send({ message: "ข้อมูลไม่ครบ" });

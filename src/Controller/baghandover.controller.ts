@@ -66,21 +66,24 @@ export class BagHandoverController {
   }
 
   static async checkOut(req: Request, res: Response) {
+    console.log(req.body)
     try {
-      const { campaignId, bagId, operatorId, note } = req.body ?? {};
+      const { campaignId, bagNo, operatorId, note ,sessionId} = req.body ?? {};
 
-      if (!campaignId || !bagId || !operatorId) {
+      if (!campaignId || !bagNo || !operatorId || !sessionId) {
         return res
           .status(400)
           .json({ message: "Missing required fields for check-out" });
       }
+      console.log(bagNo , campaignId , operatorId, sessionId)
 
-      await BagHandoverService.checkOut({
-        campaignId,
-        bagId: Number(bagId),
-        operatorId: Number(operatorId),
-        note,
-      });
+await BagHandoverService.checkOut({
+      campaignId,
+      sessionId: Number(sessionId), 
+      bagNo: Number(bagNo),         
+      operatorId: Number(operatorId),
+      note,
+    });
 
       res.status(201).json({ message: "Bag check-out recorded" });
     } catch (err: any) {

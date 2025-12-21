@@ -38,6 +38,8 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 app.use(Logging);
 const allowedOrigins = [
   'http://localhost:5173',               // frontend dev
+
+  'http://192.168.1.39:5173',
   'https://exam-management-uyce.onrender.com', // frontend prod
 ];
 

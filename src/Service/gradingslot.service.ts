@@ -56,7 +56,7 @@ export class gradingService {
           graderId,
           sid
         );
-        console.log(assignment)
+      console.log(assignment)
       if (!assignment) {
         throw new Error(
           "ผู้ตรวจคนนี้ไม่ได้ถูกมอบหมายให้ตรวจในรอบสอบนี้ (หรือยังไม่ได้เซ็ต assignment)"
@@ -131,6 +131,25 @@ export class gradingService {
     }
 
     try {
+      const unscoredSlot = await gradingslotRepo.findUnscoredSlotForGrader(
+        connection,
+        bookletId,
+        subjectId,
+        questionNo,
+        graderId
+      );
+
+      if (unscoredSlot) {
+        // เคส: สแกนซ้ำ / หน้าเด้ง แต่ยังไม่เคยบันทึก score
+        if (createdConnection) {
+          await connection.commit();
+        }
+        return {
+          slotId: unscoredSlot.id,
+          graderOrder: unscoredSlot.grader_order ?? 1,
+          status: unscoredSlot.status,
+        };
+      }
       // ดึง slot เดิมของเล่มนี้ + วิชานี้ + ข้อนี้ (LOCK)
       const existingSlots =
         await gradingslotRepo.findSlotsByBookletAndQuestion(
@@ -144,6 +163,7 @@ export class gradingService {
       const alreadyHasThisGrader = existingSlots.some(
         (s) => s.grader_id === graderId
       );
+      console.log(alreadyHasThisGrader, existingSlots)
       if (alreadyHasThisGrader) {
         throw new Error("ผู้ตรวจคนนี้ได้รับมอบหมายให้ตรวจข้อนี้อยู่แล้ว");
       }

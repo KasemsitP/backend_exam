@@ -164,6 +164,34 @@ class GradingslotRepo {
   // กรณี 1 grader มีได้แค่ 1 ข้อใน 1 session (ตามที่คุณเลือก)
   return (rows as any[])[0] ?? null;
 }
+    async findUnscoredSlotForGrader(
+    conn: PoolConnection,
+    bookletId: number,
+    subjectId: number,
+    questionNo: number,
+    graderId: number
+  ): Promise<GradingSlotRow | null> {
+    const sql = `
+      SELECT s.*
+      FROM grading_slots s
+      LEFT JOIN grading_scores gs
+        ON gs.slot_id = s.id
+      WHERE s.booklet_id = ?
+        AND s.subject_id = ?
+        AND s.question_no = ?
+        AND s.grader_id  = ?
+        AND gs.id IS NULL         -- ยังไม่มีคะแนนเลย
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const [rows] = await conn.execute<GradingSlotRow[]>(sql, [
+      bookletId,
+      subjectId,
+      questionNo,
+      graderId,
+    ]);
+    return rows[0] ?? null;
+  }
 
 
 }

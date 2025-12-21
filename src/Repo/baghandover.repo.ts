@@ -6,7 +6,8 @@ export interface BagLogDbRow extends RowDataPacket {
   campaign_id: number;
   session_id: number;
   bag_no: number;
-  action: string;           // ISSUE | RETURN | TRANSFER
+  bag_id: number; // เพิ่ม bag_id เพื่อความชัดเจน
+  action: string;
   grader_id: number | null;
   grader_name: string | null;
   operator_id: number | null;
@@ -16,23 +17,22 @@ export interface BagLogDbRow extends RowDataPacket {
 }
 
 interface IssueLogInput {
-  session_id: number;
-  bag_no: number;
+  bag_id: number; // แก้จาก session_id, bag_no เป็น bag_id
   grader_id: number;
   operator_id: number;
   note?: string | null;
 }
 
 interface ReturnLogInput {
-  session_id: number;
-  bag_no: number;
+  bag_id: number; // แก้จาก session_id, bag_no เป็น bag_id
   operator_id: number;
   note?: string | null;
 }
 
 class BagLogRepo {
   /**
-   * ดึง log ทั้งหมดของ campaign หนึ่ง (ใช้ไปสรุป locks + logs)
+   * ดึง log ทั้งหมดของ campaign
+   * แก้ไข: JOIN จาก bag_logs -> bags -> sessions
    */
   async findByCampaignId(
     campaignIdNumeric: number,
@@ -42,24 +42,22 @@ class BagLogRepo {
       SELECT
         bl.id,
         s.campaign_id,
-        bl.session_id,
-        bl.bag_no,
+        b.session_id,       -- ดึงจาก bags
+        b.bag_no,           -- ดึงจาก bags
+        bl.bag_id,
         bl.action,
         bl.grader_id,
-        ag.full_name AS grader_name,   -- ✅ เอาชื่อจาก accounts อย่างเดียว
+        ag.full_name AS grader_name,
         bl.operator_id,
         ao.full_name AS operator_name,
         bl.at_time,
         bl.note
       FROM bag_logs bl
-      JOIN sessions s
-        ON bl.session_id = s.id
-      LEFT JOIN graders g
-        ON bl.grader_id = g.id
-      LEFT JOIN accounts ag
-        ON g.account_id = ag.id       -- ชื่อผู้ตรวจ (จาก accounts)
-      LEFT JOIN accounts ao
-        ON bl.operator_id = ao.id     -- ชื่อ operator (จาก accounts)
+      JOIN bags b ON bl.bag_id = b.id        -- JOIN bags ด้วย bag_id
+      JOIN sessions s ON b.session_id = s.id -- JOIN sessions ต่อจาก bags
+      LEFT JOIN graders g ON bl.grader_id = g.id
+      LEFT JOIN accounts ag ON g.account_id = ag.id
+      LEFT JOIN accounts ao ON bl.operator_id = ao.id
       WHERE s.campaign_id = ?
       ORDER BY bl.at_time ASC, bl.id ASC;
     `;
@@ -68,19 +66,19 @@ class BagLogRepo {
   }
 
   /**
-   * Insert log action = ISSUE (ลงทะเบียนถุงให้ผู้ตรวจ)
+   * Insert log action = ISSUE
+   * แก้ไข: Insert ลง column bag_id
    */
   async insertIssueLog(
     input: IssueLogInput,
     connection: PoolConnection
   ) {
     const sql = `
-      INSERT INTO bag_logs (session_id, bag_no, action, grader_id, operator_id, note)
-      VALUES (?, ?, 'ISSUE', ?, ?, ?);
+      INSERT INTO bag_logs (bag_id, action, grader_id, operator_id, note)
+      VALUES (?, 'ISSUE', ?, ?, ?);
     `;
     const params = [
-      input.session_id,
-      input.bag_no,
+      input.bag_id,
       input.grader_id,
       input.operator_id,
       input.note ?? null,
@@ -89,90 +87,42 @@ class BagLogRepo {
   }
 
   /**
-   * Insert log action = RETURN (รับคืนถุง)
+   * Insert log action = RETURN
+   * แก้ไข: Insert ลง column bag_id
    */
   async insertReturnLog(
     input: ReturnLogInput,
     connection: PoolConnection
   ) {
     const sql = `
-      INSERT INTO bag_logs (session_id, bag_no, action, grader_id, operator_id, note)
-      VALUES (?, ?, 'RETURN', NULL, ?, ?);
+      INSERT INTO bag_logs (bag_id, action, grader_id, operator_id, note)
+      VALUES (?, 'RETURN', NULL, ?, ?);
     `;
     const params = [
-      input.session_id,
-      input.bag_no,
+      input.bag_id,
       input.operator_id,
       input.note ?? null,
     ];
     await connection.execute(sql, params);
   }
 
-
   /**
    * อัปเดตสถานะถุงในตาราง bags
-   * status: CREATED | ISSUED | RETURNED (ตาม DDL)
+   * ปรับปรุง: ใช้ bag_id (PK) ในการ update เพื่อความแม่นยำและเร็วขึ้น
    */
   async updateBagStatus(
-    sessionId: number,
-    bagNo: number,
+    bagId: number,
     status: "CREATED" | "ISSUED" | "RETURNED",
     connection: PoolConnection
   ) {
     const sql = `
       UPDATE bags
       SET status = ?
-      WHERE session_id = ? AND bag_no = ?;
+      WHERE id = ?;
     `;
-    await connection.execute(sql, [status, sessionId, bagNo]);
-  }
-
-  /**
-   * verify ว่าถุงนี้อยู่ใน session นี้จริงหรือไม่ (option แต่แนะนำ)
-   */
-  async ensureBagExists(
-    sessionId: number,
-    bagNo: number,
-    connection: PoolConnection
-  ): Promise<boolean> {
-    const sql = `
-      SELECT 1
-      FROM bags
-      WHERE session_id = ? AND bag_no = ?
-      LIMIT 1;
-    `;
-    const [rows] = await connection.execute(sql, [sessionId, bagNo]);
-    const arr = rows as RowDataPacket[];
-    return arr.length > 0;
+    await connection.execute(sql, [status, bagId]);
   }
 }
 
 const bagLogRepo = new BagLogRepo();
 export default bagLogRepo;
-
-
-    // const sql = `
-    //   SELECT
-    //     bl.id,
-    //     s.campaign_id,
-    //     bl.session_id,
-    //     bl.bag_no,
-    //     bl.action,
-    //     bl.grader_id,
-    //     ag.full_name AS grader_name,   -- ✅ เอาชื่อจาก accounts อย่างเดียว
-    //     bl.operator_id,
-    //     ao.full_name AS operator_name,
-    //     bl.at_time,
-    //     bl.note
-    //   FROM bag_logs bl
-    //   JOIN sessions s
-    //     ON bl.session_id = s.id
-    //   LEFT JOIN graders g
-    //     ON bl.grader_id = g.id
-    //   LEFT JOIN accounts ag
-    //     ON g.account_id = ag.id       -- ชื่อผู้ตรวจ (จาก accounts)
-    //   LEFT JOIN accounts ao
-    //     ON bl.operator_id = ao.id     -- ชื่อ operator (จาก accounts)
-    //   WHERE s.campaign_id = ?
-    //   ORDER BY bl.at_time ASC, bl.id ASC;
-    // `;

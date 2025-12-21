@@ -192,6 +192,7 @@ export class bagService {
         const connection = await DB.getInstance().getConnection();
         try {
             const dbBags = await bagRepo.findAllByCampaignId(campaignId, connection);
+            console.log(dbBags)
 
             const reduxBags = dbBags.map(dbBag => {
                 return {
