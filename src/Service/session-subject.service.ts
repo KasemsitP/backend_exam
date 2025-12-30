@@ -21,6 +21,18 @@ export class sessionSubjectService {
                 throw new Error(`Session with ID ${payload.session_id} not found.`);
             }
 
+            
+            const Qpayload = await sessionSubjectRepo.findNumberofQuestion(payload.subject_id)
+//            console.log(Qpayload.subject_id, payload.subject_id)
+
+            if(Qpayload.subject_id !== payload.subject_id ){
+                throw new Error("unmatach subject ID ")
+            }
+            if(Qpayload.total_questions <= 0 ){
+                throw new Error("no question found")
+            }
+
+
             const examDateISO = new Date(session.exam_date).toISOString();
             const examDatePart = examDateISO.slice(0, 10);
 
@@ -38,13 +50,14 @@ export class sessionSubjectService {
 
             console.log("Start DateTime:", startDateTime);
             console.log("End DateTime:", endDateTime);
+        //    console.log(payload.question_count)
 
             const linkPayload: CreateSessionSubjectLinkPayload = {
                 session_id: payload.session_id,
                 subject_id: payload.subject_id,              // 👈 ใช้ subject_id จาก payload
                 start_at: startDateTime,
                 end_at: endDateTime,
-                question_count: payload.question_count,
+                question_count: Qpayload.total_questions,
                 question_range: payload.question_range || null,
                 order_no: payload.order_no || 1,
             };

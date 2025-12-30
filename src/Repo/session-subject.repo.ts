@@ -11,13 +11,13 @@ export interface CreateSessionSubjectLinkPayload {
     order_no?: number | null;
 }
 export interface CreateSessionSubjectPayload {
-  session_id: number;
-  subject_id: number;      
-  start_at: string;
-  end_at: string;
-  question_count: number;
-  question_range?: string;
-  order_no?: number;
+    session_id: number;
+    subject_id: number;
+    start_at: string;
+    end_at: string;
+    question_count: number;
+    question_range?: string;
+    order_no?: number;
 }
 
 export interface ApiSessionSubject extends RowDataPacket {
@@ -33,6 +33,12 @@ export interface ApiSessionSubject extends RowDataPacket {
 export interface ApiSubjectResponse extends ApiSessionSubject {
     code: string;
     name: string;
+}
+
+export interface FindnumQuestion {
+    subject_id: number,
+    subject_code: number,
+    total_questions: number
 }
 type DbClient = Pool | PoolConnection;
 
@@ -125,6 +131,18 @@ class SessionSubjectRepo {
             "SELECT COUNT(*) as count FROM session_subjects WHERE subject_id = ?";
         const [rows] = await dbClient.execute<any[]>(sql, [subjectId]);
         return rows[0].count;
+    }
+    async findNumberofQuestion(subjectId: number): Promise<FindnumQuestion> {
+        const sql = `SELECT 
+    s.id AS subject_id,
+    s.code AS subject_code,
+    COUNT(q.id) AS total_questions
+FROM subjects s
+LEFT JOIN subject_questions q ON s.id = q.subject_id
+WHERE s.id = ?
+GROUP BY s.id, s.code, s.name`
+        const [rows] = await this.pool.execute<any[]>(sql, [subjectId]);
+        return rows[0] 
     }
 }
 

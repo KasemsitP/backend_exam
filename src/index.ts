@@ -29,6 +29,8 @@ import gradingslotRouter from './Routes/router.gradingslot';
 import gradingscoreRouter from './Routes/router.gradingscore';
 import subjectRouter from './Routes/router.subject'
 import graderAssignmentRouter from './Routes/router.grader-assignment'
+import gradingSummaryRouter from './Routes/router.gradingsummary';
+import gradingReportRouter from './Routes/router.gradingreport'
 dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
@@ -132,6 +134,8 @@ app.use("/api/",graderRouter)
 app.use("/api/",gradingslotRouter)
 app.use("/api/",gradingscoreRouter)
 app.use("/api",graderAssignmentRouter)
+app.use("/api",gradingSummaryRouter)
+app.use("/api", gradingReportRouter)
 
 
 app.get("/test",isAuthenticated, async (req, res) => {

@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import { sessionSubjectService } from "../Service/session-subject.service";
-import { CreateSessionSubjectPayload } from "../Repo/session-subject.repo";
+import { CreateSessionSubjectPayload , FindnumQuestion } from "../Repo/session-subject.repo";
 
 export class sessionSubjectController {
   static create = async (req: Request, res: Response) => {
     try {
       const sessionId = parseInt(req.body.session_id, 10);
       const subjectId = parseInt(req.body.subject_id, 10);
+
 
       if (isNaN(sessionId) || isNaN(subjectId)) {
         return res.status(400).send({ message: "Invalid session_id or subject_id" });
