@@ -80,7 +80,6 @@ export class graderService {
         {
           campaign_id: payload.campaignId,
           account_id: payload.accountId ?? null, // << สำคัญ
-          active: 1,
         },
         connection
       );
@@ -114,7 +113,6 @@ export class graderService {
         id,
         {
           name: payload.name,
-          active: payload.active,
           account_id: payload.accountId,
         },
         connection

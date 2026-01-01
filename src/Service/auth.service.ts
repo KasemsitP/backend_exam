@@ -13,23 +13,35 @@ export class authservice {
 
         if (!row) throw new Error("ไม่พบผู้ใช้");
 
+
+        if (Number(row.active) !== 1) throw new Error("บัญชีถูกระงับการใช้งาน");
+
         const match = await utills.bcryptCompare(password, row.password_hash);
         if (!match) throw new Error("รหัสผ่านไม่ถูกต้อง");
 
-        const { password_hash, ...secureUserData } = row;
+        //const { password_hash, ...secureUserData } = row;
 
-        const roleCode = (row.role_code || "staff").toLowerCase(); // "admin"
+        const roleCode = (row.role_code || "staff").toLowerCase();
 
         return {
-            id: secureUserData.id.toString(),
-            name: secureUserData.full_name,
-            username: secureUserData.username,
-            roles: [roleCode]
+            id: row.id,
+            name: row.full_name,
+            username: row.username,
+            roles: [roleCode],
+            active: Number(row.active),
+            sessionVersion: Number(row.session_version ?? 1),
         };
     }
     static getAllAccounts = async () => {
         const rows = await authrepo.findAllAccountsWithRoles();
         // (แปลง active (0/1) เป็น boolean)
+        return rows.map(row => ({
+            ...row,
+            active: !!row.active
+        }));
+    }
+    static getAllGradersAccounts = async (campaign : number) => {
+        const rows = await authrepo.findAllAccountsGraderByCampaign(Number(campaign));
         return rows.map(row => ({
             ...row,
             active: !!row.active
@@ -64,6 +76,34 @@ export class authservice {
 
         return { ...updatedAccount, active: !!updatedAccount.active };
     }
+    static revokeAccount = async (targetAccountId: number, actorAccountId?: number) => {
+        // กัน revoke ตัวเอง (optional แต่แนะนำ)
+        if (actorAccountId && targetAccountId === actorAccountId) {
+            throw new Error("ไม่สามารถระงับบัญชีตัวเองได้");
+        }
+
+        const target = await authrepo.findAccountBasicById(targetAccountId);
+        if (!target) throw new Error("ไม่พบผู้ใช้");
+       // console.log(target)
+
+        if (Number(target.active) !== 1) {
+            // ถูก revoke อยู่แล้ว
+            return { id: target.id, active: false, alreadyRevoked: true };
+        }
+
+        await authrepo.revokeAccountById(targetAccountId);
+
+        return { id: targetAccountId, active: false };
+    };
+
+    static unrevokeAccount = async (targetAccountId: number) => {
+        const target = await authrepo.findAccountBasicById(targetAccountId);
+        if (!target) throw new Error("ไม่พบผู้ใช้");
+
+        await authrepo.unrevokeAccountById(targetAccountId);
+
+        return { id: targetAccountId, active: true };
+    };
 
     static deleteAccount = async (id: number) => {
         // (TODO: ควรเช็คว่า Account นี้ถูกใช้งานใน Graders หรือไม่ก่อนลบ)

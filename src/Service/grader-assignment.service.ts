@@ -46,7 +46,6 @@ export class graderAssignmentService {
               {
                 campaign_id: a.campaignId,
                 account_id: a.accountId, 
-                active: 1,
               },
               conn
             );

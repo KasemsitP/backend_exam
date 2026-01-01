@@ -1,6 +1,6 @@
 
 import { DB } from "../model/DB";
-import { Pool } from "mysql2/promise";
+import { Pool , PoolConnection } from "mysql2/promise";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 
 export interface UserData {
@@ -43,7 +43,7 @@ class Authrepo {
         ];
 
         const [result] = await this.pool.execute<ResultSetHeader>(sql, params);
-        return result.insertId;       
+        return result.insertId;
     }
     async findByUsername(username: string): Promise<RowDataPacket | null> {
         const sql = `
@@ -60,6 +60,17 @@ class Authrepo {
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [username]);
         return rows[0] || null;
     }
+    async findMeById(ID: number): Promise<RowDataPacket | null> {
+        const sql = `
+SELECT a.id, a.username, a.full_name, a.active, r.code AS role_code
+FROM accounts a
+LEFT JOIN roles r ON r.id = a.role_id
+WHERE a.id = ?
+LIMIT 1;
+    `;
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [ID]);
+        return rows[0] || null;
+    }
     async findAllAccountsWithRoles(): Promise<RowDataPacket[]> {
         const sql = `
 SELECT 
@@ -74,6 +85,23 @@ ORDER BY a.id ASC;
 `;
 
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql);
+        return rows;
+    }
+    async findAllAccountsGraderByCampaign(campaign : number): Promise<RowDataPacket[]> {
+        const sql = `
+SELECT 
+    a.id, a.username, a.full_name, a.email, a.active, a.role_id,
+    r.code as role_code,
+    r.name as role_name
+FROM 
+    accounts a
+JOIN 
+    graders g ON a.id = g.account_id AND g.campaign_id = ?
+LEFT JOIN 
+    roles r ON a.role_id = r.id AND r.code = 'GRADER'
+ORDER BY a.id ASC;
+`;
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql,[campaign]);
         return rows;
     }
 
@@ -125,7 +153,46 @@ ORDER BY a.id ASC;
         const [result] = await this.pool.execute<ResultSetHeader>(sql, [id, sessionid]);
         return result;
     }
+    async revokeAccountById(accountId: number) {
+       const conn: PoolConnection = await this.pool.getConnection();
 
+        try {
+            await conn.beginTransaction();
+
+            await conn.execute(
+                "UPDATE accounts SET active = 0, session_version = session_version + 1 WHERE id = ?",
+                [accountId]
+            );
+
+            await conn.execute(
+                "DELETE FROM auth_sessions WHERE account_id = ?",
+                [accountId]
+            );
+
+            await conn.commit();
+        } catch (e) {
+            await conn.rollback();
+            throw e;
+        } finally {
+            conn.release(); 
+        }
+    }
+
+    async unrevokeAccountById(accountId: number) {
+        const conn = DB.getInstance();
+        await conn.execute(
+            "UPDATE accounts SET active = 1 WHERE id = ?",
+            [accountId]
+        );
+    }
+    async findAccountBasicById(accountId: number) {
+        const conn = DB.getInstance();
+        const [rows]: any = await conn.execute(
+            "SELECT id, username, full_name, active, session_version FROM accounts WHERE id = ? LIMIT 1",
+            [accountId]
+        );
+        return rows?.[0] ?? null;
+    }
 }
 const authrepo = new Authrepo()
 export default authrepo

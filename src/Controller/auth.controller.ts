@@ -6,7 +6,8 @@ import authrepo from "../Repo/auth.repo";
 declare module "express-session" {
   interface SessionData {
     userId?: number;
-    userData?: any;
+    sessionVersion?: number;
+    roles?: string[];
   }
 }
 
@@ -18,7 +19,7 @@ export class authcontroller {
       const hash = await utills.hash(password)
       const userData = { username, password: hash, full_name, email, role };
       const result = await authrepo.createAccount(userData)
-      res.status(201).send({ message: "ลงทะเบียนสำเร็จ" , id:result });
+      res.status(201).send({ message: "ลงทะเบียนสำเร็จ", id: result });
 
     } catch (error: any) {
       return res.status(400).send({ message: error.message });
@@ -29,7 +30,9 @@ export class authcontroller {
     try {
       const result = await authservice.CheckUsername(username, password)
       req.session.userId = Number(result.id);
-      req.session.userData = result;
+      req.session.sessionVersion = Number(result.sessionVersion);
+      req.session.roles = result.roles;
+
 
 
       // console.log(result.id , req.sessionID)
@@ -41,10 +44,7 @@ export class authcontroller {
       // });
       try {
         await new Promise<void>((resolve, reject) => {
-          req.session.save((err) => {
-            if (err) return reject(err);
-            resolve();
-          });
+          req.session.save((err) => (err ? reject(err) : resolve()));
         });
 
         console.log("login sid =", req.sessionID, "userId =", result.id);
@@ -67,11 +67,31 @@ export class authcontroller {
       return res.status(400).send({ message: error.message });
     }
   }
-  static getMe = (req: Request, res: Response) => {
-    if (req.session.userData) {
-      res.status(200).json(req.session.userData);
-    } else {
-      res.status(401).send({ message: "Not authenticated" });
+  static getMe = async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId;
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+
+      // ดึงข้อมูลสดจาก DB (รวม roles)
+      const row = await authrepo.findMeById(userId);
+      if (!row) return res.status(401).json({ message: "Not authenticated" });
+
+      // กัน user โดน revoke
+      if (Number(row.active) !== 1) {
+        req.session.destroy(() => { });
+        return res.status(403).json({ message: "Account revoked/disabled" });
+      }
+
+      const roleCode = (row.role_code || "staff").toLowerCase();
+
+      return res.status(200).json({
+        id: String(row.id),
+        name: row.full_name,
+        username: row.username,
+        roles: [roleCode],
+      });
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
     }
   }
   static logout = (req: Request, res: Response) => {
@@ -93,6 +113,15 @@ export class authcontroller {
   static getAll = async (req: Request, res: Response) => {
     try {
       const accounts = await authservice.getAllAccounts();
+      res.status(200).json(accounts);
+    } catch (error: any) {
+      res.status(500).send({ message: error.message });
+    }
+  }
+  static getAllGraders = async (req: Request, res: Response) => {
+    const campaign_id = parseInt(req.params.id , 10)
+    try {
+      const accounts = await authservice.getAllGradersAccounts(Number(campaign_id));
       res.status(200).json(accounts);
     } catch (error: any) {
       res.status(500).send({ message: error.message });
@@ -128,6 +157,37 @@ export class authcontroller {
       res.status(500).send({ message: error.message });
     }
   }
+
+  static revokeAccount = async (req: Request, res: Response) => {
+    try {
+      const targetId = Number(req.params.id);
+      if (Number.isNaN(targetId)) {
+        return res.status(400).json({ message: "Invalid account id" });
+      }
+
+      // actor id (คนที่กด revoke) ถ้าคุณเก็บใน session
+      const actorId = req.session.userId;
+
+      const result = await authservice.revokeAccount(targetId, actorId);
+      return res.status(200).json({ message: "revoked", ...result });
+    } catch (e: any) {
+      return res.status(400).json({ message: e.message });
+    }
+  };
+
+  static unrevokeAccount = async (req: Request, res: Response) => {
+    try {
+      const targetId = Number(req.params.id);
+      if (Number.isNaN(targetId)) {
+        return res.status(400).json({ message: "Invalid account id" });
+      }
+
+      const result = await authservice.unrevokeAccount(targetId);
+      return res.status(200).json({ message: "unrevoked", ...result });
+    } catch (e: any) {
+      return res.status(400).json({ message: e.message });
+    }
+  };
 
 
 }

@@ -113,8 +113,8 @@ app.use(
 //   res.json({ csrfToken: token });
 // });
 
-
 app.use("/api/auth/",authrouter)
+app.use(isAuthenticated)
 app.use("/api/",userrouter)
 app.use("/api/",bagRouter)
 app.use("/api/",examDataRouter)

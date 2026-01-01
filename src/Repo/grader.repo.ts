@@ -27,7 +27,6 @@ export interface DbGrader extends RowDataPacket {
   id: number;
   campaign_id: number;
   account_id: number | null;
-  active: number;
 }
 
 type DbClient = Pool | PoolConnection;
@@ -146,18 +145,16 @@ async create(
   payload: {
     campaign_id: number;
     account_id: number | null;
-    active?: number;
   },
   dbClient: DbClient = this.pool
 ): Promise<DbGrader> {
   const sql = `
-    INSERT INTO graders (campaign_id, account_id, active)
-    VALUES (?, ?, ?)
+    INSERT INTO graders (campaign_id, account_id)
+    VALUES (?, ?)
   `;
   const params = [
     payload.campaign_id,
     payload.account_id,
-    payload.active ?? 1,
   ];
 
   const [result] = await dbClient.execute<ResultSetHeader>(sql, params);
@@ -170,7 +167,6 @@ async create(
     id: number,
     data: {
       name?: string;
-      active?: boolean;
       account_id?: number | null;
     },
     connection: PoolConnection
@@ -179,7 +175,6 @@ async create(
       UPDATE graders
       SET
         name       = COALESCE(?, name),
-        active     = COALESCE(?, active),
         account_id = COALESCE(?, account_id)
       WHERE id = ?;
     `;
@@ -187,7 +182,6 @@ async create(
     try {
       const [result] = await connection.execute(sql, [
         data.name ?? null,
-        typeof data.active === "boolean" ? (data.active ? 1 : 0) : null,
         data.account_id ?? null,
         id,
       ]);

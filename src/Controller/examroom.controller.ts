@@ -1,41 +1,60 @@
+// src/Controller/examRoom.controller.ts
 import { Request, Response } from "express";
 import { examRoomService } from "../Service/examRoom.service";
 
 export class examRoomController {
+    // GET /api/exam-rooms/campaign/:campaignId
+    static getAllByCampaign = async (req: Request, res: Response) => {
+        try {
+            const { campaignId } = req.params;
+            const rooms = await examRoomService.getAllByCampaign(campaignId);
+            res.status(200).json(rooms);
+        } catch (error: any) {
+            res.status(500).send({ message: error.message });
+        }
+    };
 
-  static getAllBySession = async (req: Request, res: Response) => {
-    try {
-      const { sessionId } = req.params; // (Frontend ID: "sess-10")
-      const rooms = await examRoomService.getAllBySession(sessionId);
-      res.status(200).json(rooms);
-    } catch (error: any) {
-      res.status(500).send({ message: error.message });
-    }
-  };
-  
-  static save = async (req: Request, res: Response) => {
-    try {
-      const payload = req.body;
-      if (!payload.sessionId || !payload.roomCode || !payload.capacity) {
-        return res.status(400).send({ message: "Missing required fields" });
-      }
-      const result = await examRoomService.saveRoom(payload);
-      res.status(201).json(result);
-    } catch (error: any) {
-      res.status(500).send({ message: error.message });
-   }
-  };
-  
-  static delete = async (req: Request, res: Response) => {
-    try {
-      const { sessionId, roomCode } = req.params;
-      if (!sessionId || !roomCode) {
-        return res.status(400).send({ message: "Missing sessionId or roomCode" });
-      }
-      const result = await examRoomService.deleteRoom(sessionId, roomCode);
-      res.status(200).json(result);
-    } catch (error: any) {
-      res.status(500).send({ message: error.message });
-    }
-  };
+    // POST /api/exam-rooms
+    static save = async (req: Request, res: Response) => {
+        try {
+            const { campaign_id, roomCode, capacity } = req.body;
+
+            const payload = {
+                campaignId: Number(campaign_id),
+                roomCode,
+                capacity,
+            };
+
+            console.log(payload)
+
+            if (!payload.campaignId || !payload.roomCode || !payload.capacity) {
+                return res
+                    .status(400)
+                    .send({ message: "Missing required fields (campaignId, roomCode, capacity)" });
+            }
+            console.log("asdasd")
+
+            const result = await examRoomService.saveRoom(payload);
+            res.status(201).json(result);
+        } catch (error: any) {
+            res.status(500).send({ message: error.message });
+        }
+    };
+
+    // DELETE /api/exam-rooms/:campaignId/:roomCode
+    static delete = async (req: Request, res: Response) => {
+        try {
+            const { campaignId, roomCode } = req.params;
+            if (!campaignId || !roomCode) {
+                return res
+                    .status(400)
+                    .send({ message: "Missing campaignId or roomCode" });
+            }
+
+            const result = await examRoomService.deleteRoom(campaignId, roomCode);
+            res.status(200).json(result);
+        } catch (error: any) {
+            res.status(500).send({ message: error.message });
+        }
+    };
 }

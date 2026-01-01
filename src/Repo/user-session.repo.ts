@@ -33,12 +33,12 @@ class UserSessionsRepo {
       //
       const sql = `
 SELECT
-    us.id            AS user_session_id,
-    u.id             AS user_id,
-    u.user_code      AS userCode,
-    u.full_name      AS firstName,
-    ''               AS lastName,
-    er.room_code     AS roomName,    -- ใช้ room_code เป็นชื่อห้อง (ถ้ายังไม่มีคอลัมน์ name)
+    us.id        AS user_session_id,
+    u.id         AS user_id,
+    u.user_code  AS userCode,
+    u.full_name  AS firstName,
+    ''           AS lastName,
+    er.room_code AS roomName,
     us.qr_payload
 FROM user_sessions us
 JOIN user_campaigns uc
@@ -47,7 +47,7 @@ JOIN users u
   ON uc.user_id = u.id
 LEFT JOIN exam_rooms er
   ON er.session_id = us.session_id
- AND er.room_code  = us.room_code
+ AND er.room_code  = uc.room_code      
 WHERE us.session_id = ?;
     `;
 
