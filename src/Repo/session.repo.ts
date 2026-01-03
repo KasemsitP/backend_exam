@@ -6,7 +6,6 @@ export interface ApiSession extends RowDataPacket {
   session_code: string;
   exam_date: string;
   campaign_id: number;
-  site_id: number;
   day_no: number;
   title?: string;
 }
@@ -27,22 +26,19 @@ class SessionRepo {
   ): Promise<ApiSession> {
     const sql = `
       INSERT INTO sessions 
-        (campaign_id, session_code, title, exam_date, site_id, day_no) 
-      VALUES (?, ?, ?, ?, ?, ?)
+        (campaign_id, session_code, title, exam_date, day_no) 
+      VALUES (?, ?, ?, ?, ?)
     `;
     const params = [
       payload.campaign_id,
       payload.session_code,
       payload.title,
       payload.exam_date,
-      payload.site_id,
       payload.day_no,
     ];
 
     const [result] = await dbClient.execute<any>(sql, params);
     const newId = result.insertId;
-
-    // คืนค่า Session ที่สร้างใหม่ (รวม ID)
     return this.findById(newId, dbClient);
   }
 
@@ -83,9 +79,9 @@ class SessionRepo {
   async findAllLiteByCampaignId(
     campaignId: number,
     dbClient: DbClient = this.pool
-  ): Promise<Array<{ id: number; site_id: number }>> {
+  ): Promise<Array<{ id: number }>> {
     
-    const sql = "SELECT id, site_id FROM sessions WHERE campaign_id = ?";
+    const sql = "SELECT id FROM sessions WHERE campaign_id = ?";
     const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [
       campaignId,
     ]);
@@ -93,7 +89,6 @@ class SessionRepo {
     // (แปลงผลลัพธ์ให้ถูกต้อง)
     return rows.map(row => ({
       id: row.id,
-      site_id: row.site_id
     }));
   }
 }

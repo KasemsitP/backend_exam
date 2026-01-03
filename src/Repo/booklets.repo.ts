@@ -55,12 +55,12 @@ class BookletsRepo {
       INSERT INTO booklets (
         session_id,
         user_session_id,
-        bag_no,
+        bag_id,
         seq_in_bag,
         status
       ) VALUES (?, ?, ?, ?, ?)
     `;
-
+    console.log(bagNo)
     const [result] = await conn.execute<ResultSetHeader>(sql, [
       sessionId,
       userSessionId,
@@ -85,6 +85,7 @@ class BookletsRepo {
     const [rows] = await conn.execute<DbBookletRow[]>(sql, [id]);
     return rows[0] || null;
   }
+
   async findByCampaignSessionAndBag(
     conn: PoolConnection,
     campaignId: number,
@@ -92,25 +93,26 @@ class BookletsRepo {
     bagNo: number
   ): Promise<DbBookletInBagRow[]> {
     const sql = `
-      SELECT
+SELECT
         bk.id          AS booklet_id,
         bk.session_id,
-        bk.bag_no,
+        bk.bag_id,
         bk.seq_in_bag,
         bk.status,
         us.qr_payload  AS qr_payload,
         u.user_code,
         u.full_name
       FROM booklets bk
+      join bags b on b.id = bk.bag_id
       JOIN user_sessions us
         ON bk.user_session_id = us.id
       JOIN user_campaigns uc
         ON us.user_campaign_id = uc.id
       JOIN users u
         ON uc.user_id = u.id
-      WHERE us.campaign_id = ?
-        AND bk.session_id = ?
-        AND bk.bag_no    = ?
+      WHERE us.campaign_id = 1
+        AND bk.session_id = 10
+        AND b.bag_no   = 3
       ORDER BY bk.seq_in_bag ASC, bk.id ASC;
     `;
 

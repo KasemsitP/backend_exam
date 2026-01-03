@@ -79,6 +79,7 @@ export class bagController {
         sessionId,
         bagNo,
       });
+      console.log(list)
 
       res.json(list);
     } catch (err: any) {

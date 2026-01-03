@@ -8,6 +8,9 @@ interface User extends RowDataPacket {
   id: number;
   user_code: string;
   full_name: string;
+  first_name : string;
+  last_name : string;
+  title : string;
 }
 interface UserCampaign extends RowDataPacket {
   id: number;
@@ -61,7 +64,7 @@ class UserImportRepo {
 
   // (findOrCreateUser - เหมือนเดิม)
   async findOrCreateUser(
-    payload: { user_code: string; full_name: string; national_id?: string },
+    payload: { user_code: string; full_name: string;  first_name: string; last_name: string; title : string},
     dbClient: DbClient
   ): Promise<{ user: User; created: boolean }> {
     const findSql = "SELECT * FROM users WHERE user_code = ?";
@@ -72,10 +75,13 @@ class UserImportRepo {
       return { user: rows[0], created: false };
     }
     const insertSql =
-      "INSERT INTO users (user_code, full_name) VALUES (?, ?)";
+      "INSERT INTO users (user_code, full_name , first_name , last_name,title) VALUES (?, ?, ? , ? , ?)";
     const [result] = await dbClient.execute<any>(insertSql, [
       payload.user_code,
       payload.full_name,
+      payload.first_name,
+      payload.last_name,
+      payload.title
     ]);
     const newUser = await this.findById(result.insertId, dbClient);
     if (!newUser) {
@@ -122,7 +128,6 @@ class UserImportRepo {
       user_campaign_id: number;
       session_id: number;
       campaign_id: number;
-      site_id: number; 
     },
     dbClient: DbClient
   ): Promise<{ userSession: UserSession; created: boolean }> {
@@ -139,14 +144,13 @@ class UserImportRepo {
 
     // (2. เพิ่ม site_id ใน SQL)
     const insertSql =
-      "INSERT INTO user_sessions (user_campaign_id, session_id, campaign_id, site_id) VALUES (?, ?, ?, ?)"; // 👈 (4 ?)
+      "INSERT INTO user_sessions (user_campaign_id, session_id, campaign_id ) VALUES (?, ?, ?)"; 
     
     // (3. เพิ่ม site_id ใน Params)
     const [result] = await dbClient.execute<any>(insertSql, [
       payload.user_campaign_id,
       payload.session_id,
       payload.campaign_id,
-      payload.site_id, // 👈 (เพิ่ม)
     ]);
     
     const newUserSession = await this.findUserSessionById(

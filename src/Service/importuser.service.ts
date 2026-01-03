@@ -22,12 +22,9 @@ export class userImportService {
       totalCampaignLinks: 0,
       totalSessionLinks: 0,
     };
-
     try {
       await connection.beginTransaction();
 
-      // [ ⭐️ 1. แก้ไข: ดึง Session (id และ site_id) ⭐️ ]
-      // (เปลี่ยนจาก findAllIdsByCampaignId -> findAllLiteByCampaignId)
       const sessions = await sessionRepo.findAllLiteByCampaignId(
         campaignId,
         connection
@@ -37,37 +34,51 @@ export class userImportService {
         console.warn(`Campaign ID ${campaignId} has no sessions to link.`);
       }
 
-      // 2. วน Loop ผู้ใช้ (Rows)
-      for (const row of rows) {
-        
-        // (ส่วนนี้ถูกต้องแล้ว)
-        const userCode =
-          row.user_code ??
-          row.nationalId ??
-          row["รหัสประจำตัวประชาชน"] ??
-          row["เลขบัตรประชาชน"] ??
-          row.number;
-        
-        const fullName =
-          row.full_name ??
-          row.Player ??
-          `${row.firstName ?? row["ชื่อ"]} ${row.lastName ?? row["นามสกุล"]}`;
+      let generatedRunning = 1;
 
-        if (!userCode || !fullName || fullName.trim() === "") {
+      for (const row of rows) {
+        let userCode = undefined;
+        if (!userCode) {
+          userCode = String(generatedRunning).padStart(4, "0");
+          generatedRunning++;
+        }
+
+        const title =
+          row.title ??
+          row["คำนำหน้า"] ??
+          row["prefix"]; 
+
+        const firstName =
+          row.first_name ??
+          row.firstName ??
+          row["ชื่อ"] ??
+          row["first name"];
+
+        const lastName =
+          row.last_name ??
+          row.lastName ??
+          row["นามสกุล"] ??
+          row["last name"];
+
+        const fullName = [firstName, lastName]
+          .filter((v) => v && String(v).trim() !== "")
+          .join(" ")
+          .trim();
+
+        if (!userCode || !fullName) {
           console.warn("Skipping row, missing user_code or full_name:", row);
           continue;
         }
 
-        // 3. Find/Create User (ตาราง 'users')
         const { user, created: userCreated } =
           await userImportRepo.findOrCreateUser(
-            { user_code: userCode, full_name: fullName.trim() },
+            { user_code: userCode, full_name: fullName ,first_name: firstName , last_name: lastName , title : title},
             connection
           );
+
         if (userCreated) stats.totalUsersCreated++;
         else stats.totalUsersFound++;
 
-        // 4. Find/Create UserCampaign (เชื่อม 'users' ↔ 'exam_campaigns')
         const { userCampaign, created: campaignLinkCreated } =
           await userImportRepo.findOrCreateUserCampaign(
             { user_id: user.id, campaign_id: campaignId },
@@ -75,21 +86,15 @@ export class userImportService {
           );
         if (campaignLinkCreated) stats.totalCampaignLinks++;
 
-        // [ ⭐️ 2. แก้ไข: วน Loop (Sessions) ⭐️ ]
-        // (เปลี่ยนจาก sessionId -> session)
         for (const session of sessions) {
-          
-          // 6. Find/Create UserSession (เชื่อม 'user_campaigns' ↔ 'sessions')
-          
-          // [ ⭐️ 3. แก้ไข: เพิ่ม site_id ⭐️ ]
-          // (ส่ง site_id ไปให้ Repo เพื่อแก้ Error)
           const { created: sessionLinkCreated } =
             await userImportRepo.findOrCreateUserSession(
               {
                 user_campaign_id: userCampaign.id,
-                session_id: session.id, // 👈 (ใช้ session.id)
+                session_id: session.id,
                 campaign_id: campaignId,
-                site_id: session.site_id, // 👈 (เพิ่ม site_id)
+                // ถ้า user_sessions ยังต้องใช้ site_id อยู่
+                // site_id: session.site_id,
               },
               connection
             );
@@ -108,4 +113,3 @@ export class userImportService {
     }
   };
 }
-

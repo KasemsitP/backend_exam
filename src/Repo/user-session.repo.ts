@@ -46,9 +46,10 @@ JOIN user_campaigns uc
 JOIN users u
   ON uc.user_id = u.id
 LEFT JOIN exam_rooms er
-  ON er.session_id = us.session_id
- AND er.room_code  = uc.room_code      
+  ON er.room_code = uc.room_code
+ AND er.campaign_id = uc.campaign_id
 WHERE us.session_id = ?;
+
     `;
 
 
