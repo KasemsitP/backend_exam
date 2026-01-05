@@ -1,5 +1,6 @@
 import { DB } from "../model/DB";
 import { Pool, PoolConnection, RowDataPacket } from "mysql2/promise";
+import type { ResultSetHeader } from "mysql2/promise";
 
 type DbClient = Pool | PoolConnection;
 
@@ -8,9 +9,9 @@ interface User extends RowDataPacket {
   id: number;
   user_code: string;
   full_name: string;
-  first_name : string;
-  last_name : string;
-  title : string;
+  first_name: string;
+  last_name: string;
+  title: string;
 }
 interface UserCampaign extends RowDataPacket {
   id: number;
@@ -64,66 +65,72 @@ class UserImportRepo {
 
   // (findOrCreateUser - เหมือนเดิม)
   async findOrCreateUser(
-    payload: { user_code: string; full_name: string;  first_name: string; last_name: string; title : string},
+    payload: {
+      user_code: string;
+      full_name: string;
+      first_name: string;
+      last_name: string;
+      title: string;
+    },
     dbClient: DbClient
   ): Promise<{ user: User; created: boolean }> {
-    const findSql = "SELECT * FROM users WHERE user_code = ?";
-    const [rows] = await dbClient.execute<User[]>(findSql, [
-      payload.user_code,
-    ]);
-    if (rows.length > 0) {
-      return { user: rows[0], created: false };
-    }
-    const insertSql =
-      "INSERT INTO users (user_code, full_name , first_name , last_name,title) VALUES (?, ?, ? , ? , ?)";
-    const [result] = await dbClient.execute<any>(insertSql, [
+    const sql = `
+    INSERT INTO users (user_code, full_name, first_name, last_name, title)
+    VALUES (?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      -- จะ update ชื่อด้วย ถ้าอยากให้ sync ตามไฟล์ล่าสุด
+      full_name = VALUES(full_name),
+      first_name = VALUES(first_name),
+      last_name = VALUES(last_name),
+      title = VALUES(title),
+      -- trick สำคัญ: ทำให้ insertId กลายเป็น id เดิมตอน duplicate
+      id = LAST_INSERT_ID(id)
+  `;
+
+    const [result] = await dbClient.execute<ResultSetHeader>(sql, [
       payload.user_code,
       payload.full_name,
       payload.first_name,
       payload.last_name,
-      payload.title
+      payload.title,
     ]);
-    const newUser = await this.findById(result.insertId, dbClient);
-    if (!newUser) {
-      throw new Error("Failed to retrieve newly created user.");
-    }
-    return { user: newUser, created: true };
-  }
 
-  // (findOrCreateUserCampaign - เหมือนเดิม)
+    const created = result.affectedRows === 1; // 1 = insert ใหม่, 2 = update แทน
+    const newId = result.insertId;
+
+    const user = await this.findById(newId, dbClient);
+    if (!user) {
+      throw new Error("Failed to retrieve user after upsert.");
+    }
+    return { user, created };
+  }
   async findOrCreateUserCampaign(
     payload: { user_id: number; campaign_id: number },
     dbClient: DbClient
   ): Promise<{ userCampaign: UserCampaign; created: boolean }> {
-    const findSql =
-      "SELECT * FROM user_campaigns WHERE user_id = ? AND campaign_id = ?";
-    const [rows] = await dbClient.execute<UserCampaign[]>(findSql, [
+    const sql = `
+    INSERT INTO user_campaigns (user_id, campaign_id)
+    VALUES (?, ?)
+    ON DUPLICATE KEY UPDATE
+      id = LAST_INSERT_ID(id)
+  `;
+
+    const [result] = await dbClient.execute<ResultSetHeader>(sql, [
       payload.user_id,
       payload.campaign_id,
     ]);
-    if (rows.length > 0) {
-      return { userCampaign: rows[0], created: false };
+
+    const created = result.affectedRows === 1;
+    const newId = result.insertId;
+
+    const userCampaign = await this.findUserCampaignById(newId, dbClient);
+    if (!userCampaign) {
+      throw new Error("Failed to retrieve user_campaign after upsert.");
     }
-    const insertSql =
-      "INSERT INTO user_campaigns (user_id, campaign_id) VALUES (?, ?)";
-    const [result] = await dbClient.execute<any>(insertSql, [
-      payload.user_id,
-      payload.campaign_id,
-    ]);
-    const newUserCampaign = await this.findUserCampaignById(
-      result.insertId,
-      dbClient
-    );
-    if (!newUserCampaign) {
-      throw new Error("Failed to retrieve newly created user_campaign.");
-    }
-    return { userCampaign: newUserCampaign, created: true };
+    return { userCampaign, created };
   }
 
-  // [ ⭐️ นี่คือจุดที่แก้ไข ⭐️ ]
-  // (แก้ปัญหา Error: ts(2353))
   async findOrCreateUserSession(
-    // (1. เพิ่ม 'site_id' เข้าไปใน Type)
     payload: {
       user_campaign_id: number;
       session_id: number;
@@ -131,38 +138,30 @@ class UserImportRepo {
     },
     dbClient: DbClient
   ): Promise<{ userSession: UserSession; created: boolean }> {
-    const findSql =
-      "SELECT * FROM user_sessions WHERE user_campaign_id = ? AND session_id = ?";
-    const [rows] = await dbClient.execute<UserSession[]>(findSql, [
-      payload.user_campaign_id,
-      payload.session_id,
-    ]);
+    const sql = `
+    INSERT INTO user_sessions (user_campaign_id, session_id, campaign_id)
+    VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      id = LAST_INSERT_ID(id)
+  `;
 
-    if (rows.length > 0) {
-      return { userSession: rows[0], created: false };
-    }
-
-    // (2. เพิ่ม site_id ใน SQL)
-    const insertSql =
-      "INSERT INTO user_sessions (user_campaign_id, session_id, campaign_id ) VALUES (?, ?, ?)"; 
-    
-    // (3. เพิ่ม site_id ใน Params)
-    const [result] = await dbClient.execute<any>(insertSql, [
+    const [result] = await dbClient.execute<ResultSetHeader>(sql, [
       payload.user_campaign_id,
       payload.session_id,
       payload.campaign_id,
     ]);
-    
-    const newUserSession = await this.findUserSessionById(
-      result.insertId,
-      dbClient
-    );
-    if (!newUserSession) {
-      throw new Error("Failed to retrieve newly created user_session.");
+
+    const created = result.affectedRows === 1;
+    const newId = result.insertId;
+
+    const userSession = await this.findUserSessionById(newId, dbClient);
+    if (!userSession) {
+      throw new Error("Failed to retrieve user_session after upsert.");
     }
-    return { userSession: newUserSession, created: true };
+    return { userSession, created };
   }
-async countByCampaignId(
+
+  async countByCampaignId(
     campaignId: number,
     dbClient: DbClient = this.pool
   ): Promise<number> {
@@ -213,6 +212,22 @@ async countByCampaignId(
       );
     }
     return true;
+  }
+
+  async findMaxUserCodeByCampaign(
+    campaignId: number,
+    dbClient: DbClient = this.pool
+  ): Promise<number> {
+    const sql = `
+    SELECT 
+      COALESCE(MAX(CAST(u.user_code AS UNSIGNED)), 0) AS max_user_code
+    FROM users u
+    JOIN user_campaigns uc ON u.id = uc.user_id
+    WHERE uc.campaign_id = ?
+  `;
+    const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [campaignId]);
+    const max = Number(rows[0]?.max_user_code ?? 0);
+    return max;
   }
 }
 

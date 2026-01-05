@@ -34,10 +34,18 @@ export class userImportService {
         console.warn(`Campaign ID ${campaignId} has no sessions to link.`);
       }
 
-      let generatedRunning = 1;
+      const currentMax = await userImportRepo.findMaxUserCodeByCampaign(
+        campaignId,
+        connection
+      );
+
+      let generatedRunning = currentMax + 1;
+      let skipped = 0;
 
       for (const row of rows) {
-        let userCode = undefined;
+        // 1) หา userCode (ถ้าข้อมูลไม่มี code มาเอง)
+        let userCode = undefined
+
         if (!userCode) {
           userCode = String(generatedRunning).padStart(4, "0");
           generatedRunning++;
@@ -46,7 +54,7 @@ export class userImportService {
         const title =
           row.title ??
           row["คำนำหน้า"] ??
-          row["prefix"]; 
+          row["prefix"];
 
         const firstName =
           row.first_name ??
@@ -65,14 +73,20 @@ export class userImportService {
           .join(" ")
           .trim();
 
-        if (!userCode || !fullName) {
-          console.warn("Skipping row, missing user_code or full_name:", row);
+        if (!fullName) {
+          skipped++;
           continue;
         }
 
         const { user, created: userCreated } =
           await userImportRepo.findOrCreateUser(
-            { user_code: userCode, full_name: fullName ,first_name: firstName , last_name: lastName , title : title},
+            {
+              user_code: userCode,
+              full_name: fullName,
+              first_name: firstName,
+              last_name: lastName,
+              title: title,
+            },
             connection
           );
 
@@ -93,8 +107,6 @@ export class userImportService {
                 user_campaign_id: userCampaign.id,
                 session_id: session.id,
                 campaign_id: campaignId,
-                // ถ้า user_sessions ยังต้องใช้ site_id อยู่
-                // site_id: session.site_id,
               },
               connection
             );
@@ -102,6 +114,9 @@ export class userImportService {
         }
       }
 
+      if (skipped > 0) {
+        console.warn(`Skipped ${skipped} rows (missing full_name)`);
+      }
       await connection.commit();
       return stats;
     } catch (error) {
