@@ -1,10 +1,9 @@
 import { Request, Response } from "express";
 import { keyService } from "../Service/key.service";
+import { parse } from "path";
 
 export class keyController {
-  /**
-   * [ GET (เหมือนเดิม) ]
-   */
+
   static getAllForCampaign = async (req: Request, res: Response) => {
     try {
       const campaignId = parseInt(req.params.campaignId, 10);
@@ -18,21 +17,34 @@ export class keyController {
     }
   };
 
+  static getAllForCampaignManager = async (req: Request, res: Response) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId, 10);
+      const AccountId = parseInt(req.params.AccountId, 10);
+      if (isNaN(campaignId) || isNaN(AccountId)) {
+        return res.status(400).send({ message: "Invalid Campaign ID  or Accoun ID" });
+      }
+      const keys = await keyService.getAllForCampaignManager(campaignId, AccountId);
+      res.status(200).json(keys);
+    } catch (error: any) {
+      res.status(500).send({ message: error.message });
+    }
+  };
+
   /**
-   * [ ⭐️ POST (แก้ไข) ⭐️ ]
    * (keyAlias -> key)
    */
   static create = async (req: Request, res: Response) => {
     try {
-      const { campaignId, key } = req.body; // [ ⭐️ FIX ⭐️ ]
+      const { campaignId, key, account_id } = req.body;
 
-      if (!campaignId || !key) { // [ ⭐️ FIX ⭐️ ]
+      if (!campaignId || !key || !account_id) {
         return res
           .status(400)
-          .send({ message: "Missing campaignId or key" }); // [ ⭐️ FIX ⭐️ ]
+          .send({ message: "Missing campaignId or key" });
       }
 
-      const keyData = await keyService.create(campaignId, key); // [ ⭐️ FIX ⭐️ ]
+      const keyData = await keyService.create(campaignId, key, account_id);
       res.status(201).json(keyData);
     } catch (error: any) {
       if (error.message.includes("Key limit")) {
@@ -57,7 +69,7 @@ export class keyController {
       res.status(500).send({ message: error.message });
     }
   };
-static getPrerequisites = async (req: Request, res: Response) => {
+  static getPrerequisites = async (req: Request, res: Response) => {
     try {
       const campaignId = parseInt(req.params.campaignId, 10);
       if (isNaN(campaignId)) {
@@ -70,10 +82,7 @@ static getPrerequisites = async (req: Request, res: Response) => {
     }
   };
 
-  /**
-   * [ ⭐️ POST (แก้ไข) ⭐️ ]
-   * @desc POST /api/keys/encrypt-session-bulk
-   */
+
   static runBulkEncryption = async (req: Request, res: Response) => {
     try {
       // ( 1. รับแค่ campaignId, sessionId )
@@ -84,14 +93,12 @@ static getPrerequisites = async (req: Request, res: Response) => {
           .send({ message: "Missing campaignId or sessionId" });
       }
 
-      // 2. ส่งต่อให้ Service (สมอง)
       const stats = await keyService.runBulkEncryptionForSession(
         campaignId,
         sessionId
       );
-      
-      // 3. ส่งผลลัพธ์ (Stats) กลับไป
-      res.status(200).json(stats); // (เช่น { usersEncrypted: 150 })
+
+      res.status(200).json(stats);
     } catch (error: any) {
       if (
         error.message.includes("Key") ||
@@ -116,5 +123,21 @@ static getPrerequisites = async (req: Request, res: Response) => {
       res.status(500).send({ message: error.message });
     }
   };
+
+  static getDashboard = async (req: Request, res: Response) => {
+    try {
+      const campaignId = Number(req.params.campaignId);
+      if (Number.isNaN(campaignId)) {
+        return res.status(400).json({ message: "invalid campaign id" });
+      }
+      const data = await keyService.GetDashBoard(campaignId);
+
+      return res.json(data);
+    } catch (err) {
+      console.error("getDashboard error:", err);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  };
+
 }
 
