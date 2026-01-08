@@ -66,6 +66,7 @@ export class bagController {
   static getBookletsInBag = async (req: Request, res: Response) => {
     //console.log("HIT /api/bags/:bagNo/booklets", req.params, req.query);
     try {
+      console.log("HIT /api/bags/:bagNo/booklets", req.params, req.query);
       const bagNo = Number(req.params.bagNo);
       const campaignId = Number(req.query.campaignId);
       const sessionId = Number(req.query.sessionId);

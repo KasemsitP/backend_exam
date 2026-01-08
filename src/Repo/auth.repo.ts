@@ -1,6 +1,6 @@
 
 import { DB } from "../model/DB";
-import { Pool , PoolConnection } from "mysql2/promise";
+import { Pool, PoolConnection } from "mysql2/promise";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 
 export interface UserData {
@@ -27,6 +27,14 @@ class Authrepo {
 
 
 
+    }
+
+    async checkRole(roleId: number): Promise<RowDataPacket> {
+        const [rows] = await this.pool.execute<RowDataPacket[]>(
+            "SELECT * FROM roles WHERE id = ?",
+            [roleId]
+        );
+        return rows[0];
     }
     async createAccount(userdata: UserData): Promise<number> {
         const sql = `
@@ -87,7 +95,7 @@ ORDER BY a.id ASC;
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql);
         return rows;
     }
-    async findAllAccountsGraderByCampaign(campaign : number): Promise<RowDataPacket[]> {
+    async findAllAccountsGraderByCampaign(campaign: number): Promise<RowDataPacket[]> {
         const sql = `
 SELECT 
     a.id, a.username, a.full_name, a.email, a.active, a.role_id,
@@ -101,7 +109,7 @@ LEFT JOIN
     roles r ON a.role_id = r.id AND r.code = 'GRADER'
 ORDER BY a.id ASC;
 `;
-        const [rows] = await this.pool.execute<RowDataPacket[]>(sql,[campaign]);
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign]);
         return rows;
     }
 
@@ -146,6 +154,30 @@ ORDER BY a.id ASC;
         const [result] = await this.pool.execute<RowDataPacket[]>(sql, [id]);
         return result;
     }
+    async deleteAccountWithRelations(id: number) {
+        const conn = await this.pool.getConnection();
+        try {
+            await conn.beginTransaction();
+            console.log(id)
+            await conn.execute(
+                "DELETE FROM graders WHERE account_id = ?",
+                [id]
+            );
+
+            await conn.execute(
+                "DELETE FROM accounts WHERE id = ?",
+                [id]
+            );
+
+            await conn.commit();
+        } catch (e) {
+            await conn.rollback();
+            throw e;
+        } finally {
+            conn.release();
+        }
+    }
+
 
     async updateAuthsession(id: number, sessionid: string): Promise<ResultSetHeader> {
         console.log(id, sessionid)
@@ -154,7 +186,7 @@ ORDER BY a.id ASC;
         return result;
     }
     async revokeAccountById(accountId: number) {
-       const conn: PoolConnection = await this.pool.getConnection();
+        const conn: PoolConnection = await this.pool.getConnection();
 
         try {
             await conn.beginTransaction();
@@ -174,7 +206,7 @@ ORDER BY a.id ASC;
             await conn.rollback();
             throw e;
         } finally {
-            conn.release(); 
+            conn.release();
         }
     }
 
@@ -193,6 +225,16 @@ ORDER BY a.id ASC;
         );
         return rows?.[0] ?? null;
     }
+
+        async checkRoleByID(account_id: number): Promise<RowDataPacket> {
+        const [rows] = await this.pool.execute<RowDataPacket[]>(
+            "SELECT r.id , r.code FROM accounts a join roles r on a.role_id = r.id WHERE a.id = ?",
+            [account_id]
+        );
+        return rows[0];
+    }
 }
 const authrepo = new Authrepo()
 export default authrepo
+
+    

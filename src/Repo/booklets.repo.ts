@@ -110,9 +110,9 @@ SELECT
         ON us.user_campaign_id = uc.id
       JOIN users u
         ON uc.user_id = u.id
-      WHERE us.campaign_id = 1
-        AND bk.session_id = 10
-        AND b.bag_no   = 3
+      WHERE us.campaign_id = ?
+        AND bk.session_id = ?
+        AND b.bag_no   = ?
       ORDER BY bk.seq_in_bag ASC, bk.id ASC;
     `;
 

@@ -4,14 +4,14 @@ import dashboardRepo from "../Repo/dashboard.repo";
 export class DashboardService {
   static async getCampaignDashboard(campaignId: number) {
     const [
-      basicCounts,
-      bagCounts,
-      gradersCount,
-      keyCounts,
-      importStatus,
-      encryptedStatus,
-      avgScorePerQuestion,
-      scoreDistribution,
+      rawBasicCounts,
+      rawBagCounts,
+      rawGradersCount,
+      rawKeyCounts,
+      rawImportStatus,
+      rawEncryptedStatus,
+      rawAvgScorePerQuestion,
+      rawScoreDistribution,
     ] = await Promise.all([
       dashboardRepo.getCampaignBasicCounts(campaignId),
       dashboardRepo.getBagCountsPerSession(campaignId),
@@ -23,22 +23,64 @@ export class DashboardService {
       dashboardRepo.getScoreDistribution(campaignId),
     ]);
 
+    // ✅ กัน null / undefined ทุกตัว
+    const basicCounts = rawBasicCounts ?? {
+      campaign_id: campaignId,
+      session_count: 0,
+      subject_count: 0,
+    };
+
+    const bagCounts = rawBagCounts ?? [];
+
+    const gradersCount = rawGradersCount ?? {
+      total_graders: 0,
+      graders_with_login: 0,
+    };
+
+    const keyCounts = rawKeyCounts ?? {
+      total_keys: 0,
+      active_keys: 0,
+    };
+
+    const importStatus = rawImportStatus ?? [];
+    const encryptedStatus = rawEncryptedStatus ?? [];
+    const avgScorePerQuestion = rawAvgScorePerQuestion ?? [];
+
+    const scoreDistribution = rawScoreDistribution ?? {
+      total_users: 0,
+      no_score: 0,
+      bucket_0_24: 0,
+      bucket_25_49: 0,
+      bucket_50_74: 0,
+      bucket_75_100: 0,
+    };
+
+    // ---------- sessions map ----------
     const sessions: Record<number, any> = {};
 
-    bagCounts.forEach((bag) => {
+    // bags
+    bagCounts.forEach((bag: any) => {
       sessions[bag.session_id] = {
         sessionId: bag.session_id,
         sessionCode: bag.session_code,
         bags: {
           total: bag.total_bags,
-          capacity: Number(bag.total_capacity),
+          capacity: Number(bag.total_capacity ?? 0),
         },
       };
     });
 
-
-    importStatus.forEach((imp) => {
-      if (!sessions[imp.session_id]) return;
+    // import status
+    importStatus.forEach((imp: any) => {
+      if (!sessions[imp.session_id]) {
+        // ถ้าอยากให้มี session แม้ไม่มี bag ให้ uncomment ได้
+        // sessions[imp.session_id] = {
+        //   sessionId: imp.session_id,
+        //   sessionCode: imp.session_code,
+        //   bags: { total: 0, capacity: 0 },
+        // };
+        return;
+      }
 
       sessions[imp.session_id].users = {
         inCampaign: imp.users_in_campaign,
@@ -47,17 +89,19 @@ export class DashboardService {
       sessions[imp.session_id].importStatus = imp.import_status;
     });
 
-
-    encryptedStatus.forEach((enc) => {
+    // encryption status
+    encryptedStatus.forEach((enc: any) => {
       if (!sessions[enc.session_id]) return;
 
       sessions[enc.session_id].encryption = {
         status: enc.encryption_status,
-        encrypted: Number(enc.encrypted_users),
-        pending: Number(enc.pending_users),
+        encrypted: Number(enc.encrypted_users ?? 0),
+        pending: Number(enc.pending_users ?? 0),
+        totalUsersInSession: enc.total_users_in_session ?? 0,
       };
     });
 
+    // ---------- response ----------
     return {
       summary: {
         campaignId: basicCounts.campaign_id,
@@ -65,23 +109,23 @@ export class DashboardService {
         subjectCount: basicCounts.subject_count,
 
         graders: {
-          total: gradersCount.total_graders,
-          withLogin: gradersCount.graders_with_login,
+          total: gradersCount.total_graders ?? 0,
+          withLogin: gradersCount.graders_with_login ?? 0,
         },
 
         keys: {
-          total: keyCounts.total_keys,
-          active: Number(keyCounts.active_keys),
+          total: keyCounts.total_keys ?? 0,
+          active: Number(keyCounts.active_keys ?? 0),
         },
 
         scoreDistribution: {
-          totalUsers: scoreDistribution.total_users,
-          noScore: Number(scoreDistribution.no_score),
+          totalUsers: scoreDistribution.total_users ?? 0,
+          noScore: Number(scoreDistribution.no_score ?? 0),
           buckets: {
-            "0-24": Number(scoreDistribution.bucket_0_24),
-            "25-49": Number(scoreDistribution.bucket_25_49),
-            "50-74": Number(scoreDistribution.bucket_50_74),
-            "75-100": Number(scoreDistribution.bucket_75_100),
+            "0-24": Number(scoreDistribution.bucket_0_24 ?? 0),
+            "25-49": Number(scoreDistribution.bucket_25_49 ?? 0),
+            "50-74": Number(scoreDistribution.bucket_50_74 ?? 0),
+            "75-100": Number(scoreDistribution.bucket_75_100 ?? 0),
           },
         },
       },

@@ -160,9 +160,18 @@ export class keyService {
                 throw new Error("Key check failed: Campaign must have exactly 2 keys.");
             }
 
+            const keyFirst = keys.find(k => k.order_num === 1);
+            const keySecond = keys.find(k => k.order_num === 2);
+
+            if (!keyFirst || !keySecond) {
+                throw new Error("Key order check failed: Both keys with order_num 1 and 2 must exist.");
+            }
+            console.log(keyFirst , keySecond);
+
+
             const [key1, key2] = keys;
-            const key1Buffer = Buffer.from(key1.key, PAYLOAD_ENCODING);
-            const key2Buffer = Buffer.from(key2.key, PAYLOAD_ENCODING);
+            const key1Buffer = Buffer.from(keyFirst.key, PAYLOAD_ENCODING);
+            const key2Buffer = Buffer.from(keySecond.key, PAYLOAD_ENCODING);
 
             // Static IV Buffer ที่กำหนดไว้
             const iv1Buffer = STATIC_IV_BUFFER;

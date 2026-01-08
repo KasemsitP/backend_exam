@@ -106,8 +106,17 @@ export class authservice {
     };
 
     static deleteAccount = async (id: number) => {
-        // (TODO: ควรเช็คว่า Account นี้ถูกใช้งานใน Graders หรือไม่ก่อนลบ)
-        await authrepo.deleteAccount(id);
+        const checkRole = await authrepo.checkRoleByID(id);
+        console.log(checkRole)
+        console.log(id)
+        if (checkRole.code === "GRADER") {
+            console.log(id)
+            await authrepo.deleteAccountWithRelations(id);
+        } else {
+            await authrepo.deleteAccount(id);
+        }
+        
+    //    await authrepo.deleteAccount(id);
         return { id };
     }
 

@@ -1,7 +1,9 @@
 import { Request, Response } from "express"
 import { authservice } from "../Service/auth.service";
 import { utills } from "../utills/utills";
+import { DB } from "../model/DB";
 import authrepo from "../Repo/auth.repo";
+import graderRepo from "../Repo/grader.repo";
 
 declare module "express-session" {
   interface SessionData {
@@ -13,18 +15,69 @@ declare module "express-session" {
 
 export class authcontroller {
   static register = async (req: Request, res: Response) => {
-    try {  //full name not null , role
-      const { username, password, full_name, email, role } = req.body;
-      await authservice.IsDuplicate(username)
-      const hash = await utills.hash(password)
-      const userData = { username, password: hash, full_name, email, role };
-      const result = await authrepo.createAccount(userData)
-      res.status(201).send({ message: "ลงทะเบียนสำเร็จ", id: result });
+    const conn = await DB.getInstance().getConnection();
 
+    try {
+      const { username, password, full_name, email, role, campaignId } = req.body;
+
+      await conn.beginTransaction();
+
+      await authservice.IsDuplicate(username); 
+
+      const roleExists = await authrepo.checkRole(role);
+      if (!roleExists) throw new Error("ไม่พบ role ที่ระบุ");
+
+      const isGrader = roleExists.code === "GRADER";
+
+      const hash = await utills.hash(password);
+
+      const userData = { username, password: hash, full_name, email, role };
+      const insertId = await authrepo.createAccount(userData); 
+      const accountId = insertId;
+
+      if (!accountId) throw new Error("สร้างบัญชีไม่สำเร็จ");
+      console.log(accountId)
+      console.log(isGrader , campaignId)
+
+      if (isGrader && campaignId) {
+        await graderRepo.create(
+          {
+            account_id: accountId,
+            campaign_id: Number(campaignId),
+          },
+          conn
+        );
+      }
+
+      await conn.commit();
+
+      return res.status(201).json({ message: "ลงทะเบียนสำเร็จ", id: accountId });
     } catch (error: any) {
-      return res.status(400).send({ message: error.message });
+      await conn.rollback();
+      return res
+        .status(400)
+        .json({ message: error.message ?? "register failed" });
+    } finally {
+      conn.release();
     }
-  }
+  };
+
+
+  //   static register = async (req: Request, res: Response) => {
+  //   try {  //full name not null , role
+  //     const { username, password, full_name, email, role } = req.body;
+  //     await authservice.IsDuplicate(username)
+  //     const hash = await utills.hash(password)
+  //     const userData = { username, password: hash, full_name, email, role };
+  //     const result = await authrepo.createAccount(userData)
+  //     res.status(201).send({ message: "ลงทะเบียนสำเร็จ", id: result });
+
+  //   } catch (error: any) {
+  //     return res.status(400).send({ message: error.message });
+  //   }
+  // }
+
+
   static login = async (req: Request, res: Response) => {
     const { username, password } = req.body;
     try {
@@ -119,7 +172,7 @@ export class authcontroller {
     }
   }
   static getAllGraders = async (req: Request, res: Response) => {
-    const campaign_id = parseInt(req.params.id , 10)
+    const campaign_id = parseInt(req.params.id, 10)
     try {
       const accounts = await authservice.getAllGradersAccounts(Number(campaign_id));
       res.status(200).json(accounts);
@@ -150,6 +203,8 @@ export class authcontroller {
 
   static delete = async (req: Request, res: Response) => {
     try {
+      console.log("Deleting account id:", req.params.id);
+      
       const id = parseInt(req.params.id, 10);
       await authservice.deleteAccount(id);
       res.status(200).json({ id: id });
