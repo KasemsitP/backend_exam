@@ -69,9 +69,11 @@ export class keyService {
             if (count >= 2) {
                 throw new Error("Key limit more than 2 reached for this campaign.");
             }
-            const order = keyRepo.countByCampaignId(campaignId)
+            const order = count;
+            console.log(order)
             let order_num;
-            if (Number(order) > 0) {
+
+            if (Number(order) == 0) {
                 order_num = 1;
             }
             else {
@@ -163,12 +165,13 @@ export class keyService {
             const keyFirst = keys.find(k => k.order_num === 1);
             const keySecond = keys.find(k => k.order_num === 2);
 
+            console.log(keyFirst , keySecond)
+
             if (!keyFirst || !keySecond) {
                 throw new Error("Key order check failed: Both keys with order_num 1 and 2 must exist.");
             }
-            console.log(keyFirst , keySecond);
 
-
+             console.log(campaignId , sessionId)
             const [key1, key2] = keys;
             const key1Buffer = Buffer.from(keyFirst.key, PAYLOAD_ENCODING);
             const key2Buffer = Buffer.from(keySecond.key, PAYLOAD_ENCODING);

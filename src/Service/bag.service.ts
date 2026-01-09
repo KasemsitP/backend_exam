@@ -163,7 +163,9 @@ export class bagService {
                     seqInBag: seq,
                     status: "CREATED", // ตามรูปที่คุณใช้ตอนแพ็คถุง
                 });
+                console.log("bookletId:", bookletId);
 
+                console.log("lnw" , bagNo , sessionId )
                 await bagRepo.updateStatus(bagNo,"SEALED" , sessionId,connection)
 
                 results.push({
@@ -205,7 +207,7 @@ export class bagService {
                     capacity: dbBag.count_items,
                     scanned: dbBag.scanned_payloads,                              // frontend local state
                     status: dbBag.status,
-                    scannedCount: dbBag.scanned_count ?? 0,   // 👈 อันใหม่
+                    scannedCount: dbBag.scanned_count ?? 0,   //  อันใหม่
                 };
 
             });

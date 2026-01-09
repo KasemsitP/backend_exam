@@ -141,7 +141,7 @@ class ExamDataRepo {
       ss.subject_id,
       ss.start_at,
       ss.end_at,
-      COALESCE(COUNT(sq.id), 0) AS question_count,   -- ✅ นับจาก subject_questions
+      COALESCE(COUNT(sq.id), 0) AS question_count,   --  นับจาก subject_questions
       ss.question_range,
       ss.order_no,
       s.code AS code,
@@ -170,6 +170,70 @@ class ExamDataRepo {
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
     return rows as CampaignSubject[];
   }
+
+  // async fetchCampaigns(opts?: FetchOpts): Promise<ExamCampaign[]> {
+  //   // หมายเหตุ: แนะนำให้ไม่ส่งรายการที่ถูกลบ (ถ้ามี soft delete)
+  //   const { where, params } = this.buildActiveWhere(opts);
+  //   const sql = `
+  //     SELECT ec.id, ec.code, ec.name, ec.start_date, ec.end_date, ec.is_active, ec.note
+  //     FROM exam_campaigns ec
+  //     WHERE ec.is_active = 1
+  //     ORDER BY ec.id
+  //   `;
+  //   const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
+  //   return rows as ExamCampaign[];
+  // }
+
+  // async fetchSessions(opts?: FetchOpts): Promise<CampaignSession[]> {
+  //   const { where, params } = this.buildActiveWhere(opts);
+  //   const sql = `
+  //     SELECT s.*
+  //     FROM sessions s
+  //     JOIN exam_campaigns ec ON s.campaign_id = ec.id
+  //     WHERE ec.is_active = 1
+  //     ORDER BY s.id
+  //   `;
+  //   const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
+  //   return rows as CampaignSession[];
+  // }
+
+  // async fetchSubjects(opts?: FetchOpts): Promise<CampaignSubject[]> {
+  //   const { where, params } = this.buildActiveWhere(opts);
+  // const sql = `
+  //   SELECT 
+  //     ss.session_id,
+  //     ss.subject_id,
+  //     ss.start_at,
+  //     ss.end_at,
+  //     COALESCE(COUNT(sq.id), 0) AS question_count,   --  นับจาก subject_questions
+  //     ss.question_range,
+  //     ss.order_no,
+  //     s.code AS code,
+  //     s.name AS name
+  //   FROM session_subjects ss
+  //   JOIN sessions sess 
+  //     ON ss.session_id = sess.id
+  //   JOIN exam_campaigns ec 
+  //     ON sess.campaign_id = ec.id
+  //   JOIN subjects s 
+  //     ON ss.subject_id = s.id
+  //   LEFT JOIN subject_questions sq
+  //     ON sq.subject_id = ss.subject_id
+  //   WHERE ec.is_active = 1
+  //   GROUP BY
+  //     ss.session_id,
+  //     ss.subject_id,
+  //     ss.start_at,
+  //     ss.end_at,
+  //     ss.question_range,
+  //     ss.order_no,
+  //     s.code,
+  //     s.name
+  //   ORDER BY ss.session_id, ss.order_no
+  // `;
+  //   const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
+  //   return rows as CampaignSubject[];
+  // }
 
   async fetchExamData(opts?: FetchOpts): Promise<ExamDataPayload> {
     const [campaigns, sessions, subjects] = await Promise.all([

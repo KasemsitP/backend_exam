@@ -175,7 +175,7 @@ ORDER BY
 
 
   async updateStatus(bag_no: number, status: string, session_id: number, connection: PoolConnection) {
-    const sql = `UPDATE bags SET status = ? WHERE bag_no = ? AND session_id = ?`;
+    const sql = `UPDATE bags SET status = ? WHERE bags.id = ? AND bags.session_id = ?`;
     try {
       const [result] = await connection.execute(sql, [status, bag_no, session_id]);
       return result;
@@ -186,7 +186,7 @@ ORDER BY
   }
   async deleteById(bagNo: string, connection: PoolConnection) {
     // (ลบโดยใช้ bag_no ที่เป็น VARCHAR)
-    const sql = `DELETE FROM bags WHERE bag_no = ?;`;
+    const sql = `DELETE FROM bags WHERE id = ?;`;
     try {
       const [result] = await connection.execute(sql, [bagNo]);
       return result;

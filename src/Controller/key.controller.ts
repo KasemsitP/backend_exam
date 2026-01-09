@@ -87,6 +87,7 @@ export class keyController {
     try {
       // ( 1. รับแค่ campaignId, sessionId )
       const { campaignId, sessionId } = req.body;
+      console.log(campaignId , sessionId)
       if (!campaignId || !sessionId) {
         return res
           .status(400)
