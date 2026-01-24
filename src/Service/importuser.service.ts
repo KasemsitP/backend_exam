@@ -1,6 +1,7 @@
 import { DB } from "../model/DB";
 import userImportRepo from "../Repo/importuser.repo";
 import sessionRepo from "../Repo/session.repo"; // (Repo ที่มีอยู่)
+import shuffle from "lodash.shuffle";
 
 // (Interface ที่ตรงกับ 'ImportResponse' ใน Slice)
 interface ImportResponse {
@@ -42,12 +43,15 @@ export class userImportService {
       let generatedRunning = currentMax + 1;
       let skipped = 0;
 
-      for (const row of rows) {
+      const shuffledRows = shuffle(rows);
+      console.log("Shuffled Rows:", shuffledRows);
+
+      for (const row of shuffledRows) {
         // 1) หา userCode (ถ้าข้อมูลไม่มี code มาเอง)
         let userCode = undefined
 
         if (!userCode) {
-          userCode = String(generatedRunning).padStart(4, "0");
+          userCode = String(generatedRunning);
           generatedRunning++;
         }
 

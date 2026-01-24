@@ -20,6 +20,9 @@ export interface CreateKeyPayload {
   algor: string;
   order_num : number;
 }
+export interface SessionIdRow extends RowDataPacket {
+  id: number;
+}
 
 class KeyRepo {
   private pool: Pool;
@@ -32,7 +35,7 @@ class KeyRepo {
     campaignId: number,
     dbClient: DbClient = this.pool
   ): Promise<CampaignKey[]> {
-    const sql = "SELECT * FROM campaign_keys WHERE campaign_id = ?";
+    const sql = "SELECT ck.id , ck.campaign_id , ck.account_id , a.full_name , ck.key , ck.algor , ck.iv , ck.active , ck.created_at , ck.order_num FROM campaign_keys ck JOIN accounts a on ck.account_id = a.id WHERE campaign_id = ?;";
     const [rows] = await dbClient.execute<CampaignKey[]>(sql, [campaignId]);
     return rows;
   }
@@ -56,7 +59,23 @@ class KeyRepo {
     return rows[0].count;
   }
 
+  
 
+  //select s.id from sessions s JOIN exam_campaigns ec on s.campaign_id = ec.id WHERE campaign_id = ?;
+async selectSessionIdByCampaign(
+  campaignId: number,
+  dbClient: DbClient = this.pool
+): Promise<SessionIdRow[]> {
+  const sql = `
+    SELECT s.id
+    FROM sessions s
+    JOIN exam_campaigns ec ON s.campaign_id = ec.id
+    WHERE s.campaign_id = ?
+  `;
+
+  const [rows] = await dbClient.execute<SessionIdRow[]>(sql, [campaignId]);
+  return rows;
+}
   async findById(
     id: number,
     dbClient: DbClient = this.pool

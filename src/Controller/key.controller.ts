@@ -36,15 +36,15 @@ export class keyController {
    */
   static create = async (req: Request, res: Response) => {
     try {
-      const { campaignId, key, account_id } = req.body;
+      const { campaignId, key, account_id  , order_num} = req.body;
 
-      if (!campaignId || !key || !account_id) {
+      if (!campaignId || !key || !account_id || !order_num) {
         return res
           .status(400)
-          .send({ message: "Missing campaignId or key" });
+          .send({ message: "Missing campaignId or key or order_num" });
       }
 
-      const keyData = await keyService.create(campaignId, key, account_id);
+      const keyData = await keyService.create(campaignId, key, account_id, order_num);
       res.status(201).json(keyData);
     } catch (error: any) {
       if (error.message.includes("Key limit")) {
@@ -86,9 +86,9 @@ export class keyController {
   static runBulkEncryption = async (req: Request, res: Response) => {
     try {
       // ( 1. รับแค่ campaignId, sessionId )
-      const { campaignId, sessionId } = req.body;
-      console.log(campaignId , sessionId)
-      if (!campaignId || !sessionId) {
+      const { campaignId } = req.body;
+      console.log(campaignId )
+      if (!campaignId ) {
         return res
           .status(400)
           .send({ message: "Missing campaignId or sessionId" });
@@ -96,7 +96,6 @@ export class keyController {
 
       const stats = await keyService.runBulkEncryptionForSession(
         campaignId,
-        sessionId
       );
 
       res.status(200).json(stats);

@@ -20,6 +20,24 @@ export class bagController {
     };
 
 
+
+    static CreateBagAndBooklets = async (req: Request, res: Response) => {
+        try {
+          const {campaignId , payload } = req.body;
+          if (!campaignId || !payload ) {
+              return  res.status(400).send({ message: "ข้อมูลไม่ครบ" });
+          }
+          const result = await bagService.CreateBagAndInsertBooklets(campaignId, payload);
+          return res.status(200).json(result);
+
+        }
+        catch (error: any) {
+            res.status(500).send({ message: error.message });
+        }
+      }
+
+
+
     static InsertBooklets = async (req: Request, res: Response) => {
         try {
             const payload = req.body;

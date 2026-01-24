@@ -165,8 +165,8 @@ export class bagService {
                 });
                 console.log("bookletId:", bookletId);
 
-                console.log("lnw" , bagNo , sessionId )
-                await bagRepo.updateStatus(bagNo,"SEALED" , sessionId,connection)
+                console.log("lnw", bagNo, sessionId)
+                await bagRepo.updateStatus(bagNo, "SEALED", sessionId, connection)
 
                 results.push({
                     id: bookletId,
@@ -200,7 +200,7 @@ export class bagService {
                 return {
                     // จะใช้ id = bag_no หรือ id = b.id แล้วแต่ดีไซน์คุณ
                     id: dbBag.id,                             // แนะนำใช้ pk จริง
-                    bag_no : dbBag.bag_no,
+                    bag_no: dbBag.bag_no,
                     campaignId: dbBag.campaign_id,
                     sessionId: dbBag.session_id,
                     sessionLabel: dbBag.session_label,
@@ -221,6 +221,109 @@ export class bagService {
             connection.release();
         }
     };
+
+
+    static CreateBagAndInsertBooklets = async (
+        campaign_id: number,
+        payload: string[]
+    ) => {
+        const connection = await DB.getInstance().getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            let sessionId: number | null = null;
+            const results: ApiBookletLinked[] = [];
+
+            let sessionlabel;
+
+            // 1️⃣ decode + validate ทั้งหมดก่อน
+            const decodedList = [];
+
+            for (const qr of payload) {
+                const decoded = await keyService.decryptQrPayload(qr, campaign_id);
+
+                if (decoded.cid !== campaign_id) {
+                    throw new Error(`QR ไม่ตรง campaign`);
+                }
+
+                if (sessionId === null) {
+                    sessionId = decoded.sid;
+                } else if (decoded.sid !== sessionId) {
+                    throw new Error(`QR ต่าง session`);
+                }
+
+                decodedList.push(decoded);
+            }
+
+            if (!sessionId) {
+                throw new Error("ไม่พบ session");
+            }
+
+            // 2️⃣ สร้างถุงครั้งเดียว
+            const maxNo = await bagRepo.getMaxBagNoForSession(sessionId, connection);
+            const bagResult = await bagRepo.CreateBagByConnection(
+                sessionId,
+                maxNo + 1,
+                connection
+            );
+
+            const bagId = bagResult.insertId;
+
+            console.log("Created Bag ID:", bagId);
+
+            // 3️⃣ insert booklets
+            let seq = 1;
+            for (const decoded of decodedList) {
+                const userSession =
+                    await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
+                        connection,
+                        {
+                            campaignId: campaign_id,
+                            sessionId,
+                            userCode: decoded.uid,
+                        }
+                    );
+
+                if (!userSession) {
+                    throw new Error(`ไม่พบ user_session ${decoded.uid}`);
+                }
+
+                const bookletId = await bookletsRepo.insertOne(connection, {
+                    sessionId,
+                    userSessionId: userSession.id,
+                    bagNo: bagId,
+                    seqInBag: seq,
+                    status: "CREATED",
+                });
+
+                results.push({
+                    id: bookletId,
+                    sessionId,
+                    bagNo: bagId,
+                    userSessionId: userSession.id,
+                    seqInBag: seq,
+                    userCode: userSession.user_code,
+                });
+
+                seq++;
+            }
+
+            await connection.commit();
+
+            return {
+                bagId,
+                campaign_id,
+                bagNo : maxNo + 1,
+            };
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    };
+
 
 
     static deleteById = async (bagId: string) => {

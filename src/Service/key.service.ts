@@ -56,7 +56,7 @@ function aesDecrypt(
 export class keyService {
 
 
-    static create = async (campaignId: number, key: string, account_id: number) => {
+    static create = async (campaignId: number, key: string, account_id: number, order_num: number) => {
         if (Buffer.from(key, PAYLOAD_ENCODING).length !== 16) {
             throw new Error("Key must be exactly 16 characters (16 bytes).");
         }
@@ -71,14 +71,13 @@ export class keyService {
             }
             const order = count;
             console.log(order)
-            let order_num;
 
-            if (Number(order) == 0) {
-                order_num = 1;
-            }
-            else {
-                order_num = 2;
-            }
+            // if (Number(order) == 0) {
+            //     order_num = 1;
+            // }
+            // else {
+            //     order_num = 2;
+            // }
 
             const newKey = await keyRepo.create(
                 {
@@ -91,6 +90,7 @@ export class keyService {
                 },
                 connection
             );
+
 
             await connection.commit();
             return newKey;
@@ -149,12 +149,20 @@ export class keyService {
 
     static runBulkEncryptionForSession = async (
         campaignId: number,
-        sessionId: number
     ) => {
         const connection = await DB.getInstance().getConnection();
         let usersEncrypted = 0;
         try {
             await connection.beginTransaction();
+
+
+            const sessionRows = await keyRepo.selectSessionIdByCampaign(
+                campaignId,
+                connection
+            );
+
+            // แปลงเป็น number[]
+            const sessionIds = sessionRows.map(s => s.id);
 
             // 1. ดึงคีย์
             const keys = await keyRepo.findAllByCampaignId(campaignId, connection);
@@ -165,13 +173,13 @@ export class keyService {
             const keyFirst = keys.find(k => k.order_num === 1);
             const keySecond = keys.find(k => k.order_num === 2);
 
-            console.log(keyFirst , keySecond)
+            console.log(keyFirst, keySecond)
 
             if (!keyFirst || !keySecond) {
                 throw new Error("Key order check failed: Both keys with order_num 1 and 2 must exist.");
             }
 
-             console.log(campaignId , sessionId)
+            console.log(campaignId)
             const [key1, key2] = keys;
             const key1Buffer = Buffer.from(keyFirst.key, PAYLOAD_ENCODING);
             const key2Buffer = Buffer.from(keySecond.key, PAYLOAD_ENCODING);
@@ -179,45 +187,46 @@ export class keyService {
             // Static IV Buffer ที่กำหนดไว้
             const iv1Buffer = STATIC_IV_BUFFER;
             const iv2Buffer = STATIC_IV_BUFFER; // (ใช้ตัวเดียวกันสำหรับ Layer 2 ตามโค้ด Demo)
+            for (const sessionId of sessionIds) {
 
-            // 3. ดึงข้อมูล User
-            const allUserLinks = await userImportRepo.findAllUserLinksForSession(
-                sessionId,
-                connection
-            );
-            if (allUserLinks.length === 0) {
-                throw new Error(
-                    "User list check failed: No users found in this session."
-                );
-            }
-            console.log(allUserLinks)
+                const allUserLinks =
+                    await userImportRepo.findAllUserLinksForSession(
+                        sessionId,
+                        connection
+                    );
 
+                if (allUserLinks.length === 0) {
+                    console.warn(`No users found for session ${sessionId}`);
+                    throw new Error(`users in some session not imported yet ${sessionId}`);
+                }
+                console.log(`Encrypting ${allUserLinks.length} users for session ${sessionId}`);
 
-            for (const userLink of allUserLinks) {
+                for (const userLink of allUserLinks) {
 
-                const payload = {
-                    cid: campaignId,
-                    sid: sessionId,
-                    uid: userLink.user_id,
-                };
-                console.log(payload)
-                const plainTextBuffer = Buffer.from(JSON.stringify(payload), PAYLOAD_ENCODING);
+                    const payload = {
+                        cid: campaignId,
+                        sid: sessionId,
+                        uid: userLink.user_id,
+                    };
 
-                //  5. (FIX) เข้ารหัสโดยใช้ Static IVs
-                const step1 = aesEncrypt(plainTextBuffer, key1Buffer, iv1Buffer);
-                console.log("Step 1 Encrypted Buffer:", step1.toString('base64'));
-                const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
-                console.log("Step 2 Encrypted Buffer:", step2.toString('base64'));
+                    const plainTextBuffer = Buffer.from(
+                        JSON.stringify(payload),
+                        PAYLOAD_ENCODING
+                    );
 
-                //  6. (FIX) เก็บเฉพาะ Ciphertext (ไม่ต้องเก็บ IV)
-                const finalCiphertext = step2.toString(CIPHER_ENCODING);
+                    const step1 = aesEncrypt(plainTextBuffer, key1Buffer, iv1Buffer);
+                    const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
 
-                await userImportRepo.updateQrPayload(
-                    userLink.user_session_id,
-                    finalCiphertext,
-                    connection
-                );
-                usersEncrypted++;
+                    const finalCiphertext = step2.toString(CIPHER_ENCODING);
+
+                    await userImportRepo.updateQrPayload(
+                        userLink.user_session_id,
+                        finalCiphertext,
+                        connection
+                    );
+
+                    usersEncrypted++;
+                }
             }
 
             await connection.commit();
