@@ -13,6 +13,13 @@ export interface Subject {
   name: string;
   questions: SubjectQuestion[];
 }
+export interface SubjectQuestionAndSubject {
+  subject_id: number;
+  subject_question_id: number;
+  question_no: number;
+  question_name: string;
+}
+
 
 interface Row extends RowDataPacket {
   subject_id: number;
@@ -35,6 +42,9 @@ interface UpdateSubjectInput {
   name: string;
   questions?: { questionNo: number; label: string }[];
 }
+
+
+
 
 class SubjectRepo {
   private pool: Pool;
@@ -354,6 +364,26 @@ class SubjectRepo {
     } finally {
       conn.release();
     }
+  }
+
+  async GetSubjectNameandQuestionNo(sessionId: number, campaign_id: number): Promise<SubjectQuestionAndSubject[]> {
+    const sql = `SELECT
+  sq.subject_id,
+  sq.id          AS subject_question_id,
+  sq.question_no,
+  sq.label       AS question_name
+FROM session_subjects ss
+JOIN sessions s
+  ON s.id = ss.session_id
+JOIN subject_questions sq
+  ON sq.subject_id = ss.subject_id
+WHERE ss.session_id = ?
+  AND s.campaign_id = ?
+ORDER BY sq.subject_id, sq.question_no ASC
+LIMIT 0, 25;`
+    const [rows] = await this.pool.query<RowDataPacket[]>(sql, [sessionId, campaign_id]);
+    return rows as SubjectQuestionAndSubject[];
+
   }
 
 

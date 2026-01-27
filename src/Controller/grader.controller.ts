@@ -32,5 +32,23 @@ export class graderController {
     }
   };
 
+  static getAssignmentByAccountId = async (req: Request, res: Response) => {
+    try {
+      const { campaign_id, account_id } = req.params
+      console.log(campaign_id , account_id)
+      if (!campaign_id || !account_id) {
+        return res
+          .status(400).send({ message: "Missing campaignId parameter" });
+      }
+      const result = await graderService.getAssignmentByAccountId(Number(campaign_id) , Number(account_id))
+       return res.status(200).json(result);
+
+    } catch (error: any) {
+      return res
+        .status(500)
+        .send({ message: error.message ?? "Server error" });
+    }
+  }
+
   // create/update/delete เหมือนเดิม
 }

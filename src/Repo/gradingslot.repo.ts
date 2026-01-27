@@ -162,7 +162,7 @@ class GradingslotRepo {
   );
 
   // กรณี 1 grader มีได้แค่ 1 ข้อใน 1 session (ตามที่คุณเลือก)
-  return (rows as any[])[0] ?? null;
+  return (rows as any[]) ?? null;
 }
     async findUnscoredSlotForGrader(
     conn: PoolConnection,

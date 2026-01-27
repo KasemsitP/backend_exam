@@ -74,4 +74,8 @@ export class SubjectService {
         }
         return subjectRepo.deleteQuestion(subjectId, questionId);
     };
+    static getSubjectandQuestion = async (sessionId: number, campaign_id: number): Promise<any> => {
+        const result = await subjectRepo.GetSubjectNameandQuestionNo(sessionId , campaign_id);
+        return result;
+    }
 }

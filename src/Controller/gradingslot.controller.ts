@@ -4,9 +4,9 @@ import { gradingService } from "../Service/gradingslot.service";
 export class gradingslotController {
   static CreateSlot = async (req: Request, res: Response) => {
     try {
-      const { qrPayload, campaignId,  graderId } = req.body;
+      const { qrPayload, campaignId,  graderId  , questionNo} = req.body;
 
-      if (!qrPayload || !campaignId ||  !graderId) {
+      if (!qrPayload || !campaignId ||  !graderId || !questionNo) {
         return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
       }
 
@@ -21,6 +21,7 @@ export class gradingslotController {
         qrPayload,
         campaignId: Number(campaignId),
         graderId: Number(graderId),
+        questionNo: Number(questionNo)
       });
 
       res.status(201).json(result);

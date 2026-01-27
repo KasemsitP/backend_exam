@@ -141,26 +141,35 @@ ORDER BY sq.question_no ASC;
     return rows[0];
   }
 
-async create(
-  payload: {
-    campaign_id: number;
-    account_id: number | null;
-  },
-  dbClient: DbClient = this.pool
-): Promise<DbGrader> {
-  const sql = `
+
+  async getAssignmentByAccountId(campaign_id: number, account_id: number) {
+    const sql = `SELECT a.id , g.id ,sq.question_no , sq.label  FROM grader_assignments ga JOIN graders g ON  
+    g.id = ga.grader_id JOIN accounts a ON a.id = g.account_id JOIN subject_questions sq ON sq.id = ga.subject_question_id 
+    WHERE a.id = ? AND g.campaign_id = ?;`
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql , [account_id , campaign_id])
+    return rows;
+  }
+
+  async create(
+    payload: {
+      campaign_id: number;
+      account_id: number | null;
+    },
+    dbClient: DbClient = this.pool
+  ): Promise<DbGrader> {
+    const sql = `
     INSERT INTO graders (campaign_id, account_id)
     VALUES (?, ?)
   `;
-  const params = [
-    payload.campaign_id,
-    payload.account_id,
-  ];
+    const params = [
+      payload.campaign_id,
+      payload.account_id,
+    ];
 
-  const [result] = await dbClient.execute<ResultSetHeader>(sql, params);
-  const newId = result.insertId;
-  return this.findById(newId, dbClient);
-}
+    const [result] = await dbClient.execute<ResultSetHeader>(sql, params);
+    const newId = result.insertId;
+    return this.findById(newId, dbClient);
+  }
 
 
   async updateById(

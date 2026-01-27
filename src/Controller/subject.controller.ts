@@ -69,5 +69,18 @@ static async deleteQuestion(req: Request, res: Response) {
     res.status(400).json({ message: err?.message || "Failed to delete question" });
   }
 }
+static async getSubjectandQuestion(req: Request, res: Response) {
+  try {
+    if (!req.params.sessionId || !req.params.campaign_id) {
+      return res.status(400).json({ message: "Missing sessionId or campaign_id" });
+    }
+    const subject = await SubjectService.getSubjectandQuestion(Number(req.params.sessionId), Number(req.params.campaign_id));
+    res.json(subject);
+  } catch (err: any) {
+    console.error("Error get subject and question:", err);
+    res.status(400).json({ message: err?.message || "Failed to get subject and question" });
+  }
+}
+
 
 }

@@ -64,6 +64,11 @@ export class graderService {
     }
   };
 
+  static  getAssignmentByAccountId = async(campaign_id : number , account_id : number)=>{
+      const result = await graderRepo.getAssignmentByAccountId(campaign_id , account_id)
+      return result;
+  }
+
 
   static create = async (payload: {
     campaignId: number;

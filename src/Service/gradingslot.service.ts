@@ -8,6 +8,7 @@ interface CreateSlotFromQrPayload {
   qrPayload: string;
   campaignId: number;
   graderId: number;
+  questionNo: number;
 }
 
 
@@ -32,7 +33,7 @@ export class gradingService {
     subjectId: number;
     questionNo: number;
   }> {
-    const { qrPayload, campaignId, graderId } = payload;
+    const { qrPayload, campaignId, graderId, questionNo } = payload;
 
     const connection = await DB.getInstance().getConnection();
 
@@ -56,6 +57,13 @@ export class gradingService {
           graderId,
           sid
         );
+      const questions = assignment.map(a => ({
+        subjectId: a.subject_id,
+        questionId: a.subject_question_id,
+        questionNo: a.question_no,
+        label: a.question_label
+      }));
+
       console.log(assignment)
       if (!assignment) {
         throw new Error(
@@ -63,9 +71,18 @@ export class gradingService {
         );
       }
 
-      const subjectId = assignment.subject_id;
-      const questionNo = assignment.question_no;
-      const subjectQuestionId = assignment.subject_question_id;
+      // const subjectId = assignment.subject_id;
+      // const questionNo = assignment.question_no;
+      // const subjectQuestionId = assignment.subject_question_id;
+      const qNo = Number(questionNo);
+
+      const question = assignment.find(
+        a => a.question_no === qNo
+      );
+
+      if (!question) {
+        throw new Error("ข้อที่เลือกไม่ได้อยู่ใน assignment ของผู้ตรวจ");
+      }
 
       // 3) หาเล่มของผู้เข้าสอบ (จาก user_code / uid ใน QR)
       const bookletRow = await gradingslotRepo.findBookletForUser(
@@ -83,8 +100,8 @@ export class gradingService {
       const slot = await gradingService.allocateSlotForQuestion(
         {
           bookletId: bookletRow.booklet_id,
-          subjectId,
-          questionNo,
+          subjectId :  question.subject_id,
+          questionNo: question.question_no,
           // หรือใช้ subjectQuestionId ถ้า grading_slots เก็บอ้างถึง subject_questions โดยตรง
           graderId,
         },
@@ -100,7 +117,7 @@ export class gradingService {
         bookletId: bookletRow.booklet_id,
         userId: bookletRow.user_id,
         userCode: bookletRow.user_code,
-        subjectId,
+        subjectId : question.subject_id,
         questionNo,
       };
     } catch (err) {
