@@ -15,4 +15,8 @@ router.post(
     seatController.CreateSeat
 );
 
+router.get("/seat/isassigned/:campaign_id",seatController.IsAssigned)
+router.get("/seat/countusers/:campaign_id",seatController.getUserCount)
+router.delete("/seat/reset/:campaign_id",seatController.ResetSeat)
+
 export default router;

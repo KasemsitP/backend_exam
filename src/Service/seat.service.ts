@@ -2,6 +2,9 @@ import seatrepo from "../Repo/seat.repo"
 import { DB } from "../model/DB";
 import { UserData } from "../Repo/seat.repo";
 import { SeatAssignment } from "../Repo/seat.repo";
+import examRoomRepo from "../Repo/examRoom.repo";
+
+
 
 function hasConflict(rows: UserData[][], i: number, j: number): boolean {
     const row = rows[i];
@@ -90,18 +93,24 @@ type SeatLayoutItem = {
     last_name: string;
 };
 type SeatApiResponse = {
-  campaignId: string;
-  roomCode: string;
-  seatsPerRow: number;
-  seats: Array<{
-    rowIndex: number;
-    colIndex: number;
-    user_id: number;
-    user_code: string;
-    full_name: string;
-    last_name: string;
-  }>;
+    campaignId: string;
+    roomCode: string;
+    seatsPerRow: number;
+    seats: Array<{
+        rowIndex: number;
+        colIndex: number;
+        user_id: number;
+        user_code: string;
+        full_name: string;
+        last_name: string;
+    }>;
 };
+
+type AssignedStat = {
+    room_code: string;
+    count_user: number;
+};
+
 
 
 
@@ -109,22 +118,32 @@ type SeatApiResponse = {
 export class seatService {
 
     static async ArrangeSeat(campaign_id: number, RoomCode: string, seatsPerRow: number) {
-
         const NumberSeatper = seatsPerRow ?? 5;
-        const users = await seatrepo.GetAllUserByCampaign(Number(campaign_id))
-        // console.log(users)
-        //const users = mockUsers
 
-        const sortedusers = users.sort((a, b) => Number(a.user_code) - Number(b.user_code))
-        // console.log(sortedusers)
+        // 1) ดึงคนที่ "ยังไม่ถูกจัด" ใน campaign นี้
+        const users = await seatrepo.GetAllUserByCampaign(Number(campaign_id));
+
+        // 2) ดึงข้อมูลห้องใน campaign นี้ แล้วหาเฉพาะห้องที่เราจัดอยู่
+        const examrooms = await examRoomRepo.findByCampaignIdCon(campaign_id);
+        const realRoom = examrooms.find(r => r.room_code === RoomCode);
+
+        // กันกรณีหาไม่เจอ
+        if (!realRoom) {
+            throw new Error(`Room ${RoomCode} not found in campaign ${campaign_id}`);
+        }
+
+        const roomCapacity = realRoom.capacity; // เช่น = 5
+
+        // 3) เลือกเฉพาะจำนวนคนตามความจุห้อง
+        const usersForThisRoom = users
+            .sort((a, b) => Number(a.user_code) - Number(b.user_code))
+            .slice(0, roomCapacity);   //  ตรงนี้คือ limit ตาม capacity
 
         const rows: UserData[][] = [];
 
-        sortedusers.forEach((user, idx) => {
+        usersForThisRoom.forEach((user, idx) => {
             const rowIndex = Math.floor(idx / NumberSeatper);
-            if (!rows[rowIndex]) {
-                rows[rowIndex] = [];
-            }
+            if (!rows[rowIndex]) rows[rowIndex] = [];
             rows[rowIndex].push(user);
         });
 
@@ -134,7 +153,6 @@ export class seatService {
                 row.map(u => u.last_name).join(", ")
             ).join("\n")
         );
-
 
         // for (let i = 0; i < rows.length; i++) {
         //     for (let j = 0; j < rows[i].length; j++) {
@@ -298,39 +316,53 @@ export class seatService {
         }
     }
 
-static async getSeatUser(campaignId: number, roomCode: string): Promise<SeatApiResponse> {
-  const rows = await seatrepo.getUserSeat(roomCode, campaignId);
-  console.log("test",rows)
+    static async getSeatUser(campaignId: number, roomCode: string): Promise<SeatApiResponse> {
+        const rows = await seatrepo.getUserSeat(roomCode, campaignId);
+        console.log("test", rows)
 
-  if (!rows.length) {
-    return {
-      campaignId: String(campaignId),
-      roomCode,
-      seatsPerRow: 0,
-      seats: [],
-    };
-  }
-  const seatsPerRow = rows.reduce(
-    (max, r) => Math.max(max, Number(r.col_no)),
-    0
-  );
+        if (!rows.length) {
+            return {
+                campaignId: String(campaignId),
+                roomCode,
+                seatsPerRow: 0,
+                seats: [],
+            };
+        }
+        const seatsPerRow = rows.reduce(
+            (max, r) => Math.max(max, Number(r.col_no)),
+            0
+        );
 
 
-  const seats = rows.map((r) => ({
-    rowIndex: Number(r.row_no) - 1, 
-    colIndex: Number(r.col_no) - 1,
-    user_id: r.id,
-    user_code: r.user_code,
-    full_name: r.full_name,
-    last_name: r.last_name ?? "",
-  }));
+        const seats = rows.map((r) => ({
+            rowIndex: Number(r.row_no) - 1,
+            colIndex: Number(r.col_no) - 1,
+            user_id: r.id,
+            user_code: r.user_code,
+            full_name: r.full_name,
+            last_name: r.last_name ?? "",
+        }));
 
-  return {
-    campaignId: String(campaignId),
-    roomCode,
-    seatsPerRow,
-    seats,
-  };
-}
-
+        return {
+            campaignId: String(campaignId),
+            roomCode,
+            seatsPerRow,
+            seats,
+        };
+    }
+    static async IsAssigned(campaignId: number) {
+        const result = await seatrepo.isAssigned(campaignId)
+        console.log(result)
+        return result;
+    }
+    static async ResetSeat(campaignId: number) {
+        await seatrepo.ResetSeat(campaignId)
+        //     console.log(result)
+        //
+    }
+    static async GetStatusUserCount(campaignId: number) {
+        const result = await seatrepo.GetAllUsersCount(campaignId)
+        console.log(result)
+        return result;
+    }
 }

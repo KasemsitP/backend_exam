@@ -43,12 +43,15 @@ class Seatrepo {
     constructor() {
         this.pool = DB.getInstance();
     }
+
+
     async GetAllUserByCampaign(campaign_id: number): Promise<UserData[]> {
 
         const sql = `SELECT u.id, u.user_code, u.full_name, u.first_name, u.last_name, u.title
-   FROM users u
-   JOIN user_campaigns uc ON u.id = uc.user_id
-  WHERE uc.campaign_id = ?
+FROM users u
+JOIN user_campaigns uc ON u.id = uc.user_id
+WHERE uc.campaign_id = ?
+  AND uc.room_code IS NULL;
 `
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql
             ,
@@ -56,7 +59,22 @@ class Seatrepo {
         );
         return rows as UserData[];
     }
-    
+
+
+    //     async GetAllUserByCampaign(campaign_id: number): Promise<UserData[]> {
+
+    //         const sql = `SELECT u.id, u.user_code, u.full_name, u.first_name, u.last_name, u.title
+    //    FROM users u
+    //    JOIN user_campaigns uc ON u.id = uc.user_id
+    //   WHERE uc.campaign_id = ?
+    // `
+    //         const [rows] = await this.pool.execute<RowDataPacket[]>(sql
+    //             ,
+    //             [campaign_id]
+    //         );
+    //         return rows as UserData[];
+    //     }
+
     async GetAllUserByCampaignNotNULL(campaign_id: number): Promise<UserData[]> {
 
         const sql = `SELECT u.id, u.user_code, u.full_name, u.first_name, u.last_name, u.title
@@ -155,6 +173,59 @@ class Seatrepo {
         ]);
         return rows as UserSeatRow[];
     }
+
+    async isAssigned(campaign_id: number): Promise<any> {
+        const sql = `
+SELECT 
+  r.room_code,
+  COUNT(uc.id) AS count_user
+FROM exam_rooms r
+LEFT JOIN user_campaigns uc
+  ON uc.room_code = r.room_code
+ AND uc.campaign_id = ?
+GROUP BY r.room_code;
+
+  `
+
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
+        return rows
+    }
+
+    async ResetSeat(campaign_id: number): Promise<void> {
+        const sql = `UPDATE user_campaigns
+       SET room_code = NULL,
+           row_no   = NULL,
+           col_no   = NULL,
+           seat_code = NULL
+       WHERE campaign_id = ?`
+        const result = await this.pool.execute(sql, [campaign_id])
+    }
+    async GetAllUsersCount(campaign_id: number): Promise<any> {
+        const sql = `
+SELECT
+  COUNT(*) AS total_users,
+  SUM(CASE WHEN uc.room_code IS NOT NULL THEN 1 ELSE 0 END) AS total_users_assigned_room
+FROM user_campaigns uc
+WHERE uc.campaign_id = ?;
+;
+  `;
+        const [rows] = await this.pool.execute<
+            (RowDataPacket & {
+                total_users: number;
+                total_users_assigned_room: number;
+            })[]
+        >(sql, [campaign_id]);
+
+        const row = rows[0];
+
+        return {
+            total_users: Number(row.total_users),
+            total_users_assigned_room: Number(row.total_users_assigned_room),
+        };
+    }
+
+
 }
+
 const seatrepo = new Seatrepo()
 export default seatrepo

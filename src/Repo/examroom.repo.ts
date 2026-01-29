@@ -1,5 +1,8 @@
 // src/Repo/examRoom.repo.ts
-import { PoolConnection, RowDataPacket } from "mysql2/promise";
+
+import { DB } from "../model/DB";
+import { PoolConnection, RowDataPacket, Pool } from "mysql2/promise";
+
 
 export interface ExamRoom {
   campaign_id: number;
@@ -8,7 +11,11 @@ export interface ExamRoom {
 }
 
 class ExamRoomRepo {
-  // ดึงห้องสอบทั้งหมดของ campaign นั้น ๆ
+  private pool: Pool
+  constructor() {
+    this.pool = DB.getInstance();
+  }
+
   async findByCampaignId(
     campaignId: number,
     connection: PoolConnection
@@ -17,6 +24,22 @@ class ExamRoomRepo {
       "SELECT campaign_id, room_code, capacity FROM exam_rooms WHERE campaign_id = ? ORDER BY room_code ASC;";
     try {
       const [rows] = await connection.execute<RowDataPacket[]>(sql, [
+        campaignId,
+      ]);
+      return rows as ExamRoom[];
+    } catch (error) {
+      console.error("Repo Error (Room FindByCampaign):", error);
+      throw error;
+    }
+  }
+
+  async findByCampaignIdCon(
+    campaignId: number,
+  ): Promise<ExamRoom[]> {
+    const sql =
+      "SELECT campaign_id, room_code, capacity FROM exam_rooms WHERE campaign_id = ? ORDER BY room_code ASC;";
+    try {
+      const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [
         campaignId,
       ]);
       return rows as ExamRoom[];

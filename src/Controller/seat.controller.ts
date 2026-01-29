@@ -8,7 +8,7 @@ export class seatController {
 
     static getSeat = async (req: Request, res: Response) => {
         const { campaign_id, roomCode } = req.params;
-        console.log(campaign_id , roomCode)
+        console.log(campaign_id, roomCode)
 
 
         if (!campaign_id || !roomCode) {
@@ -22,7 +22,7 @@ export class seatController {
                 Number(campaign_id),
                 String(roomCode)
             )
-            console.log("gulnwza",data)
+            console.log("gulnwza", data)
             return res.status(200).json(data);
         } catch (error) {
             console.error("getSeat error", error);
@@ -40,7 +40,7 @@ export class seatController {
         const { seatsPerRow } = req.query;
         //  console.log(campaign_id , roomCode, seatsPerRow)
 
-       // console.log(campaign_id , roomCode , seatsPerRow)
+        // console.log(campaign_id , roomCode , seatsPerRow)
 
         if (!campaign_id || !roomCode) {
             return res.status(400).json({ message: "Invalid Campaign ID or RoomCode" });
@@ -104,5 +104,34 @@ export class seatController {
             console.error("CreateSeat error:", error);
             return res.status(500).json({ message: "Error arranging seats" });
         }
-    };
+    }
+    static IsAssigned = async (req: Request, res: Response) => {
+        const { campaign_id } = req.params
+        if (!campaign_id) {
+            return res.status(400).json({ message: "Invalid Campaign ID" });
+        }
+        const result = await seatService.IsAssigned(Number(campaign_id))
+
+        return res.status(200).json(result)
+    }
+    static ResetSeat = async (req: Request, res: Response) => {
+        const { campaign_id } = req.params
+        if (!campaign_id) {
+            return res.status(400).json({ message: "Invalid Campaign ID" });
+        }
+        const result = await seatService.ResetSeat(Number(campaign_id))
+
+        return res.status(200).json({
+            "message": "Reset Completed"
+        })
+    }
+    static getUserCount = async (req: Request, res: Response) => {
+        const { campaign_id } = req.params
+        if (!campaign_id) {
+            return res.status(400).json({ message: "Invalid Campaign ID" });
+        }
+        const result = await seatService.GetStatusUserCount(Number(campaign_id))
+
+        return res.status(200).json(result)
+    }
 }
