@@ -6,7 +6,7 @@ export interface ExamCampaign {
   name: string;
   start_date: string;
   end_date: string;
-  is_active: boolean; 
+  is_active: boolean;
   note?: string;
 }
 
@@ -17,7 +17,7 @@ export interface CampaignSession {
   campaign_id: number;
   site_id: number;
   title?: string;
-  day_no?: number; 
+  day_no?: number;
 }
 
 export interface CampaignSubject {
@@ -111,7 +111,14 @@ class ExamDataRepo {
     // หมายเหตุ: แนะนำให้ไม่ส่งรายการที่ถูกลบ (ถ้ามี soft delete)
     const { where, params } = this.buildActiveWhere(opts);
     const sql = `
-      SELECT ec.id, ec.code, ec.name, ec.start_date, ec.end_date, ec.is_active, ec.note
+      SELECT 
+  ec.id,
+  ec.code,
+  ec.name,
+  ec.is_active,
+  ec.year_be,
+  ec.site,
+  ec.campaign_size
       FROM exam_campaigns ec
       WHERE ${where}
       ORDER BY ec.id
@@ -135,7 +142,7 @@ class ExamDataRepo {
 
   async fetchSubjects(opts?: FetchOpts): Promise<CampaignSubject[]> {
     const { where, params } = this.buildActiveWhere(opts);
-  const sql = `
+    const sql = `
     SELECT 
       ss.session_id,
       ss.subject_id,

@@ -6,12 +6,11 @@ export type ApiBoolean = boolean | 0 | 1;
 
 export interface ApiCampaign extends RowDataPacket {
   id: number;
-  code: string;
+  year_be: string;
+  site: string
+  campaign_size: string
   name: string;
-  start_date: string;
-  end_date: string;
   is_active: ApiBoolean;
-  note?: string;
 }
 
 export type CreateCampaignPayload = Omit<ApiCampaign, "id">;
@@ -29,24 +28,25 @@ class CampaignRepo {
     payload: CreateCampaignPayload,
     dbClient: DbClient = this.pool
   ): Promise<ApiCampaign> {
+    console.log(payload)
     const sql = `
-      INSERT INTO exam_campaigns 
-        (code, name, start_date, end_date, is_active, note) 
-      VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO exam_campaigns
+  (year_be, site, campaign_size, name, is_active)
+VALUES
+  (?, ?, ?, ?, ?);
     `;
     const params = [
-      payload.code,
+      payload.year_be,
+      payload.site,
+      payload.campaign_size,
       payload.name,
-      payload.start_date,
-      payload.end_date,
-      payload.is_active,
-      payload.note,
+      payload.is_active ? 1 : 1,
     ];
 
-    const [result] = await dbClient.execute<any>(sql, params); // 👈 ใช้ dbClient
+    const [result] = await dbClient.execute<any>(sql, params); 
     const newId = result.insertId;
 
-    return this.findById(newId, dbClient); // 👈 ส่ง dbClient ต่อ
+    return this.findById(newId, dbClient); 
   }
   async update(
     payload: CreateCampaignPayload,
@@ -70,7 +70,7 @@ class CampaignRepo {
       payload.end_date,
       payload.is_active,
       payload.note,
-      payload.id, 
+      payload.id,
     ];
 
     await dbClient.execute<any>(sql, params);

@@ -5,7 +5,8 @@ import {
   RawQuestionAverageRow,
   RawQuestionStatsRow,
   RawBookletQuestionStatsRow,
-  findBookletQuestionStatsForBag
+  findBookletQuestionStatsForBag,
+  getUnlockCampaignByBagId
 } from "../Repo/grading-report.repo";
 export interface BagQuestionScoreRow {
   questionNo: number;
@@ -24,11 +25,13 @@ export interface BagBookletQuestionBlock {
   examCode: string;
   questionCount: number;
   questions: BagQuestionScoreRow[];
+
 }
 
 function buildBookletBlocks(
   raw: RawBookletQuestionStatsRow[],
-  questionCount: number
+  questionCount: number,
+  unlock: number
 ): BagBookletQuestionBlock[] {
   const byBooklet = new Map<number, BagBookletQuestionBlock>();
 
@@ -38,7 +41,9 @@ function buildBookletBlocks(
     if (!block) {
       block = {
         bookletId: r.booklet_id,
-        examCode: r.exam_code,
+        examCode: unlock === 1
+          ? r.exam_code
+          : String(r.booklet_id),
         questionCount: 0,
         questions: [],
       };
@@ -225,33 +230,38 @@ export class GradingReportService {
     }
   }
   static async getBagScoresReport(
-  bagId: number,
-  subjectId: number = 0
-): Promise<BagScoresResponse> {
-  const conn = await DB.getInstance().getConnection();
-  try {
-    // 1) จำนวนข้อจาก session_subjects (เหมือนเดิม)
-    const questionCount =
-      (await findQuestionCountForBagSubject(conn, bagId, subjectId)) ?? 0;
+    bagId: number,
+    subjectId: number = 0
+  ): Promise<BagScoresResponse> {
+    const conn = await DB.getInstance().getConnection();
+    try {
+      // 1) จำนวนข้อจาก session_subjects (เหมือนเดิม)
+      const questionCount =
+        (await findQuestionCountForBagSubject(conn, bagId, subjectId)) ?? 0;
 
-    // 2) raw รายเล่ม-รายข้อ
-    const rawPerBooklet = await findBookletQuestionStatsForBag(
-      conn,
-      bagId,
-      subjectId
-    );
+      // 2) raw รายเล่ม-รายข้อ
+      const rawPerBooklet = await findBookletQuestionStatsForBag(
+        conn,
+        bagId,
+        subjectId
+      );
+      const result_is_unlock = await getUnlockCampaignByBagId(conn, bagId)
 
-    // 3) แปลงเป็น blocks รายเล่ม
-    const booklets = buildBookletBlocks(rawPerBooklet, questionCount);
 
-    return {
-      bagId,
-      subjectId,
-      questionCount,
-      booklets,
-    };
-  } finally {
-    conn.release();
-  }
+      console.log(result_is_unlock[0].campaign_id)
+
+      const unlock = result_is_unlock[0].is_unlock
+
+      const booklets = buildBookletBlocks(rawPerBooklet, questionCount, unlock);
+
+      return {
+        bagId,
+        subjectId,
+        questionCount,
+        booklets,
+      };
+    } finally {
+      conn.release();
+    }
   }
 }

@@ -33,6 +33,9 @@ import gradingSummaryRouter from './Routes/router.gradingsummary';
 import gradingReportRouter from './Routes/router.gradingreport'
 import seatRouter from './Routes/router.seat'
 import dashboardRouter from './Routes/router.dashboard'
+import  signsheetRouter from './Routes/router.signsheet'
+import  seatplanRouter from './Routes/router.seatplan'
+
 dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
@@ -140,6 +143,8 @@ app.use("/api",gradingSummaryRouter)
 app.use("/api", gradingReportRouter)
 app.use("/api",seatRouter)
 app.use("/api",dashboardRouter)
+app.use("/api",signsheetRouter)
+app.use("/api",seatplanRouter)
 
 app.get("/test",isAuthenticated, async (req, res) => {
   try {

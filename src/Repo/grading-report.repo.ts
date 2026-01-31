@@ -2,10 +2,10 @@
 import { PoolConnection, RowDataPacket } from "mysql2/promise";
 
 export interface RawQuestionAverageRow extends RowDataPacket {
-    booklet_id: number;
-    exam_code: string;
-    question_no: number;
-    avg_score: number;
+  booklet_id: number;
+  exam_code: string;
+  question_no: number;
+  avg_score: number;
 }
 export interface RawQuestionStatsRow extends RowDataPacket {
   question_no: number;
@@ -82,11 +82,11 @@ export function buildRowsByBooklet(
  * ใช้ bags -> sessions -> session_subjects.question_count
  */
 export async function findQuestionCountForBagSubject(
-    conn: PoolConnection,
-    bagId: number,
-    subjectId: number
+  conn: PoolConnection,
+  bagId: number,
+  subjectId: number
 ): Promise<number | null> {
-    const sql = `
+  const sql = `
     SELECT ss.question_count
     FROM bags b
     JOIN sessions s
@@ -96,10 +96,10 @@ export async function findQuestionCountForBagSubject(
     WHERE b.id = ?
     LIMIT 1;
   `;
-    const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
-    if (!rows.length) return null;
-    const qc = rows[0].question_count as number | null;
-    return qc ?? null;
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
+  if (!rows.length) return null;
+  const qc = rows[0].question_count as number | null;
+  return qc ?? null;
 }
 //      AND ss.subject_id = ?
 
@@ -107,11 +107,11 @@ export async function findQuestionCountForBagSubject(
  * ดึงคะแนนเฉลี่ยรายข้อ (หลังจากรวม 2 ผู้ตรวจแล้ว) แบบ row ธรรมดา
  */
 export async function findQuestionAveragesForBagSubject(
-    conn: PoolConnection,
-    bagId: number,
-    subjectId: number
+  conn: PoolConnection,
+  bagId: number,
+  subjectId: number
 ): Promise<RawQuestionAverageRow[]> {
-    const sql = `
+  const sql = `
 SELECT
   b.id          AS booklet_id,
   u.user_code   AS exam_code,
@@ -140,10 +140,10 @@ ORDER BY
   s.question_no;
 
   `;
-    const [rows] = await conn.query<RawQuestionAverageRow[]>(sql, [
-        bagId,
-    ]);
-    return rows;
+  const [rows] = await conn.query<RawQuestionAverageRow[]>(sql, [
+    bagId,
+  ]);
+  return rows;
 }
 
 export interface RawQuestionStatsRow extends RowDataPacket {
@@ -309,5 +309,20 @@ export async function findBookletQuestionStatsForBag(
   `;
 
   const [rows] = await conn.query<RawBookletQuestionStatsRow[]>(sql, [bagId]);
+  return rows;
+}
+
+interface is_unlockType extends RowDataPacket{
+  campaign_id : number 
+  is_unlock : number
+}
+
+
+export async function getUnlockCampaignByBagId(conn: PoolConnection,
+  bagId: number,
+): Promise<is_unlockType[]> {
+
+  const sql = `SELECT s.campaign_id , ec.is_unlock from bags b JOIN sessions s ON s.id = b.session_id join exam_campaigns ec ON ec.id = s.campaign_id WHERE b.id = ?;`
+  const [rows] = await conn.query<is_unlockType[]>(sql , bagId)
   return rows;
 }
