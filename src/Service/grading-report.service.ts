@@ -6,8 +6,20 @@ import {
   RawQuestionStatsRow,
   RawBookletQuestionStatsRow,
   findBookletQuestionStatsForBag,
-  getUnlockCampaignByBagId
+  getUnlockCampaignByBagId,
+  getInfomation,
+  getAllBags,
+  getGraderInfo
 } from "../Repo/grading-report.repo";
+
+import {
+  getGraderBagSummary,
+  type GraderBagSummaryRow,
+} from "../Repo/grading-report.repo";
+
+import PDFDocument from "pdfkit";
+
+import path from "path";
 export interface BagQuestionScoreRow {
   questionNo: number;
   label: string;
@@ -158,6 +170,204 @@ export class GradingReportService {
    * ดึงคะแนนรายถุง รายวิชา แบบ dynamic ตามจำนวนข้อ
    * - 1 ข้อตรวจ 2 คน → เฉลี่ยด้วย AVG แล้ว
    */
+
+  private static drawBagScorePage(
+    doc: any,
+    info: any,
+    booklets: BagBookletQuestionBlock[],
+    questionCount: number
+  ) {
+    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
+    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+
+    const pageWidth = doc.page.width;
+    const { left, right, bottom } = doc.page.margins;
+    const tableWidth = pageWidth - left - right;
+
+    // ========== ถุงมุมขวาบน ==========
+    doc
+      .font(fontNormal)
+      .fontSize(30)
+      .text(`ถุงที่ ${info?.bag_no}`, left, 20, {
+        width: pageWidth - left - right,
+        align: "right",
+      });
+
+    // ========== Header กลาง ==========
+    doc.font(fontBold).fontSize(16).text(
+      `เอกสารคะแนนการทดสอบเพื่อบรรจุเป็นข้าราชการอัยการในตำแหน่งอัยการผู้ช่วย พ.ศ.${info?.year_be} (${info?.campaign_size})`,
+      { align: "center" }
+    );
+
+    doc.moveDown(0.2);
+    doc.font(fontNormal).fontSize(14).text(`วิชา${info?.subject_name}`, {
+      align: "center",
+    });
+    doc.moveDown(1);
+
+    // ========== ตารางแนวนอน ==========
+    // คอลัมน์: รหัส + 4*question + รวม + รวมทั้งหมด
+    const colCodeWidth = 60;
+    const colPerScoreWidth = 22; // ค.1 / ค.2 / ต่าง / เฉลี่ย
+    const colsPerQuestion = 4;
+    const colSumWidth = 40;
+    const totalQuestionCols = questionCount * colsPerQuestion;
+
+    const usedWidth =
+      colCodeWidth + totalQuestionCols * colPerScoreWidth + colSumWidth * 2;
+
+    const scale = usedWidth > tableWidth ? tableWidth / usedWidth : 1;
+
+    const cwCode = colCodeWidth * scale;
+    const cwScore = colPerScoreWidth * scale;
+    const cwSum = colSumWidth * scale;
+
+    const startX = left;
+    const startY = doc.y;
+    let y = startY;
+    const rowH1 = 20;
+    const rowH2 = 18;
+
+    const drawHeader = () => {
+      let x = startX;
+
+      doc.lineWidth(0.5).strokeColor("black");
+      doc.font(fontBold).fontSize(10);
+
+      // แถวบน
+      doc.rect(startX, y, cwCode, rowH1 + rowH2).stroke();
+      doc.text("รหัส", x, y + 6, { width: cwCode, align: "center" });
+      x += cwCode;
+
+      for (let q = 1; q <= questionCount; q++) {
+        const groupWidth = colsPerQuestion * cwScore;
+        doc.rect(x, y, groupWidth, rowH1).stroke();
+        doc.text(`ข้อ ${q}`, x, y + 4, { width: groupWidth, align: "center" });
+        x += groupWidth;
+      }
+
+      // รวมรายวิชา + รวมทั้งหมด
+      doc.rect(x, y, cwSum, rowH1 + rowH2).stroke();
+      doc.text("รวม", x, y + 6, { width: cwSum, align: "center" });
+      x += cwSum;
+
+      doc.rect(x, y, cwSum, rowH1 + rowH2).stroke();
+      doc.text("รวมทั้งหมด", x, y + 6, { width: cwSum, align: "center" });
+
+      // แถวล่าง (หัวคอลัมน์ย่อย)
+      y += rowH1;
+      x = startX + cwCode;
+
+      const subHeads = ["ค.1", "ค.2", "ต่าง", "เฉลี่ย"];
+      for (let q = 1; q <= questionCount; q++) {
+        for (let h = 0; h < colsPerQuestion; h++) {
+          doc.rect(x, y, cwScore, rowH2).stroke();
+          doc.text(subHeads[h], x, y + 3, {
+            width: cwScore,
+            align: "center",
+          });
+          x += cwScore;
+        }
+      }
+
+      // ล่างสุดของ header
+      doc.rect(startX, y, cwCode, rowH2).stroke(); // เส้นใต้ "รหัส"
+
+      doc
+        .rect(startX + cwCode + totalQuestionCols * cwScore, y, cwSum, rowH2)
+        .stroke();
+      doc
+        .rect(
+          startX + cwCode + totalQuestionCols * cwScore + cwSum,
+          y,
+          cwSum,
+          rowH2
+        )
+        .stroke();
+
+      y += rowH2;
+    };
+
+    // วาด header
+    drawHeader();
+
+    const rowHeight = 16;
+    doc.font(fontNormal).fontSize(9);
+
+    const ensurePage = () => {
+      if (y + rowHeight > doc.page.height - bottom) {
+        doc.addPage({ layout: "landscape" });
+        y = doc.page.margins.top;
+        // header ใหม่บนหน้าใหม่
+        drawHeader();
+      }
+    };
+
+    // เนื้อหาแต่ละเล่ม
+    for (const bk of booklets) {
+      ensurePage();
+
+      let x = startX;
+
+      // รหัสสอบ
+      doc.rect(x, y, cwCode, rowHeight).stroke();
+      doc.text(bk.examCode, x + 2, y + 3, {
+        width: cwCode - 4,
+        align: "left",
+      });
+      x += cwCode;
+
+      // รายข้อ
+      let totalPerSubject = 0;
+
+      for (let q = 1; q <= questionCount; q++) {
+        const qRow = bk.questions.find((qq) => qq.questionNo === q);
+        const s1 = qRow?.grader1Score ?? null;
+        const s2 = qRow?.grader2Score ?? null;
+        const diff =
+          s1 != null && s2 != null ? Math.abs(Number(s1) - Number(s2)) : null;
+        const avg =
+          s1 != null && s2 != null
+            ? (Number(s1) + Number(s2)) / 2
+            : qRow?.finalScore ?? null;
+
+        const vals = [s1, s2, diff, avg];
+
+        vals.forEach((val) => {
+          doc.rect(x, y, cwScore, rowHeight).stroke();
+          doc.text(
+            val == null ? "" : Number(val).toFixed(1),
+            x + 1,
+            y + 3,
+            { width: cwScore - 2, align: "right" }
+          );
+          x += cwScore;
+        });
+
+        if (avg != null) {
+          totalPerSubject += Number(avg);
+        }
+      }
+
+      // รวมรายวิชา
+      doc.rect(x, y, cwSum, rowHeight).stroke();
+      doc.text(totalPerSubject.toFixed(1), x, y + 3, {
+        width: cwSum,
+        align: "right",
+      });
+      x += cwSum;
+
+      // รวมทั้งหมด (ตอนนี้ใช้ค่าเดียวกันไปก่อน)
+      doc.rect(x, y, cwSum, rowHeight).stroke();
+      doc.text(totalPerSubject.toFixed(1), x, y + 3, {
+        width: cwSum,
+        align: "right",
+      });
+
+      y += rowHeight;
+    }
+  }
+
   static async getScoresForBagSubject(
     bagId: number,
   ): Promise<BagSubjectScoreResult> {
@@ -246,6 +456,7 @@ export class GradingReportService {
         subjectId
       );
       const result_is_unlock = await getUnlockCampaignByBagId(conn, bagId)
+      //  console.log(result_is_unlock)
 
 
       console.log(result_is_unlock[0].campaign_id)
@@ -264,4 +475,542 @@ export class GradingReportService {
       conn.release();
     }
   }
+  static async generateBagScorePdf(bagId: number): Promise<Buffer> {
+
+    const info = await getInfomation(bagId)
+    console.log(info)
+    // ดึงข้อมูลคะแนนตามถุง
+    const report = await GradingReportService.getBagScoresReport(bagId, 0);
+    const { booklets, questionCount } = report;
+
+    const doc = new PDFDocument({
+      size: "A4",
+      layout: "landscape",   // 👈 ตรงนี้ทำให้เป็นแนวนอน
+      margins: { top: 40, bottom: 40, left: 40, right: 40 },
+    });
+
+    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
+    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+
+    const chunks: Buffer[] = [];
+    doc.on("data", (c) => chunks.push(c));
+    const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+    });
+
+    /* ========== ตารางแนวนอน ========== */
+    const pageWidth = doc.page.width;
+    const { left, right, bottom } = doc.page.margins;
+    const tableWidth = pageWidth - left - right;
+    doc
+      .font(fontNormal)
+      .fontSize(30)
+      .text(
+        `ถุงที่ ${info?.bag_no}`,
+        left,
+        20,
+        {
+          width: pageWidth - left - right,
+          align: "right",
+        }
+      );
+
+    /* ========== Header ========== */
+    doc.font(fontBold).fontSize(16).text(
+      `เอกสารคะแนนการทดสอบเพื่อบรรจุเป็นข้าราชการอัยการในตำแหน่งอัยการผู้ช่วย พ.ศ.${info?.year_be} (${info?.campaign_size})`,
+      { align: "center" }
+    );
+
+    doc.moveDown(0.2);
+    doc.font(fontNormal).fontSize(14).text(
+      `วิชา${info?.subject_name}`,
+      { align: "center" }
+    );
+    doc.moveDown(1);
+
+
+
+    // คอลัมน์: รหัส + 4*question + รวม + รวมทั้งหมด (ตัวอย่าง)
+    const colCodeWidth = 60;
+    const colPerScoreWidth = 22; // ค.ค.1 / ค.ค.2 / ต่าง / เฉลี่ย
+    const colsPerQuestion = 4;
+    const colSumWidth = 40;
+    const totalQuestionCols = questionCount * colsPerQuestion;
+
+    const usedWidth =
+      colCodeWidth +
+      totalQuestionCols * colPerScoreWidth +
+      colSumWidth * 2;
+
+    const scale = usedWidth > tableWidth ? tableWidth / usedWidth : 1;
+
+    const cwCode = colCodeWidth * scale;
+    const cwScore = colPerScoreWidth * scale;
+    const cwSum = colSumWidth * scale;
+
+    const startX = left;
+    const startY = doc.y;
+    let y = startY;
+    const rowH1 = 20;
+    const rowH2 = 18;
+
+    // ฟังก์ชันวาด header 2 ชั้น (แบบง่าย ๆ)
+    const drawHeader = () => {
+      let x = startX;
+
+      doc.lineWidth(0.5).strokeColor("black");
+      doc.font(fontBold).fontSize(10);
+
+      // แถวบน
+      doc.rect(startX, y, cwCode, rowH1 + rowH2).stroke();
+      doc.text("รหัส", x, y + 6, { width: cwCode, align: "center" });
+      x += cwCode;
+
+      for (let q = 1; q <= questionCount; q++) {
+        const groupWidth = colsPerQuestion * cwScore;
+        doc.rect(x, y, groupWidth, rowH1).stroke();
+        doc.text(`ข้อ ${q}`, x, y + 4, { width: groupWidth, align: "center" });
+        x += groupWidth;
+      }
+
+      // รวมรายวิชา + รวมทั้งหมด
+      doc.rect(x, y, cwSum, rowH1 + rowH2).stroke();
+      doc.text("รวม", x, y + 6, { width: cwSum, align: "center" });
+      x += cwSum;
+
+      doc.rect(x, y, cwSum, rowH1 + rowH2).stroke();
+      doc.text("รวมทั้งหมด", x, y + 6, { width: cwSum, align: "center" });
+
+      // แถวล่าง (หัวคอลัมน์ย่อย)
+      y += rowH1;
+      x = startX + cwCode;
+
+      const subHeads = ["ค.1", "ค.2", "ต่าง", "เฉลี่ย"];
+      for (let q = 1; q <= questionCount; q++) {
+        for (let h = 0; h < colsPerQuestion; h++) {
+          doc.rect(x, y, cwScore, rowH2).stroke();
+          doc.text(subHeads[h], x, y + 3, {
+            width: cwScore,
+            align: "center",
+          });
+          x += cwScore;
+        }
+      }
+
+      // ล่างสุดของ header
+      doc.rect(startX, y, cwCode, rowH2).stroke(); // เส้นใต้ "รหัส"
+      // ช่อง sum ทั้งสอง
+      doc.rect(
+        startX + cwCode + totalQuestionCols * cwScore,
+        y,
+        cwSum,
+        rowH2
+      ).stroke();
+      doc.rect(
+        startX + cwCode + totalQuestionCols * cwScore + cwSum,
+        y,
+        cwSum,
+        rowH2
+      ).stroke();
+
+      y += rowH2;
+    };
+
+    drawHeader();
+
+    const rowHeight = 16;
+    doc.font(fontNormal).fontSize(9);
+
+    const ensurePage = () => {
+      if (y + rowHeight > doc.page.height - bottom) {
+        doc.addPage({ layout: "landscape" });
+        y = doc.page.margins.top;
+        drawHeader();
+      }
+    };
+
+    for (const bk of booklets) {
+      ensurePage();
+
+      let x = startX;
+      // รหัส
+      doc.rect(x, y, cwCode, rowHeight).stroke();
+      doc.text(bk.examCode, x + 2, y + 3, {
+        width: cwCode - 4,
+        align: "left",
+      });
+      x += cwCode;
+
+      // รายข้อ
+      let totalPerSubject = 0;
+      for (let q = 1; q <= questionCount; q++) {
+        const qRow = bk.questions.find((qq) => qq.questionNo === q);
+        const s1 = qRow?.grader1Score ?? null;
+        const s2 = qRow?.grader2Score ?? null;
+        const diff =
+          s1 != null && s2 != null ? Math.abs(Number(s1) - Number(s2)) : null;
+        const avg =
+          s1 != null && s2 != null
+            ? (Number(s1) + Number(s2)) / 2
+            : qRow?.finalScore ?? null;
+
+        const vals = [s1, s2, diff, avg];
+
+        vals.forEach((val) => {
+          doc.rect(x, y, cwScore, rowHeight).stroke();
+          doc.text(
+            val == null ? "" : Number(val).toFixed(1),
+            x + 1,
+            y + 3,
+            { width: cwScore - 2, align: "right" }
+          );
+          x += cwScore;
+        });
+
+        if (avg != null) totalPerSubject += Number(avg);
+      }
+
+      // รวมรายวิชา
+      doc.rect(x, y, cwSum, rowHeight).stroke();
+      doc.text(totalPerSubject.toFixed(1), x, y + 3, {
+        width: cwSum,
+        align: "right",
+      });
+      x += cwSum;
+
+      // รวมทั้งหมด (ถ้าคุณมีอีกวิชา ค่อยเติม logic)
+      doc.rect(x, y, cwSum, rowHeight).stroke();
+      doc.text(totalPerSubject.toFixed(1), x, y + 3, {
+        width: cwSum,
+        align: "right",
+      });
+
+      y += rowHeight;
+    }
+
+    doc.end();
+    return pdfPromise;
+  }
+  static async generateCampaignBagScoresPdf(
+    campaignId: number
+  ): Promise<Buffer> {
+    const conn = await DB.getInstance().getConnection();
+
+    try {
+      // ดึงถุงทั้งหมดใน campaign นี้
+      const bagRows = await getAllBags(campaignId);
+      console.log(campaignId, bagRows);
+
+      if (!bagRows.length) {
+        throw new Error("ไม่พบถุงใด ๆ ในแคมเปญนี้");
+      }
+
+      const doc = new PDFDocument({
+        size: "A4",
+        layout: "landscape",
+        margins: { top: 40, bottom: 40, left: 40, right: 40 },
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on("data", (c) => chunks.push(c));
+      const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", reject);
+      });
+
+      let firstPage = true;
+
+      for (const bag of bagRows) {
+        const bagId = bag.bag_id;   // 👈 ใช้ bag.bag_id ไม่ใช่ bag.id
+
+        if (!firstPage) {
+          doc.addPage({
+            size: "A4",
+            layout: "landscape",
+            margins: { top: 40, bottom: 40, left: 40, right: 40 },
+          });
+        } else {
+          firstPage = false;
+        }
+
+        const info = await getInfomation(bagId);
+
+        const report = await GradingReportService.getBagScoresReport(bagId, 0);
+        const { booklets, questionCount } = report;
+
+        GradingReportService.drawBagScorePage(
+          doc,
+          info,
+          booklets,
+          questionCount
+        );
+      }
+
+      doc.end();
+      return pdfPromise;
+    } finally {
+      conn.release();
+    }
+  }
+  static async generateGraderBagSummaryPdf(
+    bagId: number,
+    graderId: number,
+    graderName: string   // ส่งมาจาก controller ก็ได้
+  ): Promise<Buffer> {
+    const conn = await DB.getInstance().getConnection();
+    try {
+      const info = await getInfomation(bagId); // มี bag_no, subject_name, year_be, site, ฯลฯ
+      const graderInfo = await getGraderInfo(conn , bagId , graderId)
+      console.log(graderInfo)
+      const rows: GraderBagSummaryRow[] = await getGraderBagSummary(
+        conn,
+        bagId,
+        graderId
+      );
+
+      const doc = new PDFDocument({
+        size: "A4",
+        layout: "portrait",    // ใบตัวอย่างเป็นแนวตั้ง
+        margins: { top: 60, bottom: 50, left: 50, right: 50 },
+      });
+
+      const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
+      const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+
+      const chunks: Buffer[] = [];
+      doc.on("data", (c) => chunks.push(c));
+      const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", reject);
+      });
+
+      const pageWidth = doc.page.width;
+      const { left, right, bottom } = doc.page.margins;
+
+      /* ===== มุมขวาบน: ถุงที่ XX ===== */
+      doc
+        .font(fontNormal)
+        .fontSize(30)
+        .text(
+          `ถุงที่ ${info?.bag_no ?? ""}`,
+          left,
+          30,
+          {
+            width: pageWidth - left - right,
+            align: "right",
+          }
+        );
+
+      /* ===== Header กลาง ===== */
+      doc
+        .font(fontBold)
+        .fontSize(16)
+        .text("ใบบันทึกคะแนนผู้ตรวจ", { align: "center" });
+
+      doc.moveDown(0.3);
+      doc
+        .font(fontNormal)
+        .fontSize(14)
+        .text(
+          `วิชา ${info?.subject_name ?? ""}   ปี พ.ศ. ${info?.year_be ?? ""}`,
+          { align: "center" }
+        );
+      doc.moveDown(0.3);
+      doc
+        .font(fontNormal)
+        .fontSize(14)
+        .text(
+          `ข้อ ${graderInfo?.question_no}  ผู้ตรวจคนที่ ${graderInfo?.grader_order}`,
+          { align: "center" }
+        );
+      doc.moveDown(0.3);
+      doc
+        .font(fontNormal)
+        .fontSize(14)
+        .text(
+          `ชื่อ ${graderInfo?.full_name} `,
+          { align: "center" }
+        );
+
+      doc.moveDown(1);
+
+      /* ===== บรรทัดข้อมูลผู้ตรวจ / สถานที่ ===== */
+      // const lineY = doc.y;
+      // doc
+      //   .font(fontNormal)
+      //   .fontSize(13)
+      //   .text(`ชื่อผู้ตรวจ: ${graderName || "................................"}`, left, lineY);
+
+      // doc.moveDown(0.4);
+      // doc.text(
+      //   `สนามสอบ: ${info?.site ?? "................................"}`,
+      //   left
+      // );
+
+      // doc.moveDown(1);
+
+      /* ===== ตารางรายการที่ตรวจ ===== */
+
+      const startX = left;
+      let y = doc.y + 5;
+
+      const tableWidth = pageWidth - left - right;
+
+      const colNoWidth = 40;        // คอลัมน์ลำดับ fix ไว้
+      const colScoreWidth = 100;    // กว้างของคอลัมน์คะแนน (ปรับได้)
+      const colQrWidth = tableWidth - colNoWidth - colScoreWidth;
+
+      const rowHeight = 20;
+
+      // วาดหัวตาราง
+      doc.font(fontBold).fontSize(12);
+      doc.rect(startX, y, colNoWidth, rowHeight).stroke();
+      doc.text("ลำดับ", startX, y + 4, {
+        width: colNoWidth,
+        align: "center",
+      });
+
+      doc.rect(startX + colNoWidth, y, colQrWidth, rowHeight).stroke();
+      doc.text("QR Payload", startX + colNoWidth, y + 4, {
+        width: colQrWidth,
+        align: "center",
+      });
+
+      doc
+        .rect(startX + colNoWidth + colQrWidth, y, colScoreWidth, rowHeight)
+        .stroke();
+      doc.text("คะแนน", startX + colNoWidth + colQrWidth, y + 4, {
+        width: colScoreWidth,
+        align: "center",
+      });
+
+      // doc
+      //   .rect(
+      //     startX + colNoWidth + colQrWidth + colScoreWidth,
+      //     y,
+      //     colNoteWidth,
+      //     rowHeight
+      //   )
+      //   .stroke();
+      // doc.text("หมายเหตุ", startX + colNoWidth + colQrWidth + colScoreWidth, y + 4, {
+      //   width: colNoteWidth,
+      //   align: "center",
+      // });
+
+      y += rowHeight;
+
+      // ฟังก์ชันเช็คขึ้นหน้าใหม่
+      const ensurePage = () => {
+        if (y + rowHeight > doc.page.height - bottom) {
+          doc.addPage({ layout: "portrait" });
+
+          // ถุงที่ และ header เล็ก ๆ บนหน้าใหม่ (ถ้าต้องการ)
+          doc
+            .font(fontNormal)
+            .fontSize(30)
+            .text(
+              `ถุงที่ ${info?.bag_no ?? ""} (ต่อ)`,
+              left,
+              30,
+              { width: pageWidth - left - right, align: "right" }
+            );
+
+          y = doc.page.margins.top;
+
+          // หัวตารางซ้ำบนหน้าใหม่
+          doc.font(fontBold).fontSize(12);
+          doc.rect(startX, y, colNoWidth, rowHeight).stroke();
+          doc.text("ลำดับ", startX, y + 4, {
+            width: colNoWidth,
+            align: "center",
+          });
+
+          doc.rect(startX + colNoWidth, y, colQrWidth, rowHeight).stroke();
+          doc.text("QR Payload", startX + colNoWidth, y + 4, {
+            width: colQrWidth,
+            align: "center",
+          });
+
+          doc
+            .rect(startX + colNoWidth + colQrWidth, y, colScoreWidth, rowHeight)
+            .stroke();
+          doc.text("คะแนน", startX + colNoWidth + colQrWidth, y + 4, {
+            width: colScoreWidth,
+            align: "center",
+          });
+
+          // doc
+          //   .rect(
+          //     startX + colNoWidth + colQrWidth + colScoreWidth,
+          //     y,
+          //     colNoteWidth,
+          //     rowHeight
+          //   )
+          //   .stroke();
+          // doc.text(
+          //   "หมายเหตุ",
+          //   startX + colNoWidth + colQrWidth + colScoreWidth,
+          //   y + 4,
+          //   {
+          //     width: colNoteWidth,
+          //     align: "center",
+          //   }
+          // );
+
+          y += rowHeight;
+        }
+      };
+
+      // เนื้อหาตาราง
+      doc.font(fontNormal).fontSize(11);
+
+      rows.forEach((row, idx) => {
+        ensurePage();
+
+        const qrText = row.qr_payload ?? "-";
+        const scoreText =
+          row.total_score != null ? Number(row.total_score).toFixed(0) : "";
+
+        const xNo = startX;
+        const xQr = startX + colNoWidth;
+        const xScore = xQr + colQrWidth;
+        const xNote = xScore + colScoreWidth;
+
+        // กรอบ
+        doc.rect(xNo, y, colNoWidth, rowHeight).stroke();
+        doc.rect(xQr, y, colQrWidth, rowHeight).stroke();
+        doc.rect(xScore, y, colScoreWidth, rowHeight).stroke();
+        // doc.rect(xNote, y, colNoteWidth, rowHeight).stroke();
+
+        // ข้อมูล
+        doc.text(String(idx + 1), xNo, y + 4, {
+          width: colNoWidth,
+          align: "center",
+        });
+
+        doc.text(qrText, xQr + 2, y + 4, {
+          width: colQrWidth - 4,
+          align: "left",
+        });
+
+        doc.text(scoreText, xScore, y + 4, {
+          width: colScoreWidth,  // ให้กินทั้งช่อง
+          align: "center",       // จัดกลางแนวนอน
+        });
+
+        // หมายเหตุปล่อยว่างให้เขียนเอง
+        y += rowHeight;
+      });
+
+      doc.end();
+      return pdfPromise;
+    } finally {
+      conn.release();
+    }
+  }
+
+
+
+
 }

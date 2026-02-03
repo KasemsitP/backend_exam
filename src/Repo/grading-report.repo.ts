@@ -1,5 +1,6 @@
 // src/Repo/gradingReport.repo.ts
 import { PoolConnection, RowDataPacket } from "mysql2/promise";
+import { DB } from "../model/DB";
 
 export interface RawQuestionAverageRow extends RowDataPacket {
   booklet_id: number;
@@ -22,6 +23,34 @@ export interface RawQuestionStatsRow extends RowDataPacket {
 
   final_score: number | null;
 }
+
+export interface CampaignSubjectRow extends RowDataPacket {
+  campaign_id: number;
+  name: string;
+  campaign_size: string;
+  year_be: string;
+  site: string;
+  subject_name: string;
+  bag_no: number
+}
+
+export interface AllBags extends RowDataPacket{
+  bag_id: number
+  bag_no: number
+}
+
+export interface GraderBagSummaryRow extends RowDataPacket {
+  qr_payload: string | null;
+  user_code: string;      // เลขที่นั่ง (เผื่อใช้ในอนาคต)
+  total_score: number;    // คะแนนรวมที่ผู้ตรวจคนนี้ให้กับเล่มนี้
+}
+
+export interface GraderInfo extends RowDataPacket {
+  question_no : number
+  grader_order : number
+  full_name : string
+}
+
 // แต่ละแถวในตาราง "ตามเล่ม"
 export interface BagScoreRowByBooklet {
   bookletId: number;
@@ -312,9 +341,9 @@ export async function findBookletQuestionStatsForBag(
   return rows;
 }
 
-interface is_unlockType extends RowDataPacket{
-  campaign_id : number 
-  is_unlock : number
+interface is_unlockType extends RowDataPacket {
+  campaign_id: number
+  is_unlock: number
 }
 
 
@@ -323,6 +352,120 @@ export async function getUnlockCampaignByBagId(conn: PoolConnection,
 ): Promise<is_unlockType[]> {
 
   const sql = `SELECT s.campaign_id , ec.is_unlock from bags b JOIN sessions s ON s.id = b.session_id join exam_campaigns ec ON ec.id = s.campaign_id WHERE b.id = ?;`
-  const [rows] = await conn.query<is_unlockType[]>(sql , bagId)
+  const [rows] = await conn.query<is_unlockType[]>(sql, [bagId])
   return rows;
 }
+
+
+
+export async function getInfomation(
+  bagId: number,
+): Promise<CampaignSubjectRow | null> {
+
+  const pool = DB.getInstance()
+
+  const sql = `
+    SELECT
+      s.campaign_id,
+      ec.name,
+      ec.campaign_size,
+      ec.year_be,
+      b.bag_no,
+      ec.site,
+      sub.name AS subject_name
+    FROM bags b
+    JOIN sessions s ON b.session_id = s.id
+    JOIN exam_campaigns ec ON ec.id = s.campaign_id
+    JOIN session_subjects sj ON sj.session_id = s.id
+    JOIN subjects sub ON sub.id = sj.subject_id
+    WHERE b.id = ?
+  `;
+
+  const [rows] = await pool.query<CampaignSubjectRow[]>(sql, [bagId]);
+
+  return rows[0] ?? null;
+}
+
+
+export async function getAllBags(
+  campaign_id: number
+): Promise<AllBags[]> {
+
+  const pool = DB.getInstance()
+
+  const sql = `
+SELECT b.id as bag_id, b.bag_no
+        FROM bags b
+        JOIN sessions s ON b.session_id = s.id
+        WHERE s.campaign_id = ?
+        ORDER BY s.id,b.bag_no;
+  `;
+
+  const [rows] = await pool.query<AllBags[]>(sql, [campaign_id]);
+
+  return rows;
+}
+
+export async function getGraderBagSummary(
+  conn: PoolConnection,
+  bagId: number,
+  graderId: number
+): Promise<GraderBagSummaryRow[]> {
+  const sql = `
+    SELECT
+      us.qr_payload,
+      u.user_code,
+      SUM(gs.score) AS total_score
+    FROM grading_scores gs
+    JOIN grading_slots s
+      ON gs.slot_id = s.id
+    JOIN booklets b
+      ON s.booklet_id = b.id
+    JOIN bags bg
+      ON b.bag_id = bg.id
+    JOIN user_sessions us
+      ON b.user_session_id = us.id
+    JOIN user_campaigns uc
+      ON us.user_campaign_id = uc.id
+    JOIN users u
+      ON uc.user_id = u.id
+    WHERE bg.id = ?
+      AND gs.entered_by = ?   -- ผู้ตรวจคนนี้
+    GROUP BY us.qr_payload, u.user_code
+    ORDER BY u.user_code;
+  `;
+
+  const [rows] = await conn.query<GraderBagSummaryRow[]>(sql, [bagId, graderId]);
+  return rows;
+}
+
+export async function getGraderInfo(
+  conn: PoolConnection,
+  bagId: number,
+  graderId: number
+): Promise<GraderInfo | null> {
+  const sql = `
+SELECT
+  s.question_no,
+  s.grader_order,
+  a.full_name
+FROM grading_scores gs
+join graders g on g.id = gs.entered_by
+JOIN accounts a on a.id = g.account_id
+JOIN grading_slots s ON gs.slot_id = s.id
+JOIN booklets b ON s.booklet_id = b.id
+JOIN bags bg ON b.bag_id = bg.id
+JOIN user_sessions us ON b.user_session_id = us.id
+JOIN user_campaigns uc ON us.user_campaign_id = uc.id
+JOIN users u ON uc.user_id = u.id
+WHERE bg.id = ?
+  AND gs.entered_by = ?
+ORDER BY u.user_code, s.question_no;
+  `;
+
+  const [rows] = await conn.query<GraderInfo[]>(sql, [bagId, graderId]);
+  return rows[0] ?? null;
+}
+
+
+

@@ -4,15 +4,31 @@ import { DB } from "../model/DB";
 import { Pool, PoolConnection } from "mysql2/promise";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
 
+interface scoreAverage extends RowDataPacket {
+  question_no: number; avg_score: number
+}
+interface ScoreDistributionSummary extends RowDataPacket {
+  total_users: number;
+  no_score: number;
+}
 
+interface ScoreBucketRow extends RowDataPacket {
+  bucket_index: number; // 0..19
+  count: number;
+}
+
+
+interface ScoreTotalRow extends RowDataPacket {
+  total_score: number | null;
+}
 
 class DashboardRepo {
-    private pool: Pool
-    constructor() {
-        this.pool = DB.getInstance();
-    }
-    async getCampaignBasicCounts(campaign_id: number) {
-        const sql = `
+  private pool: Pool
+  constructor() {
+    this.pool = DB.getInstance();
+  }
+  async getCampaignBasicCounts(campaign_id: number) {
+    const sql = `
       SELECT
         c.id AS campaign_id,
         COUNT(DISTINCT s.id)          AS session_count,
@@ -25,13 +41,13 @@ class DashboardRepo {
       WHERE c.id = ?
       GROUP BY c.id;
     `;
-        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-        return rows[0] ?? null;
-    }
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows[0] ?? null;
+  }
 
 
-    async getStatusSession(campaign_id: number) {
-        const sql = `WITH uc AS (
+  async getStatusSession(campaign_id: number) {
+    const sql = `WITH uc AS (
   SELECT campaign_id, COUNT(*) AS users_in_campaign
   FROM user_campaigns
   GROUP BY campaign_id
@@ -60,11 +76,11 @@ LEFT JOIN us_count
 WHERE s.campaign_id = ?  -- ใส่ campaign ที่กำลังดู
 ORDER BY s.exam_date, s.session_code;`
 
-        const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
-        return row;
-    }
-    async getIsEncrypted(campaign_id: number) {
-        const sql = `SELECT
+    const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
+    return row;
+  }
+  async getIsEncrypted(campaign_id: number) {
+    const sql = `SELECT
   s.campaign_id,
   s.id            AS session_id,
   s.session_code,
@@ -85,11 +101,11 @@ WHERE s.campaign_id = ?   -- campaign ที่กำลังดู
 GROUP BY s.campaign_id, s.id, s.session_code
 ORDER BY s.exam_date, s.session_code;`
 
-        const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
-        return row;
-    }
-    async getBagCountsPerSession(campaign_id: number) {
-        const sql = `
+    const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
+    return row;
+  }
+  async getBagCountsPerSession(campaign_id: number) {
+    const sql = `
       SELECT
         s.campaign_id,
         s.id           AS session_id,
@@ -103,13 +119,13 @@ ORDER BY s.exam_date, s.session_code;`
       GROUP BY s.campaign_id, s.id, s.session_code
       ORDER BY s.exam_date, s.session_code;
     `;
-        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-        return rows;
-    }
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows;
+  }
 
-    /**  จำนวนผู้ตรวจในแต่ละ campaign */
-    async getGradersCount(campaign_id: number) {
-        const sql = `
+  /**  จำนวนผู้ตรวจในแต่ละ campaign */
+  async getGradersCount(campaign_id: number) {
+    const sql = `
       SELECT
         campaign_id,
         COUNT(*)          AS total_graders,
@@ -118,13 +134,13 @@ ORDER BY s.exam_date, s.session_code;`
       WHERE campaign_id = ?
       GROUP BY campaign_id;
     `;
-        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-        return rows[0] ?? null;
-    }
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows[0] ?? null;
+  }
 
-    /**  จำนวนคีย์ใน campaign (รวม active / all) */
-    async getKeyCounts(campaign_id: number) {
-        const sql = `
+  /**  จำนวนคีย์ใน campaign (รวม active / all) */
+  async getKeyCounts(campaign_id: number) {
+    const sql = `
       SELECT
         campaign_id,
         COUNT(*) AS total_keys,
@@ -133,76 +149,253 @@ ORDER BY s.exam_date, s.session_code;`
       WHERE campaign_id = ?
       GROUP BY campaign_id;
     `;
-        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-        return rows[0] ?? null;
-    }
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows[0] ?? null;
+  }
 
-    /**  คะแนนเฉลี่ยในแต่ละหัวข้อ (subject_questions) จากผู้ตรวจ 2 คน (เฉลี่ย 2 แล้วค่อย avg อีกที) */
-    async getAverageScorePerQuestion(campaign_id: number) {
-        const sql = `
+  async getAverageScorePerQuestion(
+    campaignId: number
+  ): Promise<{ question_no: number; avg_score: number }[]> {
+    const pool = DB.getInstance();
+
+    const sql = `
+    SELECT
+      s.question_no,
+      AVG(gs.score) AS avg_score
+    FROM grading_scores gs
+    JOIN grading_slots s
+      ON gs.slot_id = s.id
+    JOIN booklets b
+      ON s.booklet_id = b.id
+    JOIN bags bg
+      ON b.bag_id = bg.id
+    JOIN sessions se
+      ON bg.session_id = se.id
+    WHERE se.campaign_id = ?
+    GROUP BY s.question_no
+    ORDER BY s.question_no;
+  `;
+
+    const [rows] = await pool.query<scoreAverage[]>(sql, [campaignId]);
+    return rows;
+  }
+
+  /**  คะแนนเฉลี่ยในแต่ละหัวข้อ (subject_questions) จากผู้ตรวจ 2 คน (เฉลี่ย 2 แล้วค่อย avg อีกที) */
+
+  // async getAverageScorePerQuestion(campaign_id: number) {
+  //     const sql = `
+  //   SELECT
+  //     s.campaign_id,
+  //     sub.id          AS subject_id,
+  //     sub.code        AS subject_code,
+  //     sub.name        AS subject_name,
+  //     sq.id           AS subject_question_id,
+  //     sq.question_no,
+  //     sq.label        AS question_label,
+  //     AVG( (gs1.score + gs2.score) / 2 ) AS avg_score
+  //   FROM grading_slots sl1
+  //   JOIN grading_slots sl2
+  //     ON sl1.booklet_id  = sl2.booklet_id
+  //    AND sl1.subject_id  = sl2.subject_id
+  //    AND sl1.question_no = sl2.question_no
+  //    AND sl1.grader_order = 1
+  //    AND sl2.grader_order = 2
+  //   JOIN grading_scores gs1
+  //     ON gs1.slot_id = sl1.id
+  //   JOIN grading_scores gs2
+  //     ON gs2.slot_id = sl2.id
+  //   JOIN booklets b
+  //     ON b.id = sl1.booklet_id
+  //   JOIN sessions s
+  //     ON s.id = b.session_id
+  //   JOIN subjects sub
+  //     ON sub.id = sl1.subject_id
+  //   JOIN subject_questions sq
+  //     ON sq.subject_id = sub.id
+  //    AND sq.question_no = sl1.question_no
+  //   WHERE s.campaign_id = ?
+  //   GROUP BY
+  //     s.campaign_id,
+  //     sub.id,
+  //     sub.code,
+  //     sub.name,
+  //     sq.id,
+  //     sq.question_no,
+  //     sq.label
+  //   ORDER BY sub.code, sq.question_no;
+  // `;
+  //     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+  //     return rows;
+  // }
+
+  /**  ช่วงคะแนน (เอาไว้ทำ chart) จาก user_campaigns.final_score */
+  //  async getScoreDistribution(campaignId: number) {
+  //   const pool = this.pool;
+
+  //   // CTE พื้นฐาน คำนวณ total_score ต่อ user ใน campaign นี้
+  //   const userTotalCTE = `
+  //     WITH user_total AS (
+  //       SELECT
+  //         uc.id AS user_campaign_id,
+  //         uc.user_id,
+  //         SUM(gs.score) AS total_score
+  //       FROM grading_scores gs
+  //       JOIN grading_slots s
+  //         ON gs.slot_id = s.id
+  //       JOIN booklets b
+  //         ON s.booklet_id = b.id
+  //       JOIN bags bg
+  //         ON b.bag_id = bg.id
+  //       JOIN sessions se
+  //         ON bg.session_id = se.id
+  //       JOIN user_sessions us
+  //         ON b.user_session_id = us.id
+  //       JOIN user_campaigns uc
+  //         ON us.user_campaign_id = uc.id
+  //       WHERE se.campaign_id = ?
+  //       GROUP BY uc.id, uc.user_id
+  //     )
+  //   `;
+
+  //   // 1) summary: นับจำนวนคนทั้งหมด + คนที่ไม่มีคะแนน
+  //   const summarySql = `
+  //     ${userTotalCTE}
+  //     SELECT
+  //       COUNT(*) AS total_users,
+  //       SUM(CASE WHEN total_score IS NULL THEN 1 ELSE 0 END) AS no_score
+  //     FROM user_total;
+  //   `;
+
+  //   const [summaryRows] = await pool.query<ScoreDistributionSummary[]>(summarySql, [campaignId]);
+  //   const summary = summaryRows[0] ?? { total_users: 0, no_score: 0 };
+
+  //   // 2) buckets: แบ่งเป็นช่วง 0–4, 5–9, ..., 95–100 (step = 5)
+  //   const bucketsSql = `
+  //     ${userTotalCTE}
+  //     SELECT
+  //       CASE
+  //         WHEN total_score IS NULL THEN NULL
+  //         WHEN total_score < 0 THEN 0
+  //         WHEN total_score >= 100 THEN 19       -- 0..19 = 20 bucket
+  //         ELSE FLOOR(total_score / 5)
+  //       END AS bucket_index,
+  //       COUNT(*) AS count
+  //     FROM user_total
+  //     WHERE total_score IS NOT NULL
+  //     GROUP BY bucket_index
+  //     ORDER BY bucket_index;
+  //   `;
+
+  //   const [bucketRows] = await pool.query<ScoreBucketRow[]>(bucketsSql, [campaignId]);
+
+  //   // แปลง bucket_index → label "0-4", "5-9", ..., "95-100"
+  //   const buckets = bucketRows.map((r) => {
+  //     const idx = r.bucket_index; // 0..19
+  //     const min = idx * 5;
+  //     const max = idx === 19 ? 100 : idx * 5 + 4;
+  //     return {
+  //       label: `${min}-${max}`,
+  //       count: r.count,
+  //     };
+  //   });
+
+  //   return {
+  //     total_users: summary.total_users ?? 0,
+  //     no_score: summary.no_score ?? 0,
+  //     buckets,
+  //   };
+  // }
+  // dashboard.repo.ts
+
+
+async getScoreDistribution(campaign_id: number) {
+  const sql = `
+    WITH user_total AS (
       SELECT
-        s.campaign_id,
-        sub.id          AS subject_id,
-        sub.code        AS subject_code,
-        sub.name        AS subject_name,
-        sq.id           AS subject_question_id,
-        sq.question_no,
-        sq.label        AS question_label,
-        AVG( (gs1.score + gs2.score) / 2 ) AS avg_score
-      FROM grading_slots sl1
-      JOIN grading_slots sl2
-        ON sl1.booklet_id  = sl2.booklet_id
-       AND sl1.subject_id  = sl2.subject_id
-       AND sl1.question_no = sl2.question_no
-       AND sl1.grader_order = 1
-       AND sl2.grader_order = 2
-      JOIN grading_scores gs1
-        ON gs1.slot_id = sl1.id
-      JOIN grading_scores gs2
-        ON gs2.slot_id = sl2.id
+        uc.id AS user_campaign_id,
+        uc.user_id,
+        SUM(gs.score) AS total_score
+      FROM grading_scores gs
+      JOIN grading_slots s
+        ON gs.slot_id = s.id
       JOIN booklets b
-        ON b.id = sl1.booklet_id
-      JOIN sessions s
-        ON s.id = b.session_id
-      JOIN subjects sub
-        ON sub.id = sl1.subject_id
-      JOIN subject_questions sq
-        ON sq.subject_id = sub.id
-       AND sq.question_no = sl1.question_no
-      WHERE s.campaign_id = ?
-      GROUP BY
-        s.campaign_id,
-        sub.id,
-        sub.code,
-        sub.name,
-        sq.id,
-        sq.question_no,
-        sq.label
-      ORDER BY sub.code, sq.question_no;
-    `;
-        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-        return rows;
+        ON s.booklet_id = b.id
+      JOIN bags bg
+        ON b.bag_id = bg.id
+      JOIN sessions se
+        ON bg.session_id = se.id
+      JOIN user_sessions us
+        ON b.user_session_id = us.id
+      JOIN user_campaigns uc
+        ON us.user_campaign_id = uc.id
+      WHERE se.campaign_id = ?
+      GROUP BY uc.id, uc.user_id
+    )
+    SELECT total_score
+    FROM user_total;
+  `;
+
+  const [rows] = await this.pool.execute<ScoreTotalRow[]>(sql, [campaign_id]);
+
+  // ---------- config bucket ----------
+  const bucketSize = 5;     // 1-5, 6-10, ...
+  const minScore = 1;
+  const maxScore = 150;     // แสดงถึง 150 ตามที่ต้องการ
+
+  let totalUsers = 0;
+  let noScore = 0;
+
+  // map: bucketIndex -> count
+  const bucketMap = new Map<number, number>();
+
+  for (const row of rows) {
+    const score = row.total_score;
+
+    if (score == null) {
+      noScore++;
+      continue;
     }
 
-    /**  ช่วงคะแนน (เอาไว้ทำ chart) จาก user_campaigns.final_score */
-    async getScoreDistribution(campaign_id: number) {
-        const sql = `
-      SELECT
-        campaign_id,
-        COUNT(*) AS total_users,
-        SUM(CASE WHEN final_score IS NULL THEN 1 ELSE 0 END) AS no_score,
-        SUM(CASE WHEN final_score >= 0  AND final_score < 25  THEN 1 ELSE 0 END) AS bucket_0_24,
-        SUM(CASE WHEN final_score >= 25 AND final_score < 50  THEN 1 ELSE 0 END) AS bucket_25_49,
-        SUM(CASE WHEN final_score >= 50 AND final_score < 75  THEN 1 ELSE 0 END) AS bucket_50_74,
-        SUM(CASE WHEN final_score >= 75 AND final_score <= 100 THEN 1 ELSE 0 END) AS bucket_75_100
-      FROM user_campaigns
-      WHERE campaign_id = ?
-      GROUP BY campaign_id;
-    `;
-        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-        return rows[0] ?? null;
-    }
+    totalUsers++;
+
+    let s = Number(score);
+
+    // clamp คะแนนให้อยู่ในช่วง 1..150
+    if (s < minScore) s = minScore;
+    if (s > maxScore) s = maxScore;
+
+    // แปลงเป็น index ของ bucket: 1-5 → idx 0, 6-10 → idx 1, ...
+    const bucketIndex = Math.floor((s - minScore) / bucketSize);
+    bucketMap.set(bucketIndex, (bucketMap.get(bucketIndex) ?? 0) + 1);
+  }
+
+  // แปลง bucketMap -> array [{ label: "1-5", count }, ... , "146-150"]
+  const buckets: { label: string; count: number }[] = [];
+
+  const maxBucketIndex = Math.floor((maxScore - minScore) / bucketSize);
+
+  for (let idx = 0; idx <= maxBucketIndex; idx++) {
+    const from = minScore + idx * bucketSize; // 1, 6, 11, ...
+    let to = from + bucketSize - 1;           // 5, 10, 15, ...
+    if (to > maxScore) to = maxScore;         // เผื่อกรณีท้ายสุด
+
+    const label = `${from}-${to}`;
+    const count = bucketMap.get(idx) ?? 0;
+
+    // ✅ ดันทุก bucket ออกไป แม้ count = 0
+    buckets.push({ label, count });
+  }
+
+  return {
+    total_users: totalUsers,
+    no_score: noScore,
+    buckets,
+  };
 }
+}
+
+
+
 
 const dashboardRepo = new DashboardRepo()
 export default dashboardRepo

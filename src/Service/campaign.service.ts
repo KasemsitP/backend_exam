@@ -39,5 +39,8 @@ export class campaignService {
       connection.release();
     }
   };
+  static getIsUnlock = async(campaign_id :number) =>{
+    return  await campaignRepo.getIsDecrypted(campaign_id)
+  }
 }
 

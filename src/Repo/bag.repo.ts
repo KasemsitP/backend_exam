@@ -1,5 +1,5 @@
 import { DB } from "../model/DB";
-import { PoolConnection } from "mysql2/promise";
+import { PoolConnection , Pool} from "mysql2/promise";
 import { format } from "mysql2/promise";
 import { RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
@@ -38,6 +38,11 @@ export interface BagScannedCountResult extends RowDataPacket {
 
 
 class BagRepo {
+
+  private pool : Pool;
+  constructor(){
+    this.pool = DB.getInstance()
+  }
 
   // ⭐️ (FIX 3: REPO GET ต้อง JOIN sessions เพื่อหา campaign_id)
   async findAllByCampaignId(campaignId: string, connection: PoolConnection): Promise<DbBagRow[]> {
@@ -270,6 +275,21 @@ ORDER BY b.bag_no ASC;
       LIMIT 1;
     `;
     const [rows] = await connection.execute<RowDataPacket[]>(sql, [id]);
+    const arr = rows as DbBagRow[];
+    return arr[0] ?? null;
+  }
+
+  async findByIdNoConn(
+    id: number
+  ): Promise<DbBagRow | null> {
+    const sql = `
+      SELECT b.*, s.campaign_id
+      FROM bags b
+      JOIN sessions s ON b.session_id = s.id
+      WHERE b.id = ?
+      LIMIT 1;
+    `;
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [id]);
     const arr = rows as DbBagRow[];
     return arr[0] ?? null;
   }

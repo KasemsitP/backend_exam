@@ -43,10 +43,10 @@ VALUES
       payload.is_active ? 1 : 1,
     ];
 
-    const [result] = await dbClient.execute<any>(sql, params); 
+    const [result] = await dbClient.execute<any>(sql, params);
     const newId = result.insertId;
 
-    return this.findById(newId, dbClient); 
+    return this.findById(newId, dbClient);
   }
   async update(
     payload: CreateCampaignPayload,
@@ -115,6 +115,26 @@ VALUES
     }
     const newCampaign = await this.create(payload, dbClient);
     return { campaign: newCampaign, created: true };
+  }
+
+  async getIsDecrypted(campaign_id: number): Promise<boolean> {
+    const sql = `
+    SELECT e.is_unlock
+    FROM exam_campaigns e
+    WHERE e.id = ?
+    LIMIT 1
+  `;
+
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      sql,
+      [campaign_id]
+    );
+
+    if (!rows.length) {
+      throw new Error("ไม่พบ campaign");
+    }
+
+    return rows[0].is_unlock === 1;
   }
 }
 

@@ -5,7 +5,7 @@ import gradingscoreRepo from "../Repo/gradingscore.repo";
 export class gradingscoreController {
   static SubmitScore = async (req: Request, res: Response) => {
     try {
-      const { qrPayload, campaignId,  slotId,   graderId, score } = req.body;
+      const { qrPayload, campaignId, slotId, graderId, score } = req.body;
 
       if (!qrPayload || !campaignId || !graderId || !slotId || score === undefined) {
         return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
@@ -38,9 +38,8 @@ export class gradingscoreController {
       const result = await gradingscoreRepo.FindAllRecord(Number(graderId))
       res.status(201).json(result);
 
-    } catch (error : any) {
+    } catch (error: any) {
       res.status(400).send({ message: error.message });
     }
-
   }
 }

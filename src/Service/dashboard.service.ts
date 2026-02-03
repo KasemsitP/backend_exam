@@ -23,7 +23,6 @@ export class DashboardService {
       dashboardRepo.getScoreDistribution(campaignId),
     ]);
 
-    // ✅ กัน null / undefined ทุกตัว
     const basicCounts = rawBasicCounts ?? {
       campaign_id: campaignId,
       session_count: 0,
@@ -31,7 +30,6 @@ export class DashboardService {
     };
 
     const bagCounts = rawBagCounts ?? [];
-
     const gradersCount = rawGradersCount ?? {
       total_graders: 0,
       graders_with_login: 0,
@@ -49,13 +47,9 @@ export class DashboardService {
     const scoreDistribution = rawScoreDistribution ?? {
       total_users: 0,
       no_score: 0,
-      bucket_0_24: 0,
-      bucket_25_49: 0,
-      bucket_50_74: 0,
-      bucket_75_100: 0,
+      buckets: [] as { label: string; count: number }[],
     };
 
-    // ---------- sessions map ----------
     const sessions: Record<number, any> = {};
 
     // bags
@@ -72,16 +66,7 @@ export class DashboardService {
 
     // import status
     importStatus.forEach((imp: any) => {
-      if (!sessions[imp.session_id]) {
-        // ถ้าอยากให้มี session แม้ไม่มี bag ให้ uncomment ได้
-        // sessions[imp.session_id] = {
-        //   sessionId: imp.session_id,
-        //   sessionCode: imp.session_code,
-        //   bags: { total: 0, capacity: 0 },
-        // };
-        return;
-      }
-
+      if (!sessions[imp.session_id]) return;
       sessions[imp.session_id].users = {
         inCampaign: imp.users_in_campaign,
         inSession: imp.users_in_session,
@@ -101,7 +86,6 @@ export class DashboardService {
       };
     });
 
-    // ---------- response ----------
     return {
       summary: {
         campaignId: basicCounts.campaign_id,
@@ -121,12 +105,11 @@ export class DashboardService {
         scoreDistribution: {
           totalUsers: scoreDistribution.total_users ?? 0,
           noScore: Number(scoreDistribution.no_score ?? 0),
-          buckets: {
-            "0-24": Number(scoreDistribution.bucket_0_24 ?? 0),
-            "25-49": Number(scoreDistribution.bucket_25_49 ?? 0),
-            "50-74": Number(scoreDistribution.bucket_50_74 ?? 0),
-            "75-100": Number(scoreDistribution.bucket_75_100 ?? 0),
-          },
+          // 👇 ตอนนี้เป็น array แล้ว
+          buckets: (scoreDistribution.buckets ?? []).map((b: any) => ({
+            label: b.label,
+            count: Number(b.count ?? 0),
+          })),
         },
       },
 

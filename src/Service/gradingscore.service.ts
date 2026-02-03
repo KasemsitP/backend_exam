@@ -2,6 +2,8 @@
 import { DB } from "../model/DB";
 import gradingscoreRepo, { DbGradingScoreRow } from "../Repo/gradingscore.repo";
 
+
+
 export interface SubmitScorePayload {
   qrPayload?: string;
   campaignId: number;
