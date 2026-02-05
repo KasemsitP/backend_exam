@@ -36,7 +36,7 @@ export class verifyService {
                         console.log(decryptedPayload)
 
                         // 3. ดึงข้อมูลผู้สอบ (ใช้ฟังก์ชันใน Canvas)
-                        const userSession = await userSessionsRepo.findByUserCodeAndSessionId(
+                        const userSession = await userSessionsRepo.findByUserCodeAndSessionIdForQRcode(
                                 decryptedPayload.uid,
                                 decryptedPayload.sid,
                                 connection

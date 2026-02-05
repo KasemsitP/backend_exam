@@ -10,4 +10,12 @@ export class examDataController {
       res.status(500).send({ message: error.message });
     }
   };
+  static getCampaignNoactive = async (req: Request, res: Response) => {
+    try {
+      const data = await examDataService.getCampaignNoactive();
+      res.status(200).json(data);
+    } catch (error: any) {
+      res.status(500).send({ message: error.message });
+    }
+  };
 }

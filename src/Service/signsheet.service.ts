@@ -225,6 +225,7 @@ export class SignSheetService {
       userCode: r.userCode,
       roomName: r.roomName ?? null,
       qr_payload: r.qr_payload ?? null,
+      row_no: r.row_no
     }));
   }
 

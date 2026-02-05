@@ -6,9 +6,9 @@ export class examDataService {
   static getInitialData = async (): Promise<ExamDataPayload> => {
     try {
       const [campaigns, sessions, subjects] = await Promise.all([
-      examDataRepo.fetchCampaigns(),
-      examDataRepo.fetchSessions(),
-      examDataRepo.fetchSubjects(),
+        examDataRepo.fetchCampaignsNoActive(),
+        examDataRepo.fetchSessionsNoactive(),
+        examDataRepo.fetchSubjectsNoactive(),
       ]);
 
       return {
@@ -18,6 +18,24 @@ export class examDataService {
       };
     } catch (error) {
       console.error("Service Error: Failed to get initial data", error);
+      throw new Error("ไม่สามารถดึงข้อมูลตั้งต้นของระบบได้");
+    }
+  };
+  static getCampaignNoactive = async (): Promise<ExamDataPayload> => {
+    try {
+      const [campaigns, sessions, subjects] = await Promise.all([
+        examDataRepo.fetchCampaignsNoActive(),
+        examDataRepo.fetchSessionsNoactive(),
+        examDataRepo.fetchSubjectsNoactive(),
+      ]);
+
+      return {
+        campaigns,
+        sessions,
+        subjects,
+      };
+    } catch (error) {
+      console.error("Service Error: Failed to get Campaigm Exam data", error);
       throw new Error("ไม่สามารถดึงข้อมูลตั้งต้นของระบบได้");
     }
   };

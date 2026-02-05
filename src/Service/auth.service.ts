@@ -109,6 +109,7 @@ export class authservice {
         const checkRole = await authrepo.checkRoleByID(id);
         console.log(checkRole)
         console.log(id)
+        console.log("comes")
         if (checkRole.code === "GRADER") {
             console.log(id)
             await authrepo.deleteAccountWithRelations(id);

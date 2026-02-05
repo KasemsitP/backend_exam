@@ -36,6 +36,7 @@ import dashboardRouter from './Routes/router.dashboard'
 import  signsheetRouter from './Routes/router.signsheet'
 import  seatplanRouter from './Routes/router.seatplan'
 import decryptRouter from './Routes/router.decrypt'
+import gradingrecheck from './Routes/router.graderrecheck'
 
 dotenv.config()
 export const app = express();
@@ -147,6 +148,7 @@ app.use("/api",dashboardRouter)
 app.use("/api",signsheetRouter)
 app.use("/api",seatplanRouter)
 app.use("/api",decryptRouter)
+app.use("/api",gradingrecheck)
 
 app.get("/test",isAuthenticated, async (req, res) => {
   try {

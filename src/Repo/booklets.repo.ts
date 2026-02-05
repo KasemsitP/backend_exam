@@ -47,9 +47,10 @@ class BookletsRepo {
       bagNo: number;
       seqInBag: number;
       status: "CREATED" | "PACKAGED" | "SCANNED" | "GRADED";
+      created_at: Date
     }
   ): Promise<number> {
-    const { sessionId, userSessionId, bagNo, seqInBag, status } = params;
+    const { sessionId, userSessionId, bagNo, seqInBag, status, created_at } = params;
 
     const sql = `
       INSERT INTO booklets (
@@ -57,8 +58,9 @@ class BookletsRepo {
         user_session_id,
         bag_id,
         seq_in_bag,
-        status
-      ) VALUES (?, ?, ?, ?, ?)
+        status,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?,?)
     `;
     console.log(bagNo)
     const [result] = await conn.execute<ResultSetHeader>(sql, [
@@ -67,6 +69,7 @@ class BookletsRepo {
       bagNo,
       seqInBag,
       status,
+      created_at
     ]);
 
     return result.insertId;
@@ -101,7 +104,8 @@ SELECT
         bk.status,
         us.qr_payload  AS qr_payload,
         u.user_code,
-        u.full_name
+        u.full_name,
+        bk.created_at
       FROM booklets bk
       join bags b on b.id = bk.bag_id
       JOIN user_sessions us

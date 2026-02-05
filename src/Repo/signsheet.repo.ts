@@ -90,7 +90,8 @@ class SignSheetRepo {
                 ''             AS lastName,
                 uc.room_code   AS roomName,
                 uc.seat_code,
-                us.qr_payload
+                us.qr_payload,
+                uc.row_no
             ${baseJoins}
             ${whereClause}
             ORDER BY u.user_code ASC

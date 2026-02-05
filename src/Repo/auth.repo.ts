@@ -158,7 +158,11 @@ ORDER BY a.id ASC;
         const conn = await this.pool.getConnection();
         try {
             await conn.beginTransaction();
-            console.log(id)
+            console.log(id) 
+            await conn.execute(
+                "DELETE ga FROM grader_assignments AS ga INNER JOIN graders AS g ON g.id = ga.grader_id WHERE g.account_id = ?;",[id]
+            )
+            
             await conn.execute(
                 "DELETE FROM graders WHERE account_id = ?",
                 [id]

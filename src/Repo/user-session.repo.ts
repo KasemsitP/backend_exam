@@ -115,7 +115,8 @@ SELECT
     u.first_name       AS firstName,
     u.last_name        AS lastName,
     uc.room_code       AS roomName,
-    us.qr_payload
+    us.qr_payload,
+    uc.row_no as rowNo
 FROM user_sessions us
 JOIN user_campaigns uc 
   ON us.user_campaign_id = uc.id
@@ -135,6 +136,55 @@ LIMIT 1;;
       throw error;
     }
   }
+
+  async findByUserCodeAndSessionIdForQRcode(
+    userCode: string,
+    sessionId: number,
+    connection: PoolConnection
+  ): Promise<UserSessionData | undefined> {
+    console.log(userCode)
+    const sql = `
+SELECT 
+    us.id              AS userSessionId,
+    u.id               AS userId,
+    u.user_code        AS userCode,
+    u.first_name       AS firstName,
+    u.last_name        AS lastName,
+    uc.room_code       AS roomName,
+    uc.row_no          AS rowNo,
+
+    s.session_code,
+
+    sub.name           AS subjectName,
+    ec.name            AS campaignName
+FROM user_sessions us
+JOIN user_campaigns uc 
+  ON us.user_campaign_id = uc.id
+  AND us.campaign_id = uc.campaign_id
+JOIN users u 
+  ON uc.user_id = u.id
+JOIN sessions s 
+  ON s.id = us.session_id
+JOIN session_subjects sj 
+  ON sj.session_id = s.id
+JOIN subjects sub 
+  ON sub.id = sj.subject_id
+JOIN exam_campaigns ec 
+  ON ec.id = us.campaign_id
+WHERE 
+    u.user_code = ?
+    AND us.session_id = ?
+LIMIT 1;
+`;
+    try {
+      const [rows] = (await connection.execute(sql, [userCode, sessionId])) as [UserSessionData[], any];
+      return rows[0];
+    } catch (error) {
+      console.error("Repo Error (findByUserCodeAndSessionId):", error);
+      throw error;
+    }
+  }
+
   async findUserSessionByCampaignSessionAndUserCode(
     conn: PoolConnection,
     params: { campaignId: number; sessionId: number; userCode: string }

@@ -99,97 +99,97 @@ export class bagService {
     /**
      * [POST] Finalize และ Link Booklets (สมองหลัก)
      */
-    static InsertBooklets = async (payload: InsertBookletsPayload) => {
-        const connection = await DB.getInstance().getConnection();
-        try {
-            await connection.beginTransaction();
-            const campaignIdNum = parseInt(payload.campaignId, 10);
-            const bagNo = parseInt(payload.bag_no, 10);
+    // static InsertBooklets = async (payload: InsertBookletsPayload) => {
+    //     const connection = await DB.getInstance().getConnection();
+    //     try {
+    //         await connection.beginTransaction();
+    //         const campaignIdNum = parseInt(payload.campaignId, 10);
+    //         const bagNo = parseInt(payload.bag_no, 10);
 
-            // 1) หา bag จริงใน DB จาก campaign + bag_no
-            const bagRow = await bagRepo.findByCampaignAndBagNo(
-                connection,
-                campaignIdNum,
-                bagNo
-            );
-            console.log(bagRow)
-            if (!bagRow) {
-                throw new Error("ไม่พบถุงในแคมเปญนี้");
-            }
-            console.log(bagRow)
+    //         // 1) หา bag จริงใน DB จาก campaign + bag_no
+    //         const bagRow = await bagRepo.findByCampaignAndBagNo(
+    //             connection,
+    //             campaignIdNum,
+    //             bagNo
+    //         );
+    //         console.log(bagRow)
+    //         if (!bagRow) {
+    //             throw new Error("ไม่พบถุงในแคมเปญนี้");
+    //         }
+    //         console.log(bagRow)
 
-            const bagDbId = bagRow.id;
-            const sessionId = Number(bagRow.session_id);
+    //         const bagDbId = bagRow.id;
+    //         const sessionId = Number(bagRow.session_id);
 
-            const results: ApiBookletLinked[] = [];
-            let seq = 1
+    //         const results: ApiBookletLinked[] = [];
+    //         let seq = 1
 
-            for (const qr of payload.scannedCodes) {
-                // 2.1 ถอด QR → ได้ { cid, sid, uid }
-                const decoded = await keyService.decryptQrPayload(qr, campaignIdNum);
-                // decoded: { cid: number; sid: number; uid: string }
+    //         for (const qr of payload.scannedCodes) {
+    //             // 2.1 ถอด QR → ได้ { cid, sid, uid }
+    //             const decoded = await keyService.decryptQrPayload(qr, campaignIdNum);
+    //             // decoded: { cid: number; sid: number; uid: string }
 
-                if (decoded.cid !== campaignIdNum) {
-                    throw new Error(
-                        `QR ไม่ตรงกับแคมเปญ (cid=${decoded.cid}, current=${campaignIdNum})`
-                    );
-                }
+    //             if (decoded.cid !== campaignIdNum) {
+    //                 throw new Error(
+    //                     `QR ไม่ตรงกับแคมเปญ (cid=${decoded.cid}, current=${campaignIdNum})`
+    //                 );
+    //             }
 
-                if (decoded.sid !== sessionId) {
-                    throw new Error(
-                        `QR ไม่ตรงกับ session ของถุงนี้ (sid=${decoded.sid}, sessionId=${sessionId})`
-                    );
-                }
+    //             if (decoded.sid !== sessionId) {
+    //                 throw new Error(
+    //                     `QR ไม่ตรงกับ session ของถุงนี้ (sid=${decoded.sid}, sessionId=${sessionId})`
+    //                 );
+    //             }
 
-                // 2.2 หา user_session จาก cid + sid + uid
-                const userSession = await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
-                    connection,
-                    {
-                        campaignId: campaignIdNum,
-                        sessionId,
-                        userCode: decoded.uid,   // user_code, ไม่ใช่ id
-                    }
-                );
+    //             // 2.2 หา user_session จาก cid + sid + uid
+    //             const userSession = await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
+    //                 connection,
+    //                 {
+    //                     campaignId: campaignIdNum,
+    //                     sessionId,
+    //                     userCode: decoded.uid,   // user_code, ไม่ใช่ id
+    //                 }
+    //             );
 
-                if (!userSession) {
-                    throw new Error(`ไม่พบ user_session ของผู้เข้าสอบ ${decoded.uid}`);
-                }
+    //             if (!userSession) {
+    //                 throw new Error(`ไม่พบ user_session ของผู้เข้าสอบ ${decoded.uid}`);
+    //             }
 
-                console.log(bagDbId)
-                const bookletId = await bookletsRepo.insertOne(connection, {
-                    sessionId,
-                    userSessionId: userSession.id,
-                    bagNo,
-                    seqInBag: seq,
-                    status: "CREATED", // ตามรูปที่คุณใช้ตอนแพ็คถุง
-                });
-                console.log("bookletId:", bookletId);
+    //             console.log(bagDbId)
+    //             const bookletId = await bookletsRepo.insertOne(connection, {
+    //                 sessionId,
+    //                 userSessionId: userSession.id,
+    //                 bagNo,
+    //                 seqInBag: seq,
+    //                 status: "CREATED", // ตามรูปที่คุณใช้ตอนแพ็คถุง
+    //             });
+    //             console.log("bookletId:", bookletId);
 
-                console.log("lnw", bagNo, sessionId)
-                await bagRepo.updateStatus(bagNo, "SEALED", sessionId, connection)
+    //             console.log("lnw", bagNo, sessionId)
+    //             await bagRepo.updateStatus(bagNo, "SEALED", sessionId, connection)
 
-                results.push({
-                    id: bookletId,
-                    sessionId,
-                    bagNo,
-                    userSessionId: userSession.id,
-                    seqInBag: seq,
-                    userCode: userSession.user_code,
-                });
+    //             results.push({
+    //                 id: bookletId,
+    //                 sessionId,
+    //                 bagNo,
+    //                 userSessionId: userSession.id,
+    //                 seqInBag: seq,
+    //                 userCode: userSession.user_code,
+    //             });
 
-                seq++;
-            }
+    //             seq++;
+    //         }
 
-            await connection.commit();
-            return results;
-        } catch (error) {
-            await connection.rollback();
-            console.error("Service Error (Finalize & Link):", error);
-            throw error;
-        } finally {
-            connection.release();
-        }
-    };
+    //         await connection.commit();
+    //         return results;
+    //     } catch (error) {
+    //         await connection.rollback();
+    //         console.error("Service Error (Finalize & Link):", error);
+    //         throw error;
+    //     } finally {
+    //         connection.release();
+    //     }
+    // };
     static getAllByCampaignId = async (campaignId: string) => {
         const connection = await DB.getInstance().getConnection();
         try {
@@ -225,16 +225,23 @@ export class bagService {
 
     static CreateBagAndInsertBooklets = async (
         campaign_id: number,
-        payload: string[]
+        payload: string[],
+        datetime: Date[]
     ) => {
         const connection = await DB.getInstance().getConnection();
 
         try {
             await connection.beginTransaction();
 
+            console.log(datetime)
+
+            if (payload.length !== datetime.length) {
+                throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
+            }
+
+
             let sessionId: number | null = null;
             const results: ApiBookletLinked[] = [];
-
             let sessionlabel;
 
             // 1️⃣ decode + validate ทั้งหมดก่อน
@@ -274,7 +281,10 @@ export class bagService {
 
             // 3️⃣ insert booklets
             let seq = 1;
-            for (const decoded of decodedList) {
+            for (let i = 0; i < decodedList.length; i++) {
+                const decoded = decodedList[i];
+                const scannedAt = datetime[i]; // 👈 ตัวนี้แหละ
+
                 const userSession =
                     await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
                         connection,
@@ -295,6 +305,7 @@ export class bagService {
                     bagNo: bagId,
                     seqInBag: seq,
                     status: "CREATED",
+                    created_at: scannedAt,       
                 });
 
                 results.push({
@@ -314,7 +325,7 @@ export class bagService {
             return {
                 bagId,
                 campaign_id,
-                bagNo : maxNo + 1,
+                bagNo: maxNo + 1,
             };
         } catch (error) {
             await connection.rollback();
@@ -372,6 +383,7 @@ export class bagService {
                 userCode: r.user_code,
                 fullName: r.full_name,
                 qrPayload: r.qr_payload,
+                created_at : r.created_at
             }));
         } finally {
             connection.release();

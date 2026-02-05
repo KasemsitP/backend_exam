@@ -110,23 +110,53 @@ export function buildRowsByBooklet(
  * ดึงจำนวนข้อของวิชาในถุงนั้น
  * ใช้ bags -> sessions -> session_subjects.question_count
  */
+// export async function findQuestionCountForBagSubject(
+//   conn: PoolConnection,
+//   bagId: number,
+//   subjectId: number
+// ): Promise<number | null> {
+//   const sql = `
+//     SELECT ss.question_count
+//     FROM bags b
+//     JOIN sessions s
+//       ON b.session_id = s.id
+//     JOIN session_subjects ss
+//       ON ss.session_id = s.id
+//     WHERE b.id = ?
+//     LIMIT 1;
+//   `;
+//   const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
+//   if (!rows.length) return null;
+//   const qc = rows[0].question_count as number | null;
+//   return qc ?? null;
+// }
 export async function findQuestionCountForBagSubject(
   conn: PoolConnection,
   bagId: number,
   subjectId: number
 ): Promise<number | null> {
+  const subjectCond = subjectId ? " AND ss.subject_id = ? " : "";
+
   const sql = `
-    SELECT ss.question_count
+    SELECT
+      COUNT(*) AS question_count
     FROM bags b
     JOIN sessions s
       ON b.session_id = s.id
     JOIN session_subjects ss
       ON ss.session_id = s.id
+    JOIN subject_questions sq
+      ON sq.subject_id = ss.subject_id
     WHERE b.id = ?
-    LIMIT 1;
+    ${subjectCond}
   `;
-  const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
+
+  const params: any[] = [bagId];
+  if (subjectId) params.push(subjectId);
+
+  const [rows] = await conn.query<RowDataPacket[]>(sql, params);
   if (!rows.length) return null;
+
   const qc = rows[0].question_count as number | null;
   return qc ?? null;
 }

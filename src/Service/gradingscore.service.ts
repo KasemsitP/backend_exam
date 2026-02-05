@@ -1,6 +1,7 @@
 // src/Service/gradingscore.service.ts
 import { DB } from "../model/DB";
 import gradingscoreRepo, { DbGradingScoreRow } from "../Repo/gradingscore.repo";
+import { gradingRecheckService } from "./gradingrecheck.service";
 
 
 
@@ -64,6 +65,8 @@ static async submitScore(
 
     // 3) update slot status
     await gradingscoreRepo.updateSlotStatus(conn, slotId, "COMPLETED");
+
+     await gradingRecheckService.checkAndMarkDisputedIfNeeded(conn, slotId, 4);
 
     // 4) select ข้อมูลคะแนนที่เพิ่ง insert
     const row = await gradingscoreRepo.findScoreById(conn, gradingScoreId);
