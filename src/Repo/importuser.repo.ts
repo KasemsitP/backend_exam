@@ -63,47 +63,61 @@ class UserImportRepo {
     return rows[0] || null;
   }
 
-  // (findOrCreateUser - เหมือนเดิม)
-  async findOrCreateUser(
-    payload: {
-      user_code: string;
-      full_name: string;
-      first_name: string;
-      last_name: string;
-      title: string;
-    },
-    dbClient: DbClient
-  ): Promise<{ user: User; created: boolean }> {
-    const sql = `
-    INSERT INTO users (user_code, full_name, first_name, last_name, title)
-    VALUES (?, ?, ?, ?, ?)
+async findOrCreateUser(
+  payload: {
+    user_code: string;
+    full_name: string;
+    first_name: string;
+    last_name: string;
+    title: string;
+    national_id?: string | null;
+    birth_date?: string | null; // ควรเป็น 'YYYY-MM-DD'
+  },
+  dbClient: DbClient
+): Promise<{ user: User; created: boolean }> {
+  const sql = `
+    INSERT INTO users (
+      user_code,
+      full_name,
+      first_name,
+      last_name,
+      title,
+      national_id,
+      birth_date
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
-      -- จะ update ชื่อด้วย ถ้าอยากให้ sync ตามไฟล์ล่าสุด
-      full_name = VALUES(full_name),
-      first_name = VALUES(first_name),
-      last_name = VALUES(last_name),
-      title = VALUES(title),
+      -- sync ชื่อ ตามไฟล์ล่าสุด
+      full_name   = VALUES(full_name),
+      first_name  = VALUES(first_name),
+      last_name   = VALUES(last_name),
+      title       = VALUES(title),
+      -- ถ้ามีค่าใหม่ให้อัปเดต แต่ถ้า null ก็ใช้ค่าเดิม
+      national_id = IFNULL(VALUES(national_id), national_id),
+      birth_date  = IFNULL(VALUES(birth_date),  birth_date),
       -- trick สำคัญ: ทำให้ insertId กลายเป็น id เดิมตอน duplicate
       id = LAST_INSERT_ID(id)
   `;
 
-    const [result] = await dbClient.execute<ResultSetHeader>(sql, [
-      payload.user_code,
-      payload.full_name,
-      payload.first_name,
-      payload.last_name,
-      payload.title,
-    ]);
+  const [result] = await dbClient.execute<ResultSetHeader>(sql, [
+    payload.user_code,
+    payload.full_name,
+    payload.first_name,
+    payload.last_name,
+    payload.title,
+    payload.national_id ?? null,
+    payload.birth_date ?? null,
+  ]);
 
-    const created = result.affectedRows === 1; // 1 = insert ใหม่, 2 = update แทน
-    const newId = result.insertId;
+  const created = result.affectedRows === 1; // 1 = insert ใหม่, 2 = update
+  const newId = result.insertId;
 
-    const user = await this.findById(newId, dbClient);
-    if (!user) {
-      throw new Error("Failed to retrieve user after upsert.");
-    }
-    return { user, created };
+  const user = await this.findById(newId, dbClient);
+  if (!user) {
+    throw new Error("Failed to retrieve user after upsert.");
   }
+  return { user, created };
+}
   async findOrCreateUserCampaign(
     payload: { user_id: number; campaign_id: number },
     dbClient: DbClient

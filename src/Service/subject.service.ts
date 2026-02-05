@@ -53,8 +53,11 @@ export class SubjectService {
     };
     static addQuestion = async (req: Request): Promise<Subject> => {
         const subjectId = Number(req.params.id);
-        const { label , questionNo  } = req.body;
+        const { label , questionNo , maxScore  } = req.body;
 
+        if(!maxScore ){
+            throw new Error("maxScore is required");
+        }
         if (!label || !label.trim()) {
             throw new Error("Label is required");
         }
@@ -63,7 +66,7 @@ export class SubjectService {
         }
         const targetNo = questionNo ? Number(questionNo) : undefined;
 
-        return subjectRepo.addQuestion(subjectId , label.trim(), targetNo);
+        return subjectRepo.addQuestion(subjectId , label.trim(), Number(maxScore), targetNo );
     };
 
     static deleteQuestion = async (req: Request): Promise<Subject> => {

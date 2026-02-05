@@ -13,6 +13,7 @@ export interface SeatPlanRow {
 export interface SeatPlanNameRow {
     fullName: string;
     userCode: string;
+    title:string
     roomName: string | null;
     rowNo: number | null;
 }
@@ -82,11 +83,12 @@ class SeatPlanRepo {
 SELECT
         u.full_name      AS fullName,
         u.user_code      AS userCode,
+        u.title          AS title,
         uc.room_code     AS roomName,
         uc.row_no        AS rowNo
       FROM user_campaigns uc
       JOIN users u  ON uc.user_id = u.id
-      WHERE uc.campaign_id = 1
+      WHERE uc.campaign_id = ?
       ORDER BY u.full_name ASC, u.user_code ASC;;
     `;
         const [rows] = await this.pool.execute<any[]>(sql, [campaignId]);

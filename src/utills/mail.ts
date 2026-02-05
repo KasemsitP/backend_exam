@@ -1,4 +1,5 @@
 import nodemailer, { Transporter } from "nodemailer";
+import { emailTemplate } from "./emailtheme";
 
 interface SendMailOptions {
   to: string;

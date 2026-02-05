@@ -18,4 +18,13 @@ export class examDataController {
       res.status(500).send({ message: error.message });
     }
   };
+  static ActiveInActiveCampaign = async (req: Request, res: Response) => {
+    const {campaign_id } = req.params
+    try {
+      const data = await examDataService.ActiveInActiveCampaign(Number(campaign_id));
+      res.status(200).json({ message: "sucess" });
+    } catch (error: any) {
+      res.status(500).send({ message: error.message });
+    }
+  };
 }

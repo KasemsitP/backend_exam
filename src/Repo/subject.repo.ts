@@ -5,6 +5,7 @@ export interface SubjectQuestion {
   id: string;
   questionNo: number;
   label: string;
+  maxScore?: number
 }
 
 export interface Subject {
@@ -12,12 +13,14 @@ export interface Subject {
   code: string;
   name: string;
   questions: SubjectQuestion[];
+  maxScore?: number
 }
 export interface SubjectQuestionAndSubject {
   subject_id: number;
   subject_question_id: number;
   question_no: number;
   question_name: string;
+
 }
 
 
@@ -63,7 +66,8 @@ class SubjectRepo {
         s.name        AS subject_name,
         q.id          AS question_id,
         q.question_no AS question_no,
-        q.label       AS question_label
+        q.label       AS question_label,
+        q.max_score
       FROM subjects s
       LEFT JOIN subject_questions q
         ON q.subject_id = s.id
@@ -92,6 +96,7 @@ class SubjectRepo {
           id: String(r.question_id),
           questionNo: r.question_no,
           label: r.question_label ?? "",
+          maxScore : r.max_score
         });
       }
     }
@@ -281,6 +286,7 @@ class SubjectRepo {
   async addQuestion(
     subjectId: number,
     label: string,
+    maxScore: number,
     targetNo?: number
   ): Promise<Subject> {
     const conn = await this.pool.getConnection();
@@ -313,10 +319,10 @@ class SubjectRepo {
 
       await conn.query(
         `
-        INSERT INTO subject_questions (subject_id, question_no, label)
-        VALUES (?, ?, ?)
+        INSERT INTO subject_questions (subject_id, question_no, label,max_score)
+        VALUES (?, ?, ?,?)
       `,
-        [subjectId, safeNo, label]
+        [subjectId, safeNo, label,maxScore]
       );
 
       await conn.commit();
@@ -371,7 +377,8 @@ class SubjectRepo {
   sq.subject_id,
   sq.id          AS subject_question_id,
   sq.question_no,
-  sq.label       AS question_name
+  sq.label       AS question_name,
+  sq.max_score
 FROM session_subjects ss
 JOIN sessions s
   ON s.id = ss.session_id

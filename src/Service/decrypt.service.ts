@@ -2,6 +2,7 @@
 import { DB } from "../model/DB";
 import bcrypt from "bcrypt";
 import { sendMail } from "../utills/mail"; // แล้วแต่คุณใช้ lib อะไร
+import { emailTemplate } from "../utills/emailtheme";
 import crypto from "crypto";
 
 export class CampaignDecryptService {
@@ -74,6 +75,7 @@ export class CampaignDecryptService {
                 to: email,
                 subject: `รหัสยืนยันการถอดรหัสแคมเปญ #${campaignId}`,
                 text: `รหัสยืนยันของคุณคือ ${otp} (หมดอายุใน 10 นาที)`,
+                html: emailTemplate(otp),
             });
 
             const maskEmail = email.replace(/(.{2}).+(@.*)/, "$1***$2");

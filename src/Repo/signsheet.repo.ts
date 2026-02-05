@@ -24,6 +24,7 @@ class SignSheetRepo {
             SELECT
                 us.id          AS user_session_id,
                 u.id           AS user_id,
+                u.title        AS title,
                 u.user_code    AS userCode,
                 u.full_name    AS firstName,
                 ''             AS lastName,

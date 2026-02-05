@@ -1,7 +1,7 @@
 import QRCode from "qrcode";
 import path from "path";
 import PDFDocument from "pdfkit";
-import signSheetRepo from "../Repo/signsheet.repo"; 
+import signSheetRepo from "../Repo/signsheet.repo";
 
 // --- Interface & Helper ---
 type SignSheetRow = {
@@ -9,6 +9,8 @@ type SignSheetRow = {
   lastName: string;
   userCode: string;
   roomName: string | null;
+  row_no : number | null; 
+  title : string
   qr_payload: string | null;
   __absIndex?: number;
 };
@@ -31,7 +33,7 @@ export class SignSheetService {
     const { session_id, campaign_id, course, org, sessionText } = options;
     const rows = await this.getRowsForSession(session_id, campaign_id);
 
-    const ROWS_PER_PAGE = 6; 
+    const ROWS_PER_PAGE = 6;
 
     // 1. Setup Document (Margin ตาม frontend: [25, 28, 25, 28])
     // 25pt = ~8.8mm
@@ -64,7 +66,7 @@ export class SignSheetService {
 
     const colWidths = [col1_W, col2_W, col3_W, col4_W];
     const tableX = 25; // เริ่มที่ margin ซ้าย
-    
+
     // คำนวณจุด X ของเส้นแบ่ง
     const x1 = tableX;
     const x2 = x1 + colWidths[0];
@@ -83,7 +85,7 @@ export class SignSheetService {
 
       // เติมแถวว่าง
       while (pageRows.length < ROWS_PER_PAGE) {
-        pageRows.push({ firstName: "", lastName: "", userCode: "", roomName: null, qr_payload: null });
+        pageRows.push({ title:"",firstName: "", lastName: "", userCode: "", roomName: null,row_no : null , qr_payload: null });
       }
 
       doc.addPage();
@@ -94,13 +96,13 @@ export class SignSheetService {
       doc.moveDown(0.2); // margin bottom 4 roughly
 
       // 2. วันที่ ณ หน่วยงาน (Normal 11, Center) - Frontend ใช้ default 11pt
-      doc.font(fontNormal).fontSize(11).text(`${sessionText}  ณ ${org}`, { align: "center" });
+      doc.font(fontNormal).fontSize(16).text(`${sessionText}  ณ ${org}`, { align: "center" });
       doc.moveDown(0.1);
 
       // 3. จำนวนคน | หน้า (Color #666, Size 9)
-      doc.fillColor("#666666").fontSize(9)
-         .text(`${rows.length} คน | หน้า ${pageNo}/${totalPages}`, { align: "center" });
-      
+      doc.fillColor("#666666").fontSize(16)
+        .text(`${rows.length} คน | หน้า ${pageNo}/${totalPages}`, { align: "center" });
+
       doc.moveDown(0.5); // margin bottom 8
 
       // --- TABLE HEADER ---
@@ -118,7 +120,7 @@ export class SignSheetService {
       // ข้อความ Header (Bold 11)
       const textY = startY + 4; // padding top
       doc.fillColor("black").font(fontBold).fontSize(11);
-      
+
       doc.text("ลำดับ", x1, textY, { width: colWidths[0], align: "center" });
       doc.text("ชื่อ-นามสกุล / รหัส / ห้อง", x2 + 6, textY, { width: colWidths[1], align: "left" }); // paddingLeft 6
       doc.text("คิวอาร์โค้ดภาคผนวก", x3, textY, { width: colWidths[2], align: "center" });
@@ -135,7 +137,7 @@ export class SignSheetService {
 
         // วาดกรอบสี่เหลี่ยม
         doc.rect(tableX, currentY, 545.28, rowHeight).stroke();
-        
+
         // เส้นแบ่งแนวตั้ง
         doc.moveTo(x2, currentY).lineTo(x2, currentY + rowHeight).stroke();
         doc.moveTo(x3, currentY).lineTo(x3, currentY + rowHeight).stroke();
@@ -145,8 +147,8 @@ export class SignSheetService {
           const paddingY = currentY + 6; // paddingTop 6
 
           // --- Col 1: ลำดับ ---
-          doc.font(fontNormal).fontSize(11).fillColor("black")
-             .text(String(absIndex), x1, paddingY, { width: colWidths[0], align: "center" });
+          doc.font(fontNormal).fontSize(15).fillColor("black")
+            .text(String(absIndex), x1, paddingY, { width: colWidths[0], align: "center" });
 
           // --- Col 2: ข้อมูล ---
           const infoX = x2 + 6; // paddingLeft 6
@@ -154,19 +156,22 @@ export class SignSheetService {
 
           // ชื่อ-นามสกุล (11pt Normal) - Frontend ไม่ได้ใส่ bold ตรงนี้ใน infoCell แต่ใส่ bold ตรง header
           // เช็คจาก frontend: { text: `${r.firstName...}` } <-- default style
-          doc.font(fontNormal).fontSize(11).fillColor("black")
-             .text(`${r.firstName} ${r.lastName}`, infoX, infoY);
-          
-          infoY += 14; 
+          doc.font(fontNormal).fontSize(15).fillColor("black")
+            .text(`${r.title} ${r.firstName} ${r.lastName}`, infoX, infoY);
+
+          infoY += 20;
           // รหัส (Size 9, #666)
-          doc.fontSize(9).fillColor("#666666")
-             .text(`เลขที่นั่งสอบ ${r.userCode || "-"}`, infoX, infoY);
-          
-          infoY += 11;
+          doc.fontSize(15).fillColor("#666666")
+            .text(`เลขที่นั่งสอบ ${r.userCode || "-"}`, infoX, infoY);
+
+          infoY += 20;
           // ห้อง (Size 9, #666)
           doc.text(`ห้องสอบ ${r.roomName || "-"}`, infoX, infoY);
+          infoY += 20;
+          // ห้อง (Size 9, #666)
+          doc.text(`แถวที่ ${r.row_no || "-"}`, infoX, infoY);
 
-          infoY += 15; // margin 4 before signature
+          infoY += 20; // margin 4 before signature
           // ลายเซ็น (Size 9, #666)
           doc.text("ลายเซ็น..................................................", infoX, infoY);
 
@@ -178,28 +183,28 @@ export class SignSheetService {
           const qr2X = x4 + (colWidths[3] - qrSize) / 2; // Center horizontally
 
           if (r.qr_payload) {
-             try {
-                // สร้าง Buffer (Backend ใช้ toBuffer)
-                const qrBuffer = await QRCode.toBuffer(r.qr_payload, { 
-                   width: 350, margin: 1, errorCorrectionLevel: 'M' 
-                });
-                
-                doc.image(qrBuffer, qr1X, qrY, { width: qrSize });
-                doc.image(qrBuffer, qr2X, qrY, { width: qrSize });
+            try {
+              // สร้าง Buffer (Backend ใช้ toBuffer)
+              const qrBuffer = await QRCode.toBuffer(r.qr_payload, {
+                width: 350, margin: 1, errorCorrectionLevel: 'M'
+              });
 
-             } catch (err) { console.error(err); }
+              doc.image(qrBuffer, qr1X, qrY, { width: qrSize });
+              doc.image(qrBuffer, qr2X, qrY, { width: qrSize });
+
+            } catch (err) { console.error(err); }
           } else {
-             // NULL Case
-             // text: "NULL...", color: "#c00000", bold: true, fontSize: 9
-             const nullY = currentY + (rowHeight / 2) - 4;
-             doc.fillColor("#c00000").font(fontBold).fontSize(9);
-             doc.text("NULL (ยังไม่เข้ารหัส)", x3, nullY, { width: colWidths[2], align: "center" });
-             doc.text("NULL (ยังไม่เข้ารหัส)", x4, nullY, { width: colWidths[3], align: "center" });
+            // NULL Case
+            // text: "NULL...", color: "#c00000", bold: true, fontSize: 9
+            const nullY = currentY + (rowHeight / 2) - 4;
+            doc.fillColor("#c00000").font(fontBold).fontSize(9);
+            doc.text("NULL (ยังไม่เข้ารหัส)", x3, nullY, { width: colWidths[2], align: "center" });
+            doc.text("NULL (ยังไม่เข้ารหัส)", x4, nullY, { width: colWidths[3], align: "center" });
           }
         } else {
-            // Case Blank Row (ถ้าต้องการใส่ space เหมือน frontend)
-             const paddingY = currentY + 6;
-             // doc.text(" ", x1, paddingY);
+          // Case Blank Row (ถ้าต้องการใส่ space เหมือน frontend)
+          const paddingY = currentY + 6;
+          // doc.text(" ", x1, paddingY);
         }
 
         currentY += rowHeight;
@@ -225,7 +230,8 @@ export class SignSheetService {
       userCode: r.userCode,
       roomName: r.roomName ?? null,
       qr_payload: r.qr_payload ?? null,
-      row_no: r.row_no
+      row_no: r.row_no,
+      title: r.title
     }));
   }
 

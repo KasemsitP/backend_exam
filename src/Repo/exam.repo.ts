@@ -1,5 +1,5 @@
 import { DB } from "../model/DB"; // (สมมติว่านี่คือไฟล์ DB Pool ของคุณ)
-import { Pool, RowDataPacket } from "mysql2/promise";
+import { Pool, RowDataPacket, PoolConnection } from "mysql2/promise";
 export interface ExamCampaign {
   id: number;
   code: string;
@@ -208,7 +208,7 @@ class ExamDataRepo {
 
   async fetchSubjects(opts?: FetchOpts): Promise<CampaignSubject[]> {
     const { where, params } = this.buildActiveWhere(opts);
-  const sql = `
+    const sql = `
     SELECT 
       ss.session_id,
       ss.subject_id,
@@ -242,6 +242,46 @@ class ExamDataRepo {
   `;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
     return rows as CampaignSubject[];
+  }
+
+  async UpdateExamActive(conn: PoolConnection, campaign_id: number) {
+    const sql = `
+UPDATE exam_campaigns
+SET is_active = 1 where id = ?;
+  `;
+
+    await conn.execute(sql, [campaign_id]);
+  }
+  async UpdateExamNoActive(conn: PoolConnection, campaign_id: number) {
+    const sql = `
+UPDATE exam_campaigns
+SET is_active = 0 where id = ?;
+  `;
+
+    await conn.execute(sql, [campaign_id]);
+  }
+
+  async Checkactive(
+    conn: PoolConnection,
+    campaign_id: number
+  ): Promise<number> {
+    const [rows]: any = await conn.query(
+      'SELECT is_active FROM exam_campaigns WHERE id = ?',
+      [campaign_id]
+    );
+
+    return rows[0]?.is_active ?? 0;
+  }
+
+  async CampaignLists(
+    conn: PoolConnection
+  ): Promise<{ id: number; is_active: number }[]> {
+
+    const [rows] = await conn.query(
+      'SELECT id, is_active FROM exam_campaigns'
+    );
+
+    return rows as { id: number; is_active: number }[];
   }
 
   async fetchExamData(opts?: FetchOpts): Promise<ExamDataPayload> {

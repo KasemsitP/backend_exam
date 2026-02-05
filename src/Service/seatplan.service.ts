@@ -272,6 +272,8 @@ export class SeatPlanService {
         drawHeaderRow();
 
         rows.forEach((r, index) => {
+            const fullname = r.title +" "+r.fullName
+
             // ถ้าเต็มหน้าแล้วขึ้นหน้าใหม่
             if (y + rowHeight > doc.page.height - bottom) {
                 doc.addPage();
@@ -294,7 +296,7 @@ export class SeatPlanService {
                 width: col1_W,
                 align: "center",
             });
-            doc.text(r.fullName, x2 + 4, cellY, {
+            doc.text(fullname, x2 + 4, cellY, {
                 width: col2_W - 8,
                 align: "left",
             });
