@@ -12,6 +12,7 @@ export class DashboardService {
       rawEncryptedStatus,
       rawAvgScorePerQuestion,
       rawScoreDistribution,
+      rawSubjectQuestions,          // ✨ เพิ่มบรรทัดนี้
     ] = await Promise.all([
       dashboardRepo.getCampaignBasicCounts(campaignId),
       dashboardRepo.getBagCountsPerSession(campaignId),
@@ -21,6 +22,7 @@ export class DashboardService {
       dashboardRepo.getIsEncrypted(campaignId),
       dashboardRepo.getAverageScorePerQuestion(campaignId),
       dashboardRepo.getScoreDistribution(campaignId),
+      dashboardRepo.getSubjectQuestionsByCampaign(campaignId), // ✨
     ]);
 
     const basicCounts = rawBasicCounts ?? {
@@ -57,6 +59,7 @@ export class DashboardService {
       sessions[bag.session_id] = {
         sessionId: bag.session_id,
         sessionCode: bag.session_code,
+        subject_name: bag.subject_name,
         bags: {
           total: bag.total_bags,
           capacity: Number(bag.total_capacity ?? 0),
@@ -84,6 +87,35 @@ export class DashboardService {
         pending: Number(enc.pending_users ?? 0),
         totalUsersInSession: enc.total_users_in_session ?? 0,
       };
+    });
+    const subjectQuestionsBySubject: Record<number, {
+      subjectId: number;
+      code: string;
+      name: string;
+      questions: {
+        id: number;
+        questionNo: number;
+        label: string | null;
+        maxScore: number | null;
+      }[];
+    }> = {};
+
+    (rawSubjectQuestions ?? []).forEach((row: any) => {
+      if (!subjectQuestionsBySubject[row.subject_id]) {
+        subjectQuestionsBySubject[row.subject_id] = {
+          subjectId: row.subject_id,
+          code: row.subject_code,
+          name: row.subject_name,
+          questions: [],
+        };
+      }
+
+      subjectQuestionsBySubject[row.subject_id].questions.push({
+        id: row.subject_question_id,
+        questionNo: row.question_no,
+        label: row.question_label,
+        maxScore: row.max_score,
+      });
     });
 
     return {
@@ -115,6 +147,7 @@ export class DashboardService {
 
       sessions,
       avgScorePerQuestion,
+      subjectQuestions: subjectQuestionsBySubject,
     };
   }
 }

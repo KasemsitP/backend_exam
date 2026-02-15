@@ -15,5 +15,9 @@ bagRouter.get(
   bagController.getBookletsInBag
 );
 
+bagRouter.post("/bags/create-insert", bagController.CreateBagAndBooklets);
+
+bagRouter.post("/bags/check-subjects", bagController.CheckSubjectBooklets);
+
 bagRouter.get("/bags/scanned/:campaignId",bagController.getBookScannedCount)
 export default bagRouter;

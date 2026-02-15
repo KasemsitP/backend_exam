@@ -1,5 +1,5 @@
 import { DB } from "../model/DB";
-import { PoolConnection , Pool} from "mysql2/promise";
+import { PoolConnection, Pool } from "mysql2/promise";
 import { format } from "mysql2/promise";
 import { RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
@@ -39,8 +39,8 @@ export interface BagScannedCountResult extends RowDataPacket {
 
 class BagRepo {
 
-  private pool : Pool;
-  constructor(){
+  private pool: Pool;
+  constructor() {
     this.pool = DB.getInstance()
   }
 
@@ -294,6 +294,17 @@ ORDER BY b.bag_no ASC;
     return arr[0] ?? null;
   }
 
+  async CheckSubjectBooks(
+    session_id: number
+  ): Promise<{ subject_name: string } | null> {
+    const sql = `
+SELECT s.name from subjects s JOIN session_subjects ss ON   ss.subject_id = s.id WHERE  ss.session_id = ?;
+    `;
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [session_id]);
+    const arr = rows as { subject_name: string }[];
+    return arr[0];
+  }
+
   async findBySessionAndNo(
     connection: PoolConnection,
     sessionId: number,
@@ -322,7 +333,7 @@ ORDER BY b.bag_no ASC;
     try {
       const [result] = await connection.query<ResultSetHeader>(sql, [session_id, max_no, 30, 'SEALED']);
       return {
-        insertId: result.insertId,  
+        insertId: result.insertId,
         affectedRows: result.affectedRows,
       };
     } catch (error) {

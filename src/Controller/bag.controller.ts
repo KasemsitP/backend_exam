@@ -37,6 +37,22 @@ export class bagController {
     }
   }
 
+  static CheckSubjectBooklets = async (req: Request, res: Response) => {
+    try {
+      const { campaignId, payload, datetime } = req.body;
+      if (!campaignId || !payload || !datetime) {
+        return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
+      }
+      
+      const dateTimes: Date[] = datetime.map((d: string) => new Date(d));
+      const result = await bagService.CheckbookletsSubjects(campaignId, payload ,dateTimes);
+      return res.status(200).json(result);
+    } 
+    catch (error: any) {
+      res.status(500).send({ message: error.message });
+    }
+  }
+
 
 
   // static InsertBooklets = async (req: Request, res: Response) => {

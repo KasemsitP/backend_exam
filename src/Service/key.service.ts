@@ -335,9 +335,25 @@ export class keyService {
     static GetDashBoard = async (camapaign_id: number) => {
         const importStatus = await dashboardRepo.getStatusSession(Number(camapaign_id))
         const encryptedStatus = await dashboardRepo.getIsEncrypted(Number(camapaign_id))
+        const subjectsQuestions = await dashboardRepo.getSubjectQuestionsByCampaign(Number(camapaign_id))
+        const sessionDates = await keyRepo.GetSessionDate( Number(camapaign_id))
+        const keyStatus = await keyRepo.KeyStatus(Number(camapaign_id))
+        console.log("Key Status:", keyStatus);
 
 
-        return { importStatus, encryptedStatus }
+        const uniqueSubjects = subjectsQuestions.reduce((acc, curr) => {
+            if (!acc.find((s) => s.subject_id === curr.subject_id)) {
+                acc.push({
+                    subject_id: curr.subject_id,
+                    subject_code: curr.subject_code,
+                    subject_name: curr.subject_name,
+                });
+            }
+            return acc;
+        }, [] as any[]);
+
+
+        return { importStatus, encryptedStatus, subjects: uniqueSubjects, subjectsQuestions , sessionDates, keyStatus}
 
     }
 }

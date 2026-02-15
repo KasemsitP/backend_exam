@@ -119,6 +119,45 @@ async selectSessionIdByCampaign(
     const [result] = await dbClient.execute<any>(sql, [id]);
     return result.affectedRows > 0;
   }
+  async GetSessionDate(campaign_id: number): Promise<any[]> {
+    const sql = `SELECT s.exam_date,  sj.start_at , sj.end_at from session_subjects sj JOIN sessions s ON s.id = sj.session_id WHERE s.campaign_id = ?;`
+    const [rows] = await this.pool.query<RowDataPacket[]>(sql, [campaign_id]);
+    return rows as any[];
+
+  }
+
+async KeyStatus(campaign_id: number): Promise<{
+  key1_status: boolean;
+  key2_status: boolean;
+}> {
+  const sql = `
+    SELECT
+      EXISTS (
+        SELECT 1 FROM campaign_keys 
+        WHERE order_num = 1 
+          AND campaign_id = ?
+      ) AS key1_status,
+
+      EXISTS (
+        SELECT 1 FROM campaign_keys 
+        WHERE order_num = 2 
+          AND campaign_id = ?
+      ) AS key2_status
+  `;
+
+  const [rows] = await this.pool.query<RowDataPacket[]>(sql, [
+    campaign_id,
+    campaign_id,
+  ]);
+
+  const result = rows[0];
+
+  return {
+    key1_status: Boolean(result.key1_status),
+    key2_status: Boolean(result.key2_status),
+  };
+}
+
 }
 
 const keyRepo = new KeyRepo();

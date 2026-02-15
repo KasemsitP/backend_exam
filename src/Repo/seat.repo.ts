@@ -178,7 +178,7 @@ WHERE uc.campaign_id = ?
         const sql = `
 SELECT 
   r.room_code,
-  COUNT(uc.id) AS count_user
+  COUNT(DISTINCT uc.user_id) AS count_user
 FROM exam_rooms r
 LEFT JOIN user_campaigns uc
   ON uc.room_code = r.room_code

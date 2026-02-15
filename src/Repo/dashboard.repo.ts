@@ -22,6 +22,17 @@ interface ScoreTotalRow extends RowDataPacket {
   total_score: number | null;
 }
 
+interface SubjectQuestionRow extends RowDataPacket {
+  campaign_id: number;
+  subject_id: number;
+  subject_code: string;
+  subject_name: string;
+  subject_question_id: number;
+  question_no: number;
+  question_label: string | null;
+  max_score: number | null;
+}
+
 class DashboardRepo {
   private pool: Pool
   constructor() {
@@ -61,6 +72,7 @@ SELECT
   s.campaign_id,
   s.id           AS session_id,
   s.session_code,
+  subj.name AS subject_name,
   COALESCE(uc.users_in_campaign, 0)  AS users_in_campaign,
   COALESCE(us_count.users_in_session, 0) AS users_in_session,
   CASE 
@@ -73,6 +85,10 @@ LEFT JOIN uc
 LEFT JOIN us_count 
   ON us_count.campaign_id = s.campaign_id
  AND us_count.session_id  = s.id
+LEFT JOIN session_subjects sj
+ON sj.session_id = s.id
+LEFT JOIN subjects subj
+ON subj.id = sj.subject_id
 WHERE s.campaign_id = ?  -- ใส่ campaign ที่กำลังดู
 ORDER BY s.exam_date, s.session_code;`
 
@@ -106,18 +122,23 @@ ORDER BY s.exam_date, s.session_code;`
   }
   async getBagCountsPerSession(campaign_id: number) {
     const sql = `
-      SELECT
-        s.campaign_id,
-        s.id           AS session_id,
-        s.session_code,
-        COUNT(b.id)    AS total_bags,
-        SUM(b.count_items) AS total_capacity
-      FROM sessions s
-      LEFT JOIN bags b
-        ON b.session_id = s.id
-      WHERE s.campaign_id = ?
-      GROUP BY s.campaign_id, s.id, s.session_code
-      ORDER BY s.exam_date, s.session_code;
+    SELECT
+      s.campaign_id,
+      s.id AS session_id,
+      s.session_code,
+      GROUP_CONCAT(DISTINCT subj.name SEPARATOR ', ') AS subject_name,
+      COUNT(DISTINCT b.id) AS total_bags,
+      COALESCE(SUM(DISTINCT b.count_items), 0) AS total_capacity
+    FROM sessions s
+    LEFT JOIN session_subjects sj
+      ON sj.session_id = s.id
+    LEFT JOIN subjects subj
+      ON subj.id = sj.subject_id
+    LEFT JOIN bags b
+      ON b.session_id = s.id
+    WHERE s.campaign_id = ?
+    GROUP BY s.campaign_id, s.id, s.session_code
+    ORDER BY s.exam_date, s.session_code;
     `;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
     return rows;
@@ -308,8 +329,8 @@ ORDER BY s.exam_date, s.session_code;`
   // dashboard.repo.ts
 
 
-async getScoreDistribution(campaign_id: number) {
-  const sql = `
+  async getScoreDistribution(campaign_id: number) {
+    const sql = `
     WITH user_total AS (
       SELECT
         uc.id AS user_campaign_id,
@@ -335,63 +356,103 @@ async getScoreDistribution(campaign_id: number) {
     FROM user_total;
   `;
 
-  const [rows] = await this.pool.execute<ScoreTotalRow[]>(sql, [campaign_id]);
+    const [rows] = await this.pool.execute<ScoreTotalRow[]>(sql, [campaign_id]);
 
-  // ---------- config bucket ----------
-  const bucketSize = 5;     // 1-5, 6-10, ...
-  const minScore = 1;
-  const maxScore = 150;     // แสดงถึง 150 ตามที่ต้องการ
+    // ---------- config bucket ----------
+    const bucketSize = 5;     // 1-5, 6-10, ...
+    const minScore = 1;
+    const maxScore = 150;     // แสดงถึง 150 ตามที่ต้องการ
 
-  let totalUsers = 0;
-  let noScore = 0;
+    let totalUsers = 0;
+    let noScore = 0;
 
-  // map: bucketIndex -> count
-  const bucketMap = new Map<number, number>();
+    // map: bucketIndex -> count
+    const bucketMap = new Map<number, number>();
 
-  for (const row of rows) {
-    const score = row.total_score;
+    for (const row of rows) {
+      const score = row.total_score;
 
-    if (score == null) {
-      noScore++;
-      continue;
+      if (score == null) {
+        noScore++;
+        continue;
+      }
+
+      totalUsers++;
+
+      let s = Number(score);
+
+      // clamp คะแนนให้อยู่ในช่วง 1..150
+      if (s < minScore) s = minScore;
+      if (s > maxScore) s = maxScore;
+
+      // แปลงเป็น index ของ bucket: 1-5 → idx 0, 6-10 → idx 1, ...
+      const bucketIndex = Math.floor((s - minScore) / bucketSize);
+      bucketMap.set(bucketIndex, (bucketMap.get(bucketIndex) ?? 0) + 1);
     }
 
-    totalUsers++;
+    // แปลง bucketMap -> array [{ label: "1-5", count }, ... , "146-150"]
+    const buckets: { label: string; count: number }[] = [];
 
-    let s = Number(score);
+    const maxBucketIndex = Math.floor((maxScore - minScore) / bucketSize);
 
-    // clamp คะแนนให้อยู่ในช่วง 1..150
-    if (s < minScore) s = minScore;
-    if (s > maxScore) s = maxScore;
+    for (let idx = 0; idx <= maxBucketIndex; idx++) {
+      const from = minScore + idx * bucketSize; // 1, 6, 11, ...
+      let to = from + bucketSize - 1;           // 5, 10, 15, ...
+      if (to > maxScore) to = maxScore;         // เผื่อกรณีท้ายสุด
 
-    // แปลงเป็น index ของ bucket: 1-5 → idx 0, 6-10 → idx 1, ...
-    const bucketIndex = Math.floor((s - minScore) / bucketSize);
-    bucketMap.set(bucketIndex, (bucketMap.get(bucketIndex) ?? 0) + 1);
+      const label = `${from}-${to}`;
+      const count = bucketMap.get(idx) ?? 0;
+
+      // ✅ ดันทุก bucket ออกไป แม้ count = 0
+      buckets.push({ label, count });
+    }
+
+    return {
+      total_users: totalUsers,
+      no_score: noScore,
+      buckets,
+    };
   }
+  async getSubjectQuestionsByCampaign(
+    campaign_id: number
+  ): Promise<SubjectQuestionRow[]> {
+    const sql = `
+      SELECT
+        c.id             AS campaign_id,
+        subj.id          AS subject_id,
+        subj.code        AS subject_code,
+        subj.name        AS subject_name,
+        sq.id            AS subject_question_id,
+        sq.question_no,
+        sq.label         AS question_label,
+        sq.max_score
+      FROM exam_campaigns c
+      JOIN sessions s
+        ON s.campaign_id = c.id
+      JOIN session_subjects ss
+        ON ss.session_id = s.id
+      JOIN subjects subj
+        ON subj.id = ss.subject_id
+      JOIN subject_questions sq
+        ON sq.subject_id = subj.id
+      WHERE c.id = ?
+      GROUP BY
+        c.id,
+        subj.id,
+        subj.code,
+        subj.name,
+        sq.id,
+        sq.question_no,
+        sq.label,
+        sq.max_score
+      ORDER BY
+        subj.code,
+        sq.question_no;
+    `;
 
-  // แปลง bucketMap -> array [{ label: "1-5", count }, ... , "146-150"]
-  const buckets: { label: string; count: number }[] = [];
-
-  const maxBucketIndex = Math.floor((maxScore - minScore) / bucketSize);
-
-  for (let idx = 0; idx <= maxBucketIndex; idx++) {
-    const from = minScore + idx * bucketSize; // 1, 6, 11, ...
-    let to = from + bucketSize - 1;           // 5, 10, 15, ...
-    if (to > maxScore) to = maxScore;         // เผื่อกรณีท้ายสุด
-
-    const label = `${from}-${to}`;
-    const count = bucketMap.get(idx) ?? 0;
-
-    // ✅ ดันทุก bucket ออกไป แม้ count = 0
-    buckets.push({ label, count });
+    const [rows] = await this.pool.execute<SubjectQuestionRow[]>(sql, [campaign_id]);
+    return rows;
   }
-
-  return {
-    total_users: totalUsers,
-    no_score: noScore,
-    buckets,
-  };
-}
 }
 
 

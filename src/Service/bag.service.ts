@@ -305,7 +305,7 @@ export class bagService {
                     bagNo: bagId,
                     seqInBag: seq,
                     status: "CREATED",
-                    created_at: scannedAt,       
+                    created_at: scannedAt,
                 });
 
                 results.push({
@@ -383,7 +383,7 @@ export class bagService {
                 userCode: r.user_code,
                 fullName: r.full_name,
                 qrPayload: r.qr_payload,
-                created_at : r.created_at
+                created_at: r.created_at
             }));
         } finally {
             connection.release();
@@ -405,5 +405,119 @@ export class bagService {
             connection.release();
         }
     }
+
+    static CheckbookletsSubjects = async (
+        campaign_id: number,
+        payload: string[],
+        datetime: Date[]
+    ) => {
+        const connection = await DB.getInstance().getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            //console.log(datetime)
+
+            if (payload.length !== datetime.length) {
+                throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
+            }
+
+
+            let sessionId: number | null = null;
+            const results: ApiBookletLinked[] = [];
+            let sessionlabel;
+
+            // 1️⃣ decode + validate ทั้งหมดก่อน
+            const decodedList = [];
+
+            for (const qr of payload) {
+                const decoded = await keyService.decryptQrPayload(qr, campaign_id);
+
+                if (decoded.cid !== campaign_id) {
+                    throw new Error(`QR ไม่ตรง campaign`);
+                }
+
+                if (sessionId === null) {
+                    sessionId = decoded.sid;
+                } else if (decoded.sid !== sessionId) {
+                    throw new Error(`QR ต่าง session`);
+                }
+
+                decodedList.push(decoded);
+            }
+
+            if (!sessionId) {
+                throw new Error("ไม่พบ session");
+            }
+
+            const subjectResult = await bagRepo.CheckSubjectBooks(sessionId)
+
+            // 2️⃣ สร้างถุงครั้งเดียว
+            const maxNo = await bagRepo.getMaxBagNoForSession(sessionId, connection);
+            // const bagResult = await bagRepo.CreateBagByConnection(
+            //     sessionId,
+            //     maxNo + 1,
+            //     connection
+            // );
+
+            // const bagId = bagResult.insertId;
+
+            // console.log("Created Bag ID:", bagId);
+
+            // // 3️⃣ insert booklets
+            // let seq = 1;
+            // for (let i = 0; i < decodedList.length; i++) {
+            //     const decoded = decodedList[i];
+            //     const scannedAt = datetime[i]; // 👈 ตัวนี้แหละ
+
+            //     const userSession =
+            //         await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
+            //             connection,
+            //             {
+            //                 campaignId: campaign_id,
+            //                 sessionId,
+            //                 userCode: decoded.uid,
+            //             }
+            //         );
+
+            //     if (!userSession) {
+            //         throw new Error(`ไม่พบ user_session ${decoded.uid}`);
+            //     }
+
+            //     const bookletId = await bookletsRepo.insertOne(connection, {
+            //         sessionId,
+            //         userSessionId: userSession.id,
+            //         bagNo: bagId,
+            //         seqInBag: seq,
+            //         status: "CREATED",
+            //         created_at: scannedAt,       
+            //     });
+
+            //     results.push({
+            //         id: bookletId,
+            //         sessionId,
+            //         bagNo: bagId,
+            //         userSessionId: userSession.id,
+            //         seqInBag: seq,
+            //         userCode: userSession.user_code,
+            //     });
+
+            //     seq++;
+            // }
+
+            await connection.commit();
+
+            return {
+                success : true,
+                subject_name: subjectResult,
+                bagNo: maxNo + 1,
+            };
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    };
 }
 

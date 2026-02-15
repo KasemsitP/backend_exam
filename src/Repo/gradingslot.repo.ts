@@ -8,6 +8,8 @@ export interface BookletLookupRow extends RowDataPacket {
   user_campaign_id: number;
   user_id: number;
   user_code: string;
+  bag_id : number;
+  bag_no : number;
 }
 
 export interface GradingSlotRow extends RowDataPacket {
@@ -33,24 +35,28 @@ class GradingslotRepo {
     userCode: string
   ): Promise<BookletLookupRow | null> {
     const sql = `
-      SELECT
-        b.id              AS booklet_id,
-        b.user_session_id AS user_session_id,
-        us.user_campaign_id,
-        u.id              AS user_id,
-        u.user_code       AS user_code
-      FROM users u
-      JOIN user_campaigns uc
-        ON uc.user_id = u.id
-       AND uc.campaign_id = ?
-      JOIN user_sessions us
-        ON us.user_campaign_id = uc.id
-       AND us.session_id = ?
-       AND us.campaign_id = ?
-      JOIN booklets b
-        ON b.user_session_id = us.id
-      WHERE u.user_code = ?
-      LIMIT 1;
+SELECT
+    b.id              AS booklet_id,
+    b.user_session_id AS user_session_id,
+    us.user_campaign_id,
+    us.qr_payload,          -- เพิ่มตรงนี้
+    u.id              AS user_id,
+    u.user_code       AS user_code,
+    bg.id              AS bag_id,
+    bg.bag_no          AS bag_no
+FROM users u
+JOIN user_campaigns uc
+  ON uc.user_id = u.id
+ AND uc.campaign_id = ?
+JOIN user_sessions us
+  ON us.user_campaign_id = uc.id
+ AND us.session_id = ?
+ AND us.campaign_id = ?
+JOIN booklets b
+  ON b.user_session_id = us.id
+JOIN bags bg ON bg.id = b.bag_id 
+WHERE u.user_code = ?
+LIMIT 1;
     `;
 
     const params = [campaignId, sessionId, campaignId, userCode];
@@ -138,13 +144,13 @@ class GradingslotRepo {
 
   //ยังไม่มีใช้นะ
 
-  async  findAssignmentForGraderInSession(
-  conn: PoolConnection,
-  graderId: number,
-  sessionId: number
-) {
-  const [rows] = await conn.query(
-    `
+  async findAssignmentForGraderInSession(
+    conn: PoolConnection,
+    graderId: number,
+    sessionId: number
+  ) {
+    const [rows] = await conn.query(
+      `
       SELECT 
         ga.grader_id,
         ga.session_id,
@@ -158,13 +164,13 @@ class GradingslotRepo {
       WHERE ga.grader_id = ?
         AND ga.session_id = ?
     `,
-    [graderId, sessionId]
-  );
+      [graderId, sessionId]
+    );
 
-  // กรณี 1 grader มีได้แค่ 1 ข้อใน 1 session (ตามที่คุณเลือก)
-  return (rows as any[]) ?? null;
-}
-    async findUnscoredSlotForGrader(
+    // กรณี 1 grader มีได้แค่ 1 ข้อใน 1 session (ตามที่คุณเลือก)
+    return (rows as any[]) ?? null;
+  }
+  async findUnscoredSlotForGrader(
     conn: PoolConnection,
     bookletId: number,
     subjectId: number,

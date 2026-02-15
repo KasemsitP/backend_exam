@@ -21,7 +21,7 @@ class SignSheetRepo {
     // --- 1. Fetch ALL data (For PDF Export) ---
     async findUserSessionByCampaignAndSession(sessionId: number, campaign_id: number): Promise<any[]> {
         const sql = `
-            SELECT
+ SELECT
                 us.id          AS user_session_id,
                 u.id           AS user_id,
                 u.title        AS title,
@@ -38,7 +38,7 @@ class SignSheetRepo {
             JOIN users u ON uc.user_id = u.id
             LEFT JOIN exam_rooms er ON er.room_code = uc.room_code AND er.campaign_id = uc.campaign_id
             WHERE us.session_id = ? AND us.campaign_id = ?
-            ORDER BY u.user_code ASC
+            ORDER BY u.user_code + 0  ASC;
         `;
         const [rows] = await this.pool.execute<any[]>(sql, [sessionId, campaign_id]);
         return rows;
@@ -95,14 +95,14 @@ class SignSheetRepo {
                 uc.row_no
             ${baseJoins}
             ${whereClause}
-            ORDER BY u.user_code ASC
+            ORDER BY CAST(u.user_code AS UNSIGNED) ASC
             LIMIT ? OFFSET ?
         `;
 
         // Execute with limit/offset
         const [rows] = await this.pool.execute<any[]>(dataSql, [
-            ...searchParams, 
-            limit.toString(), 
+            ...searchParams,
+            limit.toString(),
             offset.toString()
         ]);
 

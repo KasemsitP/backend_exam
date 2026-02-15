@@ -32,6 +32,8 @@ export class gradingService {
     userCode: string;
     subjectId: number;
     questionNo: number;
+    bagId : number;
+    bagNo : number;
   }> {
     const { qrPayload, campaignId, graderId, questionNo } = payload;
 
@@ -80,10 +82,12 @@ export class gradingService {
         a => a.question_no === qNo
       );
 
+     
+
       if (!question) {
         throw new Error("ข้อที่เลือกไม่ได้อยู่ใน assignment ของผู้ตรวจ");
       }
-
+       console.log("question", question)
       // 3) หาเล่มของผู้เข้าสอบ (จาก user_code / uid ใน QR)
       const bookletRow = await gradingslotRepo.findBookletForUser(
         connection,
@@ -119,6 +123,8 @@ export class gradingService {
         userCode: bookletRow.user_code,
         subjectId : question.subject_id,
         questionNo,
+        bagId : bookletRow.bag_id,
+        bagNo : bookletRow.bag_no
       };
     } catch (err) {
       await connection.rollback();

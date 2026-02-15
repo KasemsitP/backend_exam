@@ -96,7 +96,7 @@ class SubjectRepo {
           id: String(r.question_id),
           questionNo: r.question_no,
           label: r.question_label ?? "",
-          maxScore : r.max_score
+          maxScore: r.max_score
         });
       }
     }
@@ -322,7 +322,7 @@ class SubjectRepo {
         INSERT INTO subject_questions (subject_id, question_no, label,max_score)
         VALUES (?, ?, ?,?)
       `,
-        [subjectId, safeNo, label,maxScore]
+        [subjectId, safeNo, label, maxScore]
       );
 
       await conn.commit();
