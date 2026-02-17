@@ -14,6 +14,7 @@ export interface Subject {
   name: string;
   questions: SubjectQuestion[];
   maxScore?: number
+  full_score?: number;
 }
 export interface SubjectQuestionAndSubject {
   subject_id: number;
@@ -67,7 +68,8 @@ class SubjectRepo {
         q.id          AS question_id,
         q.question_no AS question_no,
         q.label       AS question_label,
-        q.max_score
+        q.max_score,
+        s.full_score
       FROM subjects s
       LEFT JOIN subject_questions q
         ON q.subject_id = s.id
@@ -87,6 +89,7 @@ class SubjectRepo {
           code: r.subject_code,
           name: r.subject_name,
           questions: [],
+          full_score : r.full_score
         };
         subjects.push(subject);
       }
@@ -106,7 +109,7 @@ class SubjectRepo {
 
   /* ---------- helper: ดึง 1 วิชาพร้อมข้อ ด้วย id (ใช้หลัง C/U) ---------- */
 
-  private async getSubjectWithQuestionsById(
+  async getSubjectWithQuestionsById(
     conn: Pool | PoolConnection,
     id: number
   ): Promise<Subject | null> {
@@ -287,89 +290,95 @@ class SubjectRepo {
     subjectId: number,
     label: string,
     maxScore: number,
-    targetNo?: number
+    targetNo?: number,
+    dbClient: Pool | PoolConnection = this.pool
   ): Promise<Subject> {
-    const conn = await this.pool.getConnection();
-    try {
-      await conn.beginTransaction();
-      const [rows] = await conn.query<RowDataPacket[]>(
-        "SELECT COALESCE(MAX(question_no), 0) AS max_no FROM subject_questions WHERE subject_id = ?",
-        [subjectId]
-      );
+    // 1️⃣ หาเลขข้อสูงสุดปัจจุบัน
+    const [rows] = await dbClient.query<RowDataPacket[]>(
+      `
+    SELECT COALESCE(MAX(question_no), 0) AS max_no
+    FROM subject_questions
+    WHERE subject_id = ?
+    `,
+      [subjectId]
+    );
 
-      const maxNo = Number(rows[0].max_no);
-      let safeNo =
-        typeof targetNo === "number" && !Number.isNaN(targetNo)
-          ? targetNo
-          : maxNo + 1;
+    const maxNo = Number(rows[0].max_no);
 
-      if (safeNo < 1) safeNo = 1;
-      if (safeNo > maxNo + 1) safeNo = maxNo + 1;
+    let safeNo =
+      typeof targetNo === "number" && !Number.isNaN(targetNo)
+        ? targetNo
+        : maxNo + 1;
 
+    if (safeNo < 1) safeNo = 1;
+    if (safeNo > maxNo + 1) safeNo = maxNo + 1;
 
-      await conn.query(
-        `
-        UPDATE subject_questions
-        SET question_no = question_no + 1
-        WHERE subject_id = ?
-          AND question_no >= ?
-      `,
-        [subjectId, safeNo]
-      );
+    // 3️⃣ เลื่อน question_no ถ้าจะแทรกกลาง
+    await dbClient.query(
+      `
+    UPDATE subject_questions
+    SET question_no = question_no + 1
+    WHERE subject_id = ?
+      AND question_no >= ?
+    `,
+      [subjectId, safeNo]
+    );
 
-      await conn.query(
-        `
-        INSERT INTO subject_questions (subject_id, question_no, label,max_score)
-        VALUES (?, ?, ?,?)
-      `,
-        [subjectId, safeNo, label, maxScore]
-      );
+    await dbClient.query(
+      `
+    INSERT INTO subject_questions 
+      (subject_id, question_no, label, max_score)
+    VALUES (?, ?, ?, ?)
+    `,
+      [subjectId, safeNo, label, maxScore]
+    );
 
-      await conn.commit();
+    const subject = await this.getSubjectWithQuestionsById(
+      dbClient,
+      subjectId
+    );
 
-      const subject = await this.getSubjectWithQuestionsById(conn, subjectId);
-      if (!subject) throw new Error("Subject not found after insert question");
-      return subject;
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
+    if (!subject) {
+      throw new Error("ไม่เจอวิชาที่สามารถเพิ่มหัวข้อได้");
     }
+
+    return subject;
   }
 
-  async deleteQuestion(subjectId: number, questionId: number): Promise<Subject> {
-    const conn = await this.pool.getConnection();
-    try {
-      await conn.beginTransaction();
 
-      await conn.query(
-        "DELETE FROM subject_questions WHERE id = ? AND subject_id = ?",
-        [questionId, subjectId]
-      );
-      await conn.query("SET @no := 0");
+  async deleteQuestion(
+    subjectId: number,
+    questionId: number,
+    conn: PoolConnection
+  ): Promise<void> {
 
-      await conn.query(
-        `
-  UPDATE subject_questions
-  SET question_no = (@no := @no + 1)
-  WHERE subject_id = ?
-  ORDER BY question_no ASC
-  `,
-        [subjectId]
-      );
+    await conn.query(
+      "DELETE FROM subject_questions WHERE id = ? AND subject_id = ?",
+      [questionId, subjectId]
+    );
 
-      await conn.commit();
+    await conn.query("SET @no := 0");
 
-      const subject = await this.getSubjectWithQuestionsById(conn, subjectId);
-      if (!subject) throw new Error("Subject not found after delete question");
-      return subject;
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
-    }
+    await conn.query(
+      `
+    UPDATE subject_questions
+    SET question_no = (@no := @no + 1)
+    WHERE subject_id = ?
+    ORDER BY question_no ASC
+    `,
+      [subjectId]
+    );
+  }
+
+  async decreaseFullScore(
+    subjectId: number,
+    removedScore: number,
+    conn: PoolConnection
+  ) {
+    await conn.query(
+      "UPDATE subjects SET full_score = full_score - ? WHERE id = ?",
+      [removedScore, subjectId]
+    );
   }
 
   async GetSubjectNameandQuestionNo(sessionId: number, campaign_id: number): Promise<SubjectQuestionAndSubject[]> {
@@ -392,6 +401,34 @@ LIMIT 0, 25;`
     return rows as SubjectQuestionAndSubject[];
 
   }
+
+  async getMaxScoreById(subject_id: number, dbClient: Pool | PoolConnection = this.pool): Promise<{ full_score: number }> {
+    const sql = `SELECT sj.full_score from subjects sj where sj.id = ? for update`
+    const [rows] = await dbClient.query<RowDataPacket[]>(sql, [subject_id]);
+    return rows[0] as { full_score: number };
+
+  }
+
+  async updateMaxScore(subject_id: number, newMaxScore: number, dbClient: Pool | PoolConnection = this.pool): Promise<void> {
+    const sql = `UPDATE subjects SET full_score = full_score + ? WHERE id = ?`
+    await dbClient.query<RowDataPacket[]>(sql, [newMaxScore, subject_id]);
+  }
+  async getQuestionById(
+    subjectId: number,
+    questionId: number,
+    conn: PoolConnection
+  ) {
+    const [rows] = await conn.query<RowDataPacket[]>(
+      `SELECT max_score AS maxScore 
+     FROM  subject_questions
+     WHERE id = ? AND subject_id = ?
+     FOR UPDATE`,
+      [questionId, subjectId]
+    );
+
+    return rows[0];
+  }
+
 
 
 }

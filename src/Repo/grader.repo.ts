@@ -21,6 +21,7 @@ export interface DbGraderAssignmentRow {
   subject_question_id: number;
   question_no: number
   question_label?: string;
+  max_score : number;
 }
 
 export interface DbGrader extends RowDataPacket {
@@ -57,6 +58,7 @@ SELECT
 
     ga.subject_question_id,
     sq.question_no,          -- << ดึงเลขข้อจาก subject_questions
+    sq.max_score ,
     sq.label AS question_label
 
 FROM grader_assignments ga

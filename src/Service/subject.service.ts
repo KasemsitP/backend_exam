@@ -1,4 +1,5 @@
 import { Request } from "express";
+import { DB } from "../model/DB";
 import subjectRepo, { Subject } from "../Repo/subject.repo";
 
 export class SubjectService {
@@ -53,32 +54,104 @@ export class SubjectService {
     };
     static addQuestion = async (req: Request): Promise<Subject> => {
         const subjectId = Number(req.params.id);
-        const { label , questionNo , maxScore  } = req.body;
+        const { label, questionNo, maxScore } = req.body;
 
-        if(!maxScore ){
-            throw new Error("maxScore is required");
+        if (!maxScore) {
+            throw new Error("กรุณาใส่คะแนนเต็ม");
         }
+
         if (!label || !label.trim()) {
-            throw new Error("Label is required");
+            throw new Error("ชื่อหัวข้อไม่สามารถเว้นว่างได้");
         }
-        if (!subjectId || Number.isNaN(subjectId)) {
-            throw new Error("Invalid subject id");
-        }
-        const targetNo = questionNo ? Number(questionNo) : undefined;
 
-        return subjectRepo.addQuestion(subjectId , label.trim(), Number(maxScore), targetNo );
+        if (!subjectId || Number.isNaN(subjectId)) {
+            throw new Error("รหัสวิชาไม่ถูกต้อง");
+        }
+
+        const conn = await DB.getInstance().getConnection();
+
+        try {
+            await conn.beginTransaction();
+
+            const targetNo = questionNo ? Number(questionNo) : undefined;
+
+            const fullScore = await subjectRepo.getMaxScoreById(subjectId, conn);
+            const addedScore = Number(maxScore);
+
+            if (!fullScore) {
+                throw new Error("ไม่เจอคะแนนเต็มข้อวิชา");
+            }
+            const currentScore = fullScore.full_score;
+
+            if (currentScore + addedScore > 100) {
+                throw new Error("คะแนนรวมของหัวข้อทั้งหมดต้องไม่เกิน 100");
+            }
+
+            const result = await subjectRepo.addQuestion(
+                subjectId,
+                label.trim(),
+                Number(maxScore),
+                targetNo,
+                conn
+            );
+            await subjectRepo.updateMaxScore(subjectId, addedScore, conn);
+
+
+            await conn.commit();
+
+            return result;
+        } catch (error) {
+            await conn.rollback();
+            throw error;
+        } finally {
+            conn.release();
+        }
     };
 
-    static deleteQuestion = async (req: Request): Promise<Subject> => {
+    static deleteQuestion = async (req: Request): Promise<void> => {
         const subjectId = Number(req.params.id);
         const questionId = Number(req.params.questionId);
-        if (!subjectId || Number.isNaN(subjectId) || !questionId || Number.isNaN(questionId)) {
-            throw new Error("Invalid id");
+
+        if (!subjectId || Number.isNaN(subjectId) ||
+            !questionId || Number.isNaN(questionId)) {
+            throw new Error("ไม่พบรหัสวิชาที่ต้องการลบ");
         }
-        return subjectRepo.deleteQuestion(subjectId, questionId);
+
+        const conn = await DB.getInstance().getConnection();
+
+        try {
+            await conn.beginTransaction();
+
+            // ดึงคะแนนของข้อที่จะลบ (lock แถว)
+            const question = await subjectRepo.getQuestionById(
+                subjectId,
+                questionId,
+                conn
+            );
+
+            if (!question) {
+                throw new Error("ไม่พบหัวข้อที่ต้องการลบ");
+            }
+
+            const removedScore = question.maxScore;
+
+            // ลบข้อสอบ
+            await subjectRepo.deleteQuestion(subjectId, questionId, conn);
+
+            // ลบคะแนนออกจาก subject แบบ atomic
+            await subjectRepo.decreaseFullScore(subjectId, removedScore, conn)
+
+            await conn.commit();
+        } catch (error) {
+            await conn.rollback();
+            throw error;
+        } finally {
+            conn.release();
+        }
     };
+
     static getSubjectandQuestion = async (sessionId: number, campaign_id: number): Promise<any> => {
-        const result = await subjectRepo.GetSubjectNameandQuestionNo(sessionId , campaign_id);
+        const result = await subjectRepo.GetSubjectNameandQuestionNo(sessionId, campaign_id);
         return result;
     }
 }

@@ -36,7 +36,7 @@ export class keyController {
    */
   static create = async (req: Request, res: Response) => {
     try {
-      const { campaignId, key, account_id  , order_num} = req.body;
+      const { campaignId, key, account_id, order_num } = req.body;
 
       if (!campaignId || !key || !account_id || !order_num) {
         return res
@@ -59,14 +59,18 @@ export class keyController {
    */
   static delete = async (req: Request, res: Response) => {
     try {
-      const keyId = parseInt(req.params.id, 10);
-      if (isNaN(keyId)) {
-        return res.status(400).send({ message: "Invalid Key ID" });
+      const keyId = parseInt(req.params.keyId, 10);
+      const campaignId = parseInt(req.params.campaignId, 10);
+      const accountId = parseInt(req.params.accountId, 10);
+      console.log("keyId:", keyId, "campaignId:", campaignId, "accountId:", accountId);
+      if (isNaN(keyId) || isNaN(campaignId) || isNaN(accountId)) {
+        return res.status(400).send({ message: "Invalid Key ID, Campaign ID, or Account ID" });
       }
-      await keyService.delete(keyId);
-      res.status(204).send();
+      await keyService.delete(keyId, campaignId, accountId);
+      res.status(204).send({ message: "ลบคีย์สำเร็จแล้ว" });
     } catch (error: any) {
       res.status(500).send({ message: error.message });
+     // console.log("Error in delete controller:", error);
     }
   };
   static getPrerequisites = async (req: Request, res: Response) => {
@@ -87,8 +91,8 @@ export class keyController {
     try {
       // ( 1. รับแค่ campaignId, sessionId )
       const { campaignId } = req.body;
-      console.log(campaignId )
-      if (!campaignId ) {
+      console.log(campaignId)
+      if (!campaignId) {
         return res
           .status(400)
           .send({ message: "Missing campaignId or sessionId" });
@@ -127,6 +131,7 @@ export class keyController {
   static getDashboard = async (req: Request, res: Response) => {
     try {
       const campaignId = Number(req.params.campaignId);
+
       if (Number.isNaN(campaignId)) {
         return res.status(400).json({ message: "invalid campaign id" });
       }

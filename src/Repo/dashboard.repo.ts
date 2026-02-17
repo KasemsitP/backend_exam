@@ -31,6 +31,9 @@ interface SubjectQuestionRow extends RowDataPacket {
   question_no: number;
   question_label: string | null;
   max_score: number | null;
+  exam_date: Date;
+  start_at: Date;
+  end_at: Date;
 }
 
 class DashboardRepo {
@@ -417,37 +420,34 @@ ORDER BY s.exam_date, s.session_code;`
     campaign_id: number
   ): Promise<SubjectQuestionRow[]> {
     const sql = `
-      SELECT
-        c.id             AS campaign_id,
-        subj.id          AS subject_id,
-        subj.code        AS subject_code,
-        subj.name        AS subject_name,
-        sq.id            AS subject_question_id,
-        sq.question_no,
-        sq.label         AS question_label,
-        sq.max_score
-      FROM exam_campaigns c
-      JOIN sessions s
-        ON s.campaign_id = c.id
-      JOIN session_subjects ss
-        ON ss.session_id = s.id
-      JOIN subjects subj
-        ON subj.id = ss.subject_id
-      JOIN subject_questions sq
-        ON sq.subject_id = subj.id
-      WHERE c.id = ?
-      GROUP BY
-        c.id,
-        subj.id,
-        subj.code,
-        subj.name,
-        sq.id,
-        sq.question_no,
-        sq.label,
-        sq.max_score
-      ORDER BY
-        subj.code,
-        sq.question_no;
+SELECT
+  se.campaign_id,
+  se.id           AS session_id,
+  se.session_code,
+  se.exam_date,
+  sesssub.start_at,
+  sesssub.end_at,
+
+  sub.id          AS subject_id,
+  sub.code        AS subject_code,
+  sub.name        AS subject_name,
+
+  sq.id           AS subject_question_id,
+  sq.question_no,
+  sq.label        AS question_label,
+  sq.max_score
+FROM sessions se
+JOIN session_subjects sesssub
+ON sesssub.session_id = se.id
+JOIN session_subjects ss
+  ON ss.session_id = se.id
+JOIN subjects sub
+  ON sub.id = ss.subject_id
+LEFT JOIN subject_questions sq
+  ON sq.subject_id = sub.id
+WHERE se.campaign_id = ?
+ORDER BY se.exam_date, se.session_code, sub.code, sq.question_no;
+
     `;
 
     const [rows] = await this.pool.execute<SubjectQuestionRow[]>(sql, [campaign_id]);

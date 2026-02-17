@@ -23,5 +23,11 @@ reportRouter.get(
   GradingReportController.ReportScoreGraders
 );
 
+reportRouter.get(
+  "/reports/campaigns/:campaignId/pass-list",
+  GradingReportController.exportPassListPdf
+);
+
+
 
 export default reportRouter;

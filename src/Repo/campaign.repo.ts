@@ -136,6 +136,13 @@ VALUES
 
     return rows[0].is_unlock === 1;
   }
+
+  async unlockCampaign(campaign_id: number, dbClient: DbClient = this.pool): Promise<void> {
+    const sql = `            UPDATE exam_campaigns
+             SET is_unlock = 1
+             WHERE id = ?`
+    await dbClient.execute(sql, [campaign_id]);
+  }
 }
 
 const campaignRepo = new CampaignRepo();

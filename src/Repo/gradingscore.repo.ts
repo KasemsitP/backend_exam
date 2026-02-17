@@ -70,6 +70,11 @@ export interface ScoreForSlotGroupRow extends RowDataPacket {
   enteredBy: number;
   enteredAt: Date;
 }
+interface CheckScoreRow extends RowDataPacket {
+  question_no: number;
+  label: string;
+  max_score: number;
+}
 
 class GradingScoreRepo {
   private pool: Pool;
@@ -110,6 +115,26 @@ class GradingScoreRepo {
 
     const [rows] = await conn.execute<RowDataPacket[]>(sql, paramsArr);
     return rows.length > 0;
+  }
+
+  async CheckScore(
+    conn: PoolConnection,
+    params: {
+      slotId: number;
+      question_no: number;
+      graderId: number;
+    }
+  ): Promise<CheckScoreRow | null> {
+    const { slotId, question_no, graderId } = params;
+
+    const sql = `
+SELECT sq.question_no , sq.label , sq.max_score from subject_questions sq JOIN subjects s ON s.id = sq.subject_id JOIN grading_slots gs ON gs.subject_id = s.id WHERE gs.id = ? AND sq.question_no = ? AND gs.grader_id = ?;
+    `;
+
+    const paramsArr = [slotId, question_no, graderId];
+
+   const [rows] = await conn.execute<CheckScoreRow[]>(sql, paramsArr);
+    return rows[0] || null;
   }
 
   /**
@@ -349,7 +374,7 @@ LIMIT 25 OFFSET 0;
   }
   async findDisputedQuestions(
     conn: PoolConnection,
-    campaign_id : number,
+    campaign_id: number,
     thresholdDiff: number
   ): Promise<DisputedQuestionRow[]> {
     const sql = `
@@ -463,7 +488,7 @@ GROUP BY
 ORDER BY diff DESC;
     `;
 
-    const [rows] = await conn.query<DisputedQuestionRow[]>(sql, [campaign_id ,thresholdDiff]);
+    const [rows] = await conn.query<DisputedQuestionRow[]>(sql, [campaign_id, thresholdDiff]);
     return rows;
   }
 }

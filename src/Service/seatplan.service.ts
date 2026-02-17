@@ -143,10 +143,10 @@ export class SeatPlanService {
         return pdfPromise;
     }
     static async generateSeatPlanNameListPdf(options: {
-       
+
         campaign_id: number;
     }): Promise<Buffer | null> {
-        const {  campaign_id } = options;
+        const { campaign_id } = options;
 
 
         const info = await seatPlanRepo.getExamInfoWithSessions(campaign_id)
@@ -220,43 +220,47 @@ export class SeatPlanService {
             { align: "center" }
         );
         doc.moveDown(1);
-
-        /* -------- ตั้งค่าตาราง -------- */
         const pageWidth = doc.page.width;
         const { left, right, bottom } = doc.page.margins;
         const tableWidth = pageWidth - left - right;
 
-        // สัดส่วนคอลัมน์: ลำดับ / ชื่อ / เลขประจำตัว / ห้อง / แถว
-        const col1_W = tableWidth * 0.10; // ลำดับ
-        const col2_W = tableWidth * 0.40; // ชื่อ - สกุล
-        const col3_W = tableWidth * 0.20; // เลขประจำตัวสอบ
-        const col4_W = tableWidth * 0.18; // ห้องสอบ
-        const col5_W = tableWidth * 0.12; // แถว
+        // ✅ 6 คอลัมน์: ลำดับ / ชื่อ / เลขประจำตัว / ห้อง / แถว / ลำดับในแถว
+        const col1_W = tableWidth * 0.08; // ลำดับ
+        const col2_W = tableWidth * 0.38; // ชื่อ-สกุล
+        const col3_W = tableWidth * 0.18; // เลขประจำตัวสอบ
+        const col4_W = tableWidth * 0.16; // ห้องสอบ
+        const col5_W = tableWidth * 0.10; // แถว
+        const col6_W = tableWidth - (col1_W + col2_W + col3_W + col4_W + col5_W); // ✅ ที่เหลือ (ลำดับในแถว)
 
         const startX = left;
         let y = doc.y + 5;
 
-        const headerHeight = 18; // หัวตารางเตี้ยลง
-        const rowHeight = 18;    // แถวข้อมูลเตี้ยลงให้ฟีลเหมือนรูป
+        const headerHeight = 18;
+        const rowHeight = 18;
 
         const x1 = startX;
         const x2 = x1 + col1_W;
         const x3 = x2 + col2_W;
         const x4 = x3 + col3_W;
         const x5 = x4 + col4_W;
+        const x6 = x5 + col5_W;
+        const x7 = x6 + col6_W; // ขอบขวาสุด
 
         const drawHeaderRow = () => {
             doc.lineWidth(0.7).strokeColor("black");
 
             // กรอบหัวตาราง
             doc.rect(startX, y, tableWidth, headerHeight).stroke();
-            // เส้นคั่นแนวตั้งหัวตาราง
+
+            // เส้นคั่นแนวตั้งหัวตาราง (เพิ่ม x6)
             doc.moveTo(x2, y).lineTo(x2, y + headerHeight).stroke();
             doc.moveTo(x3, y).lineTo(x3, y + headerHeight).stroke();
             doc.moveTo(x4, y).lineTo(x4, y + headerHeight).stroke();
             doc.moveTo(x5, y).lineTo(x5, y + headerHeight).stroke();
+            doc.moveTo(x6, y).lineTo(x6, y + headerHeight).stroke(); // ✅ เพิ่ม
+            // ไม่ต้องวาด x7 เพราะเป็นขอบกรอบอยู่แล้ว
 
-            const hY = y + 3; // เลื่อนลงมานิดให้กลางแถว
+            const hY = y + 3;
             doc.font(fontBold).fontSize(11);
 
             doc.text("ลำดับ", x1, hY, { width: col1_W, align: "center" });
@@ -264,6 +268,7 @@ export class SeatPlanService {
             doc.text("เลขประจำตัวสอบ", x3, hY, { width: col3_W, align: "center" });
             doc.text("ห้องสอบ", x4, hY, { width: col4_W, align: "center" });
             doc.text("แถว", x5, hY, { width: col5_W, align: "center" });
+            doc.text("ลำดับในแถว", x6, hY, { width: col6_W, align: "center" }); // ✅ คอลัมน์ใหม่
 
             y += headerHeight;
             doc.font(fontNormal).fontSize(11);
@@ -272,46 +277,33 @@ export class SeatPlanService {
         drawHeaderRow();
 
         rows.forEach((r, index) => {
-            const fullname = r.title +" "+r.fullName
+            const fullname = `${r.title} ${r.fullName}`;
 
             // ถ้าเต็มหน้าแล้วขึ้นหน้าใหม่
             if (y + rowHeight > doc.page.height - bottom) {
                 doc.addPage();
                 y = doc.page.margins.top;
-
                 drawHeaderRow();
             }
 
             // กรอบแถวเต็มทั้งบรรทัด
             doc.rect(startX, y, tableWidth, rowHeight).stroke();
-            // เส้นคั่นแนวตั้งแต่ละคอลัมน์
+
+            // เส้นคั่นแนวตั้งแต่ละคอลัมน์ (เพิ่ม x6)
             doc.moveTo(x2, y).lineTo(x2, y + rowHeight).stroke();
             doc.moveTo(x3, y).lineTo(x3, y + rowHeight).stroke();
             doc.moveTo(x4, y).lineTo(x4, y + rowHeight).stroke();
             doc.moveTo(x5, y).lineTo(x5, y + rowHeight).stroke();
+            doc.moveTo(x6, y).lineTo(x6, y + rowHeight).stroke(); // ✅ เพิ่ม
 
             const cellY = y + 3;
 
-            doc.text(String(index + 1), x1, cellY, {
-                width: col1_W,
-                align: "center",
-            });
-            doc.text(fullname, x2 + 4, cellY, {
-                width: col2_W - 8,
-                align: "left",
-            });
-            doc.text(r.userCode, x3, cellY, {
-                width: col3_W,
-                align: "center",
-            });
-            doc.text(r.roomName ?? "-", x4, cellY, {
-                width: col4_W,
-                align: "center",
-            });
-            doc.text(String(r.rowNo), x5, cellY, {
-                width: col5_W,
-                align: "center",
-            });
+            doc.text(String(index + 1), x1, cellY, { width: col1_W, align: "center" });
+            doc.text(fullname, x2 + 4, cellY, { width: col2_W - 8, align: "left" });
+            doc.text(r.userCode, x3, cellY, { width: col3_W, align: "center" });
+            doc.text(r.roomName ?? "-", x4, cellY, { width: col4_W, align: "center" });
+            doc.text(String(r.rowNo), x5, cellY, { width: col5_W, align: "center" });
+            doc.text(String(r.colNo ?? "-"), x6, cellY, { width: col6_W, align: "center" }); // ✅ colNo
 
             y += rowHeight;
         });

@@ -10,6 +10,7 @@ type SignSheetRow = {
   userCode: string;
   roomName: string | null;
   row_no: number | null;
+  col_no: number | null;
   title: string
   qr_payload: string | null;
   __absIndex?: number;
@@ -163,11 +164,11 @@ export class SignSheetService {
           let infoY = paddingY;
           doc.text(`${r.title} ${r.firstName} ${r.lastName}`, infoX, infoY);
           infoY += 20;
-          doc.fillColor("#666666").text(`เลขที่นั่งสอบ ${r.userCode || "-"}`, infoX, infoY);
+          doc.fillColor("#666666").text(`รหัสประจำตัวสอบ ${r.userCode || "-"}`, infoX, infoY);
           infoY += 20;
           doc.text(`ห้องสอบ ${r.roomName || "-"}`, infoX, infoY);
           infoY += 20;
-          doc.text(`แถวที่ ${r.row_no || "-"}`, infoX, infoY);
+          doc.text(`แถวที่ ${r.row_no || "-"}  ลำดับที่ ${r.col_no || "-"}`, infoX, infoY);
           infoY += 20;
           doc.text("ลายเซ็น..................................................", infoX, infoY);
 
@@ -220,7 +221,8 @@ export class SignSheetService {
       roomName: r.roomName ?? null,
       qr_payload: r.qr_payload ?? null,
       row_no: r.row_no,
-      title: r.title
+      title: r.title,
+      col_no: r.col_no
     }));
   }
 

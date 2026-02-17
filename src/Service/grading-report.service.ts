@@ -12,6 +12,8 @@ import {
   getGraderInfo
 } from "../Repo/grading-report.repo";
 
+import passlistRepo, { PassListRow } from "../Repo/passlist.repo";
+
 import {
   getGraderBagSummary,
   type GraderBagSummaryRow,
@@ -39,6 +41,10 @@ export interface BagBookletQuestionBlock {
   questions: BagQuestionScoreRow[];
 
 }
+
+type SortKey = "score" | "examCode" | "name";
+type SortOrder = "asc" | "desc";
+
 
 function buildBookletBlocks(
   raw: RawBookletQuestionStatsRow[],
@@ -1009,7 +1015,152 @@ export class GradingReportService {
       conn.release();
     }
   }
+  static async generatePassListPdf(opts: {
+    campaignId: number;
+    sort: string;
+    order: string;
+    includeScore: boolean;
+  }): Promise<Buffer> {
+    const sort = (opts.sort as SortKey) || "score";
+    const order = (opts.order as SortOrder) || "desc";
 
+    // 1) data
+    const { examInfo, rows } = await passlistRepo.getPassListRows({
+      campaignId: opts.campaignId,
+      sort,
+      order,
+    });
+
+    // 2) pdf doc
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 40, bottom: 40, left: 48, right: 48 },
+      autoFirstPage: true,
+    });
+
+    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
+    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+
+    const buffers: Buffer[] = [];
+    doc.on("data", (b) => buffers.push(b));
+    const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+      doc.on("end", () => resolve(Buffer.concat(buffers)));
+      doc.on("error", reject);
+    });
+
+    // ===== Header (ปรับข้อความให้ตรงของคุณได้) =====
+    doc.font(fontNormal).fontSize(14).text("บัญชีรายชื่อผู้สอบผ่านข้อเขียน", {
+      align: "center",
+    });
+    doc.moveDown(0.2);
+
+    doc
+      .font(fontNormal)
+      .fontSize(12)
+      .text(
+        "(แนบท้ายประกาศ...)",
+        { align: "center" }
+      );
+    doc.moveDown(0.2);
+
+    doc
+      .font(fontNormal)
+      .fontSize(12)
+      .text(
+        `อัยการผู้ช่วย พ.ศ.${examInfo.year_be} (${examInfo.campaign_size})`,
+        { align: "center" }
+      );
+
+    doc.moveDown(0.2);
+    doc.font(fontNormal).fontSize(12).text(`ณ ${examInfo.site}`, { align: "center" });
+    doc.moveDown(0.6);
+
+    // ===== Table layout =====
+    const pageWidth = doc.page.width;
+    const { left, right, bottom } = doc.page.margins;
+    const tableWidth = pageWidth - left - right;
+
+    // 3 คอลัมน์แบบรูป: ลำดับ | เลขประจำตัวสอบ | ชื่อ-สกุล
+    // ถ้า includeScore=1 ให้เพิ่มคอลัมน์คะแนน
+    const colW = opts.includeScore
+      ? [tableWidth * 0.10, tableWidth * 0.22, tableWidth * 0.48, tableWidth * 0.20]
+      : [tableWidth * 0.12, tableWidth * 0.24, tableWidth * 0.64];
+
+    const startX = left;
+    let y = doc.y;
+
+    const headerH = 20;
+    const rowH = 18;
+
+    const x1 = startX;
+    const x2 = x1 + colW[0];
+    const x3 = x2 + colW[1];
+    const x4 = x3 + colW[2]; // ถ้า includeScore=1 จะเป็น col4 start
+    const tableRight = startX + tableWidth;
+
+    const drawHeader = () => {
+      doc.lineWidth(0.7).strokeColor("black");
+
+      doc.rect(startX, y, tableWidth, headerH).stroke();
+      doc.moveTo(x2, y).lineTo(x2, y + headerH).stroke();
+      doc.moveTo(x3, y).lineTo(x3, y + headerH).stroke();
+      if (opts.includeScore) doc.moveTo(x4, y).lineTo(x4, y + headerH).stroke();
+
+      const ty = y + 4;
+      doc.font(fontBold).fontSize(12);
+      doc.text("ลำดับที่", x1, ty, { width: colW[0], align: "center" });
+      doc.text("เลขประจำตัวสอบ", x2, ty, { width: colW[1], align: "center" });
+      doc.text("ชื่อ-สกุล", x3, ty, { width: colW[2], align: "center" });
+      if (opts.includeScore) {
+        doc.text("คะแนน", x4, ty, { width: colW[3], align: "center" });
+      }
+
+      y += headerH;
+      doc.font(fontNormal).fontSize(12);
+    };
+
+    const ensureSpace = () => {
+      if (y + rowH > doc.page.height - bottom) {
+        doc.addPage();
+        y = doc.page.margins.top;
+        drawHeader();
+      }
+    };
+
+    drawHeader();
+
+    // ===== Rows =====
+    rows.forEach((r, idx) => {
+      ensureSpace();
+
+      doc.rect(startX, y, tableWidth, rowH).stroke();
+      doc.moveTo(x2, y).lineTo(x2, y + rowH).stroke();
+      doc.moveTo(x3, y).lineTo(x3, y + rowH).stroke();
+      if (opts.includeScore) doc.moveTo(x4, y).lineTo(x4, y + rowH).stroke();
+
+      const ty = y + 3;
+
+      doc.text(String(idx + 1), x1, ty, { width: colW[0], align: "center" });
+      doc.text(r.userCode, x2, ty, { width: colW[1], align: "center" });
+
+      const fullName = `${r.title ?? ""}${r.title ? " " : ""}${r.fullName}`;
+      doc.text(fullName, x3 + 6, ty, { width: colW[2] - 12, align: "left" });
+
+      if (opts.includeScore) {
+        doc.text(
+          r.finalScore == null ? "-" : Number(r.finalScore).toFixed(2),
+          x4,
+          ty,
+          { width: colW[3], align: "center" }
+        );
+      }
+
+      y += rowH;
+    });
+
+    doc.end();
+    return pdfPromise;
+  }
 
 
 

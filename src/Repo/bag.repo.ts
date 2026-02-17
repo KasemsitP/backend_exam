@@ -97,13 +97,12 @@ class BagRepo {
   b.id,
   s.campaign_id,
   b.session_id,
-  s.title AS session_label,
   b.bag_no,
   b.count_items,
   b.status,
   CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) AS bag_no_str,
   MIN(sj.code) AS subject_code,
-  MIN(sj.name) AS subject_name,
+  MIN(sj.name) AS session_label,
   MAX(COALESCE(bs.scanned_count, 0)) AS scanned_count
 FROM bags b
 JOIN sessions s 

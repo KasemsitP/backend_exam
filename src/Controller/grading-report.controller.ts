@@ -2,6 +2,12 @@
 import { Request, Response } from "express";
 import { GradingReportService } from "../Service/grading-report.service";
 
+
+const asInt = (v: any, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 export class GradingReportController {
   /**
    * GET /api/reports/bags/:bagId/subjects/:subjectId/scores
@@ -85,6 +91,37 @@ export class GradingReportController {
       res.send(pdfBuffer);
     } catch (err : any) {
        res.status(500).json({ message: "สร้าง PDF คะแนนผู้ตรวจไม่สำเร็จ" });
+    }
+  }
+    static async exportPassListPdf(req: Request, res: Response) {
+    try {
+      const campaignId = asInt(req.params.campaignId, 0);
+      if (!campaignId) {
+        return res.status(400).json({ message: "campaignId ไม่ถูกต้อง" });
+      }
+
+      const sort = String(req.query.sort || "score"); // score | examCode | name
+      const order = String(req.query.order || "desc"); // asc | desc
+      const includeScore = String(req.query.includeScore || "0") === "1";
+
+      const pdfBuffer = await GradingReportService.generatePassListPdf({
+        campaignId,
+        sort,
+        order,
+        includeScore,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="pass-list-campaign-${campaignId}.pdf"`
+      );
+      return res.status(200).send(pdfBuffer);
+    } catch (err: any) {
+      console.error(err);
+      return res
+        .status(500)
+        .json({ message: err?.message || "Export PDF ไม่สำเร็จ" });
     }
   }
 }

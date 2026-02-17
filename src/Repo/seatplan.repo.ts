@@ -16,6 +16,7 @@ export interface SeatPlanNameRow {
     title:string
     roomName: string | null;
     rowNo: number | null;
+    colNo : number | null;
 }
 export interface Examinfo extends RowDataPacket {
     id: number
@@ -85,7 +86,8 @@ SELECT
         u.user_code      AS userCode,
         u.title          AS title,
         uc.room_code     AS roomName,
-        uc.row_no        AS rowNo
+        uc.row_no        AS rowNo,
+        uc.col_no        AS colNo
       FROM user_campaigns uc
       JOIN users u  ON uc.user_id = u.id
       WHERE uc.campaign_id = ?

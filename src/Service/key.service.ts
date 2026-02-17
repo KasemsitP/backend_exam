@@ -23,16 +23,17 @@ function aesEncrypt(
 
     if (iv.length !== IV_LENGTH) {
         console.error(`IV length is ${iv.length}, expected ${IV_LENGTH}`);
-        throw new Error("Invalid IV length passed to aesEncrypt.");
+        throw new Error("IV ต้องมีความยาว 16 ไบต์ (128 bits) สำหรับ AES-128");
     }
 
     if (key.length !== 16) {
         console.error(`Key length is ${key.length}, expected 16`);
-        throw new Error("Invalid Key length passed to aesEncrypt (must be 16 bytes for AES-128).");
+        throw new Error("คีย์ต้องมีความยาว 16 ไบต์ (128 bits) สำหรับ AES-128");
     }
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
     return Buffer.concat([cipher.update(textBuffer), cipher.final()]);
 }
+
 
 
 function aesDecrypt(
@@ -58,7 +59,7 @@ export class keyService {
 
     static create = async (campaignId: number, key: string, account_id: number, order_num: number) => {
         if (Buffer.from(key, PAYLOAD_ENCODING).length !== 16) {
-            throw new Error("Key must be exactly 16 characters (16 bytes).");
+            throw new Error("คีย์ต้องมีความยาว 16 ตัวอักษร (128 bits) สำหรับ AES-128");
         }
 
         const connection = await DB.getInstance().getConnection();
@@ -67,8 +68,20 @@ export class keyService {
 
             const count = await keyRepo.countByCampaignId(campaignId, connection);
             if (count >= 2) {
-                throw new Error("Key limit more than 2 reached for this campaign.");
+                throw new Error("คีย์สำหรับรอบสอบนี้มีครบแล้ว (2 คีย์)");
             }
+
+            const checkRole = await keyRepo.checkRoles(account_id, connection);
+            if (!checkRole || checkRole.code !== "MANAGER") {
+                throw new Error("คุณไม่มีสิทธิ์ในการสร้างคีย์นี้เนื่องจากคุณไม่ใช่ผู้จัดการคีย์");
+            }
+
+
+            const is_assigned = await keyRepo.isAssigned(account_id, campaignId, connection);
+            if (is_assigned) {
+                throw new Error("คุณได้เคยสร้างคีย์สำหรับการเข้ารหัสรอบนี้แล้ว ไม่สามารถสร้างใหม่ได้อีก");
+            }
+
             const order = count;
             console.log(order)
 
@@ -78,11 +91,17 @@ export class keyService {
             // else {
             //     order_num = 2;
             // }
+            const iv1Buffer = STATIC_IV_BUFFER
+            const key1Buffer = Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING);
+
+            const plainTextBuffer = Buffer.from(key, PAYLOAD_ENCODING);
+            const step1 = aesEncrypt(plainTextBuffer, key1Buffer, iv1Buffer);
 
             const newKey = await keyRepo.create(
                 {
                     campaign_id: campaignId,
-                    key: key,
+                    // key: key,
+                    key: step1.toString(CIPHER_ENCODING),
                     account_id: account_id,
                     iv: STATIC_IV_STRING,
                     algor: ALGORITHM,
@@ -90,6 +109,10 @@ export class keyService {
                 },
                 connection
             );
+
+            const decryptedBuffer = aesDecrypt(step1, key1Buffer, iv1Buffer);
+            const decryptedKey = decryptedBuffer.toString(PAYLOAD_ENCODING);
+            console.log("Decrypted Key for verification:", decryptedKey);
 
 
             await connection.commit();
@@ -106,12 +129,44 @@ export class keyService {
     /**
      * [ 2. Logic "Delete" (เหมือนเดิม) ]
      */
-    static delete = async (keyId: number): Promise<boolean> => {
+    static delete = async (
+        keyId: number,
+        campaignId: number,
+        accountId: number
+    ): Promise<boolean> => {
+
+        const conn = await DB.getInstance().getConnection();
+
         try {
-            return await keyRepo.delete(keyId);
+            await conn.beginTransaction();
+
+
+            const checkRole = await keyRepo.checkRoles(accountId, conn);
+            if (!checkRole || checkRole.code !== "MANAGER") {
+                throw new Error("คุณไม่มีสิทธิ์ในการลบคีย์นี้เนื่องจากคุณไม่ใช่ผู้จัดการคีย์");
+            }
+
+            const keyData = await keyRepo.findKeys(keyId, campaignId, conn);
+
+            if (!keyData) {
+                throw new Error("ไม่พบคีย์ที่ต้องการลบ");
+            }
+
+            if (keyData.account_id !== accountId) {
+                throw new Error("คุณไม่มีสิทธิ์ในการลบคีย์นี้เนื่องจากคุณไม่ได้เป็นเจ้าของคีย์");
+            }
+
+
+            await keyRepo.delete(keyId, conn);
+
+            await conn.commit();
+            return true;
+
         } catch (error) {
-            console.error("Service Error (Key Delete):", error);
+            await conn.rollback();
             throw error;
+        } finally {
+            conn.release();
         }
     };
 
@@ -150,6 +205,11 @@ export class keyService {
     static runBulkEncryptionForSession = async (
         campaignId: number,
     ) => {
+        const countkeys = await keyRepo.countByCampaignId(campaignId);
+        if (countkeys < 1) {
+            throw new Error("ไม่สามารถทำการเข้ารหัสได้เนื่องจากรอบสอบนี้มีคีย์ไม่ครบ 2 คีย์");
+        }
+
         const connection = await DB.getInstance().getConnection();
         let usersEncrypted = 0;
         try {
@@ -167,7 +227,7 @@ export class keyService {
             // 1. ดึงคีย์
             const keys = await keyRepo.findAllByCampaignId(campaignId, connection);
             if (keys.length !== 2) {
-                throw new Error("Key check failed: Campaign must have exactly 2 keys.");
+                throw new Error("ไม่สามารถทำการเข้ารหัสได้เนื่องจากรอบสอบนี้มีคีย์ไม่ครบ 2 คีย์");
             }
 
             const keyFirst = keys.find(k => k.order_num === 1);
@@ -176,13 +236,20 @@ export class keyService {
             console.log(keyFirst, keySecond)
 
             if (!keyFirst || !keySecond) {
-                throw new Error("Key order check failed: Both keys with order_num 1 and 2 must exist.");
+                throw new Error("คีย์สำหรับรอบสอบนี้ไม่ครบ 2 คีย์");
             }
+            const decryptedKey1Buffer = aesDecrypt(Buffer.from(keyFirst.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey1 = decryptedKey1Buffer.toString(PAYLOAD_ENCODING);
+            console.log("Decrypted Key 1 for verification:", decryptedKey1);
+
+            const decryptedKey2Buffer = aesDecrypt(Buffer.from(keySecond.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey2 = decryptedKey2Buffer.toString(PAYLOAD_ENCODING);
+            console.log("Decrypted Key 2 for verification:", decryptedKey2);
 
             console.log(campaignId)
-            const [key1, key2] = keys;
-            const key1Buffer = Buffer.from(keyFirst.key, PAYLOAD_ENCODING);
-            const key2Buffer = Buffer.from(keySecond.key, PAYLOAD_ENCODING);
+            // const [key1, key2] = keys;
+            const key1Buffer = Buffer.from(decryptedKey1, PAYLOAD_ENCODING);
+            const key2Buffer = Buffer.from(decryptedKey2, PAYLOAD_ENCODING);
 
             // Static IV Buffer ที่กำหนดไว้
             const iv1Buffer = STATIC_IV_BUFFER;
@@ -255,13 +322,19 @@ export class keyService {
             const [key1, key2] = keys;
 
             // 2.  FIX: แปลง "Key" (16 ตัวอักษร) เป็น Buffer (16 ไบต์)
-            const key1Buffer = Buffer.from(key1.key, PAYLOAD_ENCODING);
-            const key2Buffer = Buffer.from(key2.key, PAYLOAD_ENCODING);
+            // const key1Buffer = Buffer.from(key1.key, PAYLOAD_ENCODING);
+            // const key2Buffer = Buffer.from(key2.key, PAYLOAD_ENCODING);
 
             //  FIX: ใช้ Static IVs
             const iv1Buffer = STATIC_IV_BUFFER;
             const iv2Buffer = STATIC_IV_BUFFER;
 
+            const decryptedKey1Buffer = aesDecrypt(Buffer.from(key1.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey2Buffer = aesDecrypt(Buffer.from(key2.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const key1Buffer = Buffer.from(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+            const key2Buffer = Buffer.from(decryptedKey2Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+
+            console.log(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), decryptedKey2Buffer.toString(PAYLOAD_ENCODING))
             // 3.  FIX: แปลง Ciphertext (ไม่ต้องแยก IV)
             const cipherBuffer = Buffer.from(ciphertext, CIPHER_ENCODING);
 
@@ -285,6 +358,32 @@ export class keyService {
             throw new Error("Decryption failed. Invalid payload or keys.");
         }
     };
+
+    static decrypteKeyForUnlock = async (campaignId: number, connection: PoolConnection) => {
+        try {
+            const keys = await keyRepo.findAllByCampaignId(campaignId, connection);
+            if (keys.length < 2) {
+                throw new Error("รอบสอบนี้ยังไม่ได้สร้างคีย์ครับ 2 คีย์");
+            }
+            const keyFirst = keys.find(k => k.order_num === 1);
+            const keySecond = keys.find(k => k.order_num === 2);
+
+            if (!keyFirst || !keySecond) {
+                throw new Error("คีย์สำหรับรอบสอบนี้ไม่ครบ 2 คีย์");
+            }
+            const decryptedKey1Buffer = aesDecrypt(Buffer.from(keyFirst.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey1 = decryptedKey1Buffer.toString(PAYLOAD_ENCODING);
+            console.log("Decrypted Key 1 for verification:", decryptedKey1);
+            const decryptedKey2Buffer = aesDecrypt(Buffer.from(keySecond.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey2 = decryptedKey2Buffer.toString(PAYLOAD_ENCODING);
+            console.log("Decrypted Key 2 for verification:", decryptedKey2);
+            return { decryptedKey1, decryptedKey2 };
+        }
+        catch (error) {
+            console.error("Service Error (Decryption for Unlock):", error);
+            throw new Error("ถอดรหัสล้มเหลว");
+        }
+    }
 
     static decryptQrPayloadConnection = async (
         ciphertext: string,
@@ -301,13 +400,19 @@ export class keyService {
             const [key1, key2] = keys;
 
             // 2.  FIX: แปลง "Key" (16 ตัวอักษร) เป็น Buffer (16 ไบต์)
-            const key1Buffer = Buffer.from(key1.key, PAYLOAD_ENCODING);
-            const key2Buffer = Buffer.from(key2.key, PAYLOAD_ENCODING);
+            // const key1Buffer = Buffer.from(key1.key, PAYLOAD_ENCODING);
+            // const key2Buffer = Buffer.from(key2.key, PAYLOAD_ENCODING);
 
             //  FIX: ใช้ Static IVs
             const iv1Buffer = STATIC_IV_BUFFER;
             const iv2Buffer = STATIC_IV_BUFFER;
 
+            const decryptedKey1Buffer = aesDecrypt(Buffer.from(key1.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey2Buffer = aesDecrypt(Buffer.from(key2.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const key1Buffer = Buffer.from(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+            const key2Buffer = Buffer.from(decryptedKey2Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+
+            console.log(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), decryptedKey2Buffer.toString(PAYLOAD_ENCODING))
             // 3.  FIX: แปลง Ciphertext (ไม่ต้องแยก IV)
             const cipherBuffer = Buffer.from(ciphertext, CIPHER_ENCODING);
 
@@ -332,30 +437,87 @@ export class keyService {
         }
     };
 
-    static GetDashBoard = async (camapaign_id: number) => {
-        const importStatus = await dashboardRepo.getStatusSession(Number(camapaign_id))
-        const encryptedStatus = await dashboardRepo.getIsEncrypted(Number(camapaign_id))
-        const subjectsQuestions = await dashboardRepo.getSubjectQuestionsByCampaign(Number(camapaign_id))
-        const sessionDates = await keyRepo.GetSessionDate( Number(camapaign_id))
-        const keyStatus = await keyRepo.KeyStatus(Number(camapaign_id))
-        console.log("Key Status:", keyStatus);
+    static GetDashBoard = async (campaign_id: number) => {
+        const importStatus = await dashboardRepo.getStatusSession(Number(campaign_id));
+        const encryptedStatus = await dashboardRepo.getIsEncrypted(Number(campaign_id));
+        const subjectsQuestions = await dashboardRepo.getSubjectQuestionsByCampaign(Number(campaign_id));
+        const sessionDates = await keyRepo.GetSessionDate(Number(campaign_id)); // << ควรมี session_id + session_code
+        const keyStatus = await keyRepo.KeyStatus(Number(campaign_id));
 
+        // --- helper ---
+        const toNumber = (v: any, fallback = 0) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : fallback;
+        };
 
-        const uniqueSubjects = subjectsQuestions.reduce((acc, curr) => {
-            if (!acc.find((s) => s.subject_id === curr.subject_id)) {
-                acc.push({
-                    subject_id: curr.subject_id,
-                    subject_code: curr.subject_code,
-                    subject_name: curr.subject_name,
-                });
+        // ทำ index หา session ได้เร็ว
+        const sessionDateMap = new Map<number, any>();
+        for (const d of sessionDates ?? []) {
+            sessionDateMap.set(d.session_id, d);
+        }
+
+        // เผื่อ sessionDates ไม่มี session_code ให้ดึงจาก importStatus
+        const sessionCodeMap = new Map<number, string>();
+        for (const s of importStatus ?? []) {
+            sessionCodeMap.set(s.session_id, s.session_code);
+        }
+
+        // --- GROUP: session -> subjects -> questions ---
+        const sessions: Record<number, any> = {};
+
+        for (const r of subjectsQuestions ?? []) {
+            const sid = Number(r.session_id);
+            const subjId = Number(r.subject_id);
+
+            if (!sessions[sid]) {
+                const d = sessionDateMap.get(sid);
+                sessions[sid] = {
+                    session_id: sid,
+                    session_code: d?.session_code ?? sessionCodeMap.get(sid) ?? `Session ${sid}`,
+                    exam_date: d?.exam_date ?? r.exam_date ?? null,
+                    start_at: d?.start_at ?? r.start_at ?? null,
+                    end_at: d?.end_at ?? r.end_at ?? null,
+                    subjects: [] as any[],
+                };
             }
-            return acc;
-        }, [] as any[]);
 
+            let subj = sessions[sid].subjects.find((x: any) => x.subject_id === subjId);
+            if (!subj) {
+                subj = {
+                    subject_id: subjId,
+                    subject_code: r.subject_code,
+                    subject_name: r.subject_name,
+                    questions: [] as any[],
+                };
+                sessions[sid].subjects.push(subj);
+            }
 
-        return { importStatus, encryptedStatus, subjects: uniqueSubjects, subjectsQuestions , sessionDates, keyStatus}
+            subj.questions.push({
+                id: Number(r.subject_question_id),
+                questionNo: Number(r.question_no),
+                label: r.question_label,
+                maxScore: toNumber(r.max_score, 0),
+            });
+        }
 
-    }
+        // sort ให้เรียงสวย
+        Object.values(sessions).forEach((sess: any) => {
+            sess.subjects.forEach((subj: any) => {
+                subj.questions.sort((a: any, b: any) => a.questionNo - b.questionNo);
+            });
+            sess.subjects.sort((a: any, b: any) => String(a.subject_code).localeCompare(String(b.subject_code)));
+        });
+
+        return {
+            importStatus,
+            encryptedStatus,
+            keyStatus,
+            sessionDates,       // จะคงไว้ก็ได้
+            subjectsQuestions,  // จะคงไว้ก็ได้ (ไว้ debug)
+            sessions,           // ✅ ตัวใหม่ที่ UI ใช้ง่ายสุด
+        };
+    };
+
 }
 
 

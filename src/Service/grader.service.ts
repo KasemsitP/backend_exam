@@ -21,6 +21,7 @@ export interface ApiGrader {
   subject_question_id: number;
   question_no: number
   question_label?: string;
+  max_score: number;
 }
 
 
@@ -52,7 +53,8 @@ export class graderService {
         subject_name: r.subject_name,
         subject_question_id: r.subject_question_id,
         question_no: r.question_no,
-        question_label: r.question_label
+        question_label: r.question_label,
+        max_score: r.max_score
       }));
 
       return assignments;
