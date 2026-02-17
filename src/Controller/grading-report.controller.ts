@@ -3,10 +3,42 @@ import { Request, Response } from "express";
 import { GradingReportService } from "../Service/grading-report.service";
 
 
-const asInt = (v: any, fallback: number) => {
+
+function asInt(v: any, fallback = 0) {
   const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-};
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function parseBool01(v: any, fallback: boolean) {
+  if (v === undefined || v === null) return fallback;
+  const s = String(v).trim().toLowerCase();
+  if (s === "1" || s === "true" || s === "yes") return true;
+  if (s === "0" || s === "false" || s === "no") return false;
+  return fallback;
+}
+
+type AnyGroupItem = any;
+//type GroupRule = { title: string; items: AnyGroupItem[] };
+
+function normalizeGroups(input: any): { title: string; items: { sessionId: number; subjectId: number; questionNo: number }[] }[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((g) => {
+      const title = String(g?.title ?? "").trim() || "กลุ่ม";
+      const rawItems = Array.isArray(g?.items) ? g.items : [];
+      const items = rawItems
+        .map((it: AnyGroupItem) => {
+          const sessionId = asInt(it?.sessionId ?? it?.session_id, 0);
+          const subjectId = asInt(it?.subjectId ?? it?.subject_id, 0);
+          const questionNo = asInt(it?.questionNo ?? it?.question_no, 0);
+          return { sessionId, subjectId, questionNo };
+        })
+        .filter((x: any) => x.sessionId > 0 && x.subjectId > 0 && x.questionNo > 0);
+      return { title, items };
+    })
+    .filter((g) => g.items.length > 0);
+}
+
 
 export class GradingReportController {
   /**
@@ -122,6 +154,104 @@ export class GradingReportController {
       return res
         .status(500)
         .json({ message: err?.message || "Export PDF ไม่สำเร็จ" });
+    }
+  }
+  static async exportRankingPdf(req: Request, res: Response) {
+    try {
+      const campaignId = asInt(req.params.campaignId, 0);
+      if (!campaignId) return res.status(400).json({ message: "campaignId ไม่ถูกต้อง" });
+
+      const subjectIds = String(req.query.subjectIds || "")
+        .split(",")
+        .map((x) => Number(x.trim()))
+        .filter((n) => Number.isFinite(n) && n > 0);
+
+      if (subjectIds.length === 0) {
+        return res.status(400).json({ message: "กรุณาส่ง subjectIds อย่างน้อย 1 รายการ" });
+      }
+
+      const sortBy = String(req.query.sortBy || "TOTAL_DESC");
+      const includeRankNo = parseBool01(req.query.includeRankNo, true);
+      const includeRoomSeat = parseBool01(req.query.includeRoomSeat, true);
+      const includeAvgExplain = parseBool01(req.query.includeAvgExplain, true);
+      const onlyCompleted = parseBool01(req.query.onlyCompleted, false);
+
+      const limit = Math.min(Math.max(asInt(req.query.limit, 0), 0), 5000); // 0 = ไม่จำกัด
+
+      let groups: any[] = [];
+      const groupsRaw = req.query.groups;
+      if (groupsRaw) {
+        try {
+          groups = JSON.parse(String(groupsRaw));
+          if (!Array.isArray(groups)) groups = [];
+        } catch {
+          return res.status(400).json({ message: "groups JSON ไม่ถูกต้อง" });
+        }
+      }
+
+      const pdf = await GradingReportService.generateRankingPdf({
+        campaignId,
+        subjectIds,
+        sortBy,
+        includeRankNo,
+        includeRoomSeat,
+        includeAvgExplain,
+        onlyCompleted,
+        limit,
+        groups: normalizeGroups(groups),
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="ranking-${campaignId}.pdf"`);
+      return res.status(200).send(pdf);
+    } catch (err: any) {
+      console.error(err);
+      return res.status(500).json({ message: err?.message || "Export ranking PDF ไม่สำเร็จ" });
+    }
+  }
+
+  // ✅ POST version (body)
+  static async exportRankingPdfPost(req: Request, res: Response) {
+    try {
+      const campaignId = asInt(req.params.campaignId, 0);
+      if (!campaignId) return res.status(400).json({ message: "campaignId ไม่ถูกต้อง" });
+
+      const subjectIds = Array.isArray(req.body?.subjectIds)
+        ? req.body.subjectIds.map((x: any) => asInt(x, 0)).filter((n: number) => n > 0)
+        : [];
+
+      if (subjectIds.length === 0) {
+        return res.status(400).json({ message: "กรุณาส่ง subjectIds อย่างน้อย 1 รายการ" });
+      }
+
+      const sortBy = String(req.body?.sortBy || "TOTAL_DESC");
+      const includeRankNo = !!req.body?.includeRankNo;
+      const includeRoomSeat = !!req.body?.includeRoomSeat;
+      const includeAvgExplain = !!req.body?.includeAvgExplain;
+      const onlyCompleted = !!req.body?.onlyCompleted;
+
+      const limit = Math.min(Math.max(asInt(req.body?.limit, 0), 0), 5000);
+
+      const groups = normalizeGroups(req.body?.groups);
+
+      const pdf = await GradingReportService.generateRankingPdf({
+        campaignId,
+        subjectIds,
+        sortBy,
+        includeRankNo,
+        includeRoomSeat,
+        includeAvgExplain,
+        onlyCompleted,
+        limit,
+        groups,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="ranking-${campaignId}.pdf"`);
+      return res.status(200).send(pdf);
+    } catch (err: any) {
+      console.error(err);
+      return res.status(500).json({ message: err?.message || "Export ranking PDF ไม่สำเร็จ" });
     }
   }
 }

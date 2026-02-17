@@ -6,6 +6,9 @@ export class SubjectService {
     static getAllSubjects = async (_req: Request): Promise<Subject[]> => {
         return subjectRepo.getSubjectsWithQuestions();
     };
+    static  getQuestionByCamp = async (campaignId: number) => {
+        return subjectRepo.getQuestionByCamp(campaignId);
+    };
 
     static createSubject = async (req: Request): Promise<Subject> => {
         const { code, name, questions } = req.body as {

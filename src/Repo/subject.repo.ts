@@ -24,6 +24,15 @@ export interface SubjectQuestionAndSubject {
 
 }
 
+interface getQuestionByCamp extends RowDataPacket {
+  session_id: number;
+  subject_name: string;
+  subject_id: number;
+  question_no: number;
+  label: string
+}
+
+
 
 interface Row extends RowDataPacket {
   subject_id: number;
@@ -89,7 +98,7 @@ class SubjectRepo {
           code: r.subject_code,
           name: r.subject_name,
           questions: [],
-          full_score : r.full_score
+          full_score: r.full_score
         };
         subjects.push(subject);
       }
@@ -406,6 +415,19 @@ LIMIT 0, 25;`
     const sql = `SELECT sj.full_score from subjects sj where sj.id = ? for update`
     const [rows] = await dbClient.query<RowDataPacket[]>(sql, [subject_id]);
     return rows[0] as { full_score: number };
+
+  }
+
+
+  async getQuestionByCamp(campaign_id: number, dbClient: Pool | PoolConnection = this.pool): Promise<getQuestionByCamp[]> {
+    const sql = `select sess.id as session_id , s.name as subject_name , s.id as subject_id , sq.question_no , sq.label  FROM subject_questions sq 
+JOIN subjects s ON s.id = sq.subject_id
+JOIN session_subjects ss ON ss.subject_id = s.id
+JOIN sessions sess ON sess.id = ss.session_id
+WHERE sess.campaign_id = ?
+ORDER BY s.name , sq.question_no;`
+    const [rows] = await dbClient.query<RowDataPacket[]>(sql, [campaign_id]);
+    return rows as getQuestionByCamp[];
 
   }
 

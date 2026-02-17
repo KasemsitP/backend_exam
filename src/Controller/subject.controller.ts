@@ -81,6 +81,18 @@ static async getSubjectandQuestion(req: Request, res: Response) {
     res.status(400).json({ message: err?.message || "Failed to get subject and question" });
   }
 }
+static async getSubjectQuestionByCamp(req: Request, res: Response) {
+  try {
+    if (!req.params.campaign_id) {
+      return res.status(400).json({ message: "Missing campaign_id" });
+    }
+    const subject = await SubjectService.getQuestionByCamp(Number(req.params.campaign_id));
+    res.json(subject);
+  } catch (err: any) {
+    console.error("Error get subject and question:", err);
+    res.status(400).json({ message: err?.message || "Failed to get subject and question" });
+  }
+}
 
 
 }

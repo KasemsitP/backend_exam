@@ -34,7 +34,7 @@ export interface CampaignSubjectRow extends RowDataPacket {
   bag_no: number
 }
 
-export interface AllBags extends RowDataPacket{
+export interface AllBags extends RowDataPacket {
   bag_id: number
   bag_no: number
 }
@@ -46,9 +46,9 @@ export interface GraderBagSummaryRow extends RowDataPacket {
 }
 
 export interface GraderInfo extends RowDataPacket {
-  question_no : number
-  grader_order : number
-  full_name : string
+  question_no: number
+  grader_order: number
+  full_name: string
 }
 
 // แต่ละแถวในตาราง "ตามเล่ม"
@@ -160,6 +160,44 @@ export async function findQuestionCountForBagSubject(
   const qc = rows[0].question_count as number | null;
   return qc ?? null;
 }
+
+export async function findQuestionLabelForBagSubject(
+  conn: PoolConnection,
+  bagId: number,
+  subjectId: number
+): Promise<{ question_no: number; label: string }[] | null> {
+
+  const subjectCond = subjectId ? " AND ss.subject_id = ? " : "";
+
+  const sql = `
+    SELECT
+      sq.question_no,
+      sq.label
+    FROM bags b
+    JOIN sessions s
+      ON b.session_id = s.id
+    JOIN session_subjects ss
+      ON ss.session_id = s.id
+    JOIN subject_questions sq
+      ON sq.subject_id = ss.subject_id
+    WHERE b.id = ?
+    ${subjectCond}
+    ORDER BY sq.question_no ASC
+  `;
+
+  const params: any[] = [bagId];
+  if (subjectId) params.push(subjectId);
+
+  const [rows] = await conn.query<
+    (RowDataPacket & { question_no: number; label: string })[]
+  >(sql, params);
+
+  if (!rows.length) return null;
+
+  return rows;
+}
+
+
 //      AND ss.subject_id = ?
 
 /**

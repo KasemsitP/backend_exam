@@ -9,10 +9,13 @@ import {
   getUnlockCampaignByBagId,
   getInfomation,
   getAllBags,
-  getGraderInfo
+  getGraderInfo,
+  findQuestionLabelForBagSubject
 } from "../Repo/grading-report.repo";
 
 import passlistRepo, { PassListRow } from "../Repo/passlist.repo";
+
+import rankingRepo, { RankingRawRow } from "../Repo/ranking-report.repo";
 
 import {
   getGraderBagSummary,
@@ -22,6 +25,8 @@ import {
 import PDFDocument from "pdfkit";
 
 import path from "path";
+
+
 export interface BagQuestionScoreRow {
   questionNo: number;
   label: string;
@@ -40,10 +45,38 @@ export interface BagBookletQuestionBlock {
   questionCount: number;
   questions: BagQuestionScoreRow[];
 
+
 }
 
 type SortKey = "score" | "examCode" | "name";
 type SortOrder = "asc" | "desc";
+type GroupItem = { sessionId: number; subjectId: number; questionNo: number };
+type GroupRule = { title: string; items: GroupItem[] };
+type SortBy = "TOTAL_DESC" | "TOTAL_ASC" | "EXAMCODE_ASC" | "EXAMCODE_DESC" | "NAME_ASC" | "NAME_DESC";
+
+// Helper สร้าง Key สำหรับ Map
+function keyOf(sessionId: number, subjectId: number, questionNo: number) {
+  return `${sessionId}:${subjectId}:${questionNo}`;
+}
+
+// โครงสร้างข้อมูล User ระหว่างคำนวณ
+type RankingUserData = {
+  userCode: string;
+  title: string | null;
+  fullName: string;
+  roomCode: string | null;
+  seatCode: string | null;
+
+  totalScore: number;         // คะแนนรวมทั้งหมด (จาก subjectIds ที่เลือก)
+  groupScores: number[];      // คะแนนตามกลุ่ม Tie-break [กลุ่ม1, กลุ่ม2, ...]
+
+  isCompleted: boolean;       // ตรวจครบทุกข้อหรือไม่
+  scoresMap: Map<string, number | null>; // เก็บรายข้อไว้ lookup
+};
+
+function compareText(a: string, b: string) {
+  return a.localeCompare(b, "th");
+}
 
 
 function buildBookletBlocks(
@@ -156,6 +189,7 @@ export interface BagScoresResponse {
   subjectId: number;
   questionCount: number;
   booklets: BagBookletQuestionBlock[];
+  questionLabels: { question_no: number; label: string }[];
 }
 export interface BagSubjectScoreRow {
   bookletId: number;
@@ -181,7 +215,8 @@ export class GradingReportService {
     doc: any,
     info: any,
     booklets: BagBookletQuestionBlock[],
-    questionCount: number
+    questionCount: number,
+    questionLabels: { question_no: number; label: string }[]
   ) {
     const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
     const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
@@ -189,6 +224,10 @@ export class GradingReportService {
     const pageWidth = doc.page.width;
     const { left, right, bottom } = doc.page.margins;
     const tableWidth = pageWidth - left - right;
+
+    const labelMap = new Map(
+      questionLabels.map((q) => [q.question_no, q.label])
+    );
 
     // ========== ถุงมุมขวาบน ==========
     doc
@@ -231,7 +270,7 @@ export class GradingReportService {
     const startX = left;
     const startY = doc.y;
     let y = startY;
-    const rowH1 = 20;
+    const rowH1 = 42;
     const rowH2 = 18;
 
     const drawHeader = () => {
@@ -247,8 +286,19 @@ export class GradingReportService {
 
       for (let q = 1; q <= questionCount; q++) {
         const groupWidth = colsPerQuestion * cwScore;
+        const label = labelMap.get(q) ?? "";
         doc.rect(x, y, groupWidth, rowH1).stroke();
-        doc.text(`ข้อ ${q}`, x, y + 4, { width: groupWidth, align: "center" });
+        doc.text(
+          `ข้อ ${q}\n${label}`,
+          x,
+          y + 4,
+          {
+            width: groupWidth,
+            align: "center",
+            ellipsis: true,   // ตัด ...
+          }
+        );
+
         x += groupWidth;
       }
 
@@ -455,6 +505,10 @@ export class GradingReportService {
       const questionCount =
         (await findQuestionCountForBagSubject(conn, bagId, subjectId)) ?? 0;
 
+      const questionLabels = await findQuestionLabelForBagSubject(conn, bagId, subjectId)
+
+      console.log("questionLabels", questionLabels)
+
       // 2) raw รายเล่ม-รายข้อ
       const rawPerBooklet = await findBookletQuestionStatsForBag(
         conn,
@@ -476,6 +530,7 @@ export class GradingReportService {
         subjectId,
         questionCount,
         booklets,
+        questionLabels: questionLabels ?? [],
       };
     } finally {
       conn.release();
@@ -486,8 +541,23 @@ export class GradingReportService {
     const info = await getInfomation(bagId)
     console.log(info)
     // ดึงข้อมูลคะแนนตามถุง
-    const report = await GradingReportService.getBagScoresReport(bagId, 0);
-    const { booklets, questionCount } = report;
+    const reportDB = await GradingReportService.getBagScoresReport(bagId, 0);
+
+    const report = {
+      ...reportDB,
+      booklets: [...reportDB.booklets].sort((a, b) =>
+        a.examCode.localeCompare(b.examCode, undefined, { numeric: true })
+      ),
+    };
+
+
+
+    console.log(report)
+    const { booklets, questionCount, questionLabels } = report;
+
+    const labelMap = new Map(
+      questionLabels.map((q) => [q.question_no, q.label])
+    );
 
     const doc = new PDFDocument({
       size: "A4",
@@ -558,7 +628,7 @@ export class GradingReportService {
     const startX = left;
     const startY = doc.y;
     let y = startY;
-    const rowH1 = 20;
+    const rowH1 = 42;
     const rowH2 = 18;
 
     // ฟังก์ชันวาด header 2 ชั้น (แบบง่าย ๆ)
@@ -576,7 +646,18 @@ export class GradingReportService {
       for (let q = 1; q <= questionCount; q++) {
         const groupWidth = colsPerQuestion * cwScore;
         doc.rect(x, y, groupWidth, rowH1).stroke();
-        doc.text(`ข้อ ${q}`, x, y + 4, { width: groupWidth, align: "center" });
+        const label = labelMap.get(q) ?? "";
+
+        doc.text(
+          `ข้อ ${q}\n${label}`,
+          x,
+          y + 4,
+          {
+            width: groupWidth,
+            align: "center",
+            ellipsis: true,   // ตัด ...
+          }
+        );
         x += groupWidth;
       }
 
@@ -669,7 +750,7 @@ export class GradingReportService {
             val == null ? "" : Number(val).toFixed(1),
             x + 1,
             y + 3,
-            { width: cwScore - 2, align: "right" }
+            { width: cwScore - 2, align: "center" }
           );
           x += cwScore;
         });
@@ -681,7 +762,7 @@ export class GradingReportService {
       doc.rect(x, y, cwSum, rowHeight).stroke();
       doc.text(totalPerSubject.toFixed(1), x, y + 3, {
         width: cwSum,
-        align: "right",
+        align: "center",
       });
       x += cwSum;
 
@@ -689,7 +770,7 @@ export class GradingReportService {
       doc.rect(x, y, cwSum, rowHeight).stroke();
       doc.text(totalPerSubject.toFixed(1), x, y + 3, {
         width: cwSum,
-        align: "right",
+        align: "center",
       });
 
       y += rowHeight;
@@ -743,13 +824,14 @@ export class GradingReportService {
         const info = await getInfomation(bagId);
 
         const report = await GradingReportService.getBagScoresReport(bagId, 0);
-        const { booklets, questionCount } = report;
+        const { booklets, questionCount, questionLabels } = report;
 
         GradingReportService.drawBagScorePage(
           doc,
           info,
           booklets,
-          questionCount
+          questionCount,
+          questionLabels
         );
       }
 
@@ -767,7 +849,7 @@ export class GradingReportService {
     const conn = await DB.getInstance().getConnection();
     try {
       const info = await getInfomation(bagId); // มี bag_no, subject_name, year_be, site, ฯลฯ
-      const graderInfo = await getGraderInfo(conn , bagId , graderId)
+      const graderInfo = await getGraderInfo(conn, bagId, graderId)
       console.log(graderInfo)
       const rows: GraderBagSummaryRow[] = await getGraderBagSummary(
         conn,
@@ -1162,6 +1244,262 @@ export class GradingReportService {
     return pdfPromise;
   }
 
+  static async generateRankingPdf(opts: {
+    campaignId: number;
+    subjectIds: number[];
+    sortBy: string;
+    includeRankNo: boolean;
+    includeRoomSeat: boolean;
+    includeAvgExplain: boolean;
+    onlyCompleted: boolean;
+    limit: number;
+    groups: GroupRule[];
+  }): Promise<Buffer> {
+
+    // 1. ดึงข้อมูล Campaign และ คะแนนดิบ
+    const examInfo = await rankingRepo.getExamInfo(opts.campaignId);
+    const rawData = await rankingRepo.getRankingRawRows({
+      campaignId: opts.campaignId,
+      subjectIds: opts.subjectIds,
+    });
+
+    // 2. Aggregate Data by User
+    const usersMap = new Map<string, RankingUserData>();
+
+    for (const row of rawData) {
+      if (!usersMap.has(row.user_code)) {
+        usersMap.set(row.user_code, {
+          userCode: row.user_code,
+          title: row.title,
+          fullName: row.full_name,
+          roomCode: row.room_code,
+          seatCode: row.seat_code,
+          totalScore: 0,
+          groupScores: [],
+          isCompleted: true, // ตั้งต้น true, ถ้าเจอข้อไหนไม่ครบจะปรับเป็น false
+          scoresMap: new Map(),
+        });
+      }
+
+      const user = usersMap.get(row.user_code)!;
+      const key = keyOf(row.session_id, row.subject_id, row.question_no);
+
+      // เก็บลง Map รายข้อ
+      user.scoresMap.set(key, row.avg_score);
+
+      // เช็คว่าตรวจครบไหม (ถ้าข้อนี้ has_both=0 แสดงว่าไม่ครบ)
+      if (!row.has_both) {
+        user.isCompleted = false;
+      }
+
+      // บวกคะแนนเข้า Total Score (นับทุกข้อที่ Query มา)
+      // *สำคัญ* ตรงนี้คือคะแนนรวมจริง ไม่เกี่ยวกับกลุ่ม Tie-break
+      if (row.avg_score != null) {
+        user.totalScore += Number(row.avg_score);
+      }
+    }
+
+    // 3. คำนวณคะแนนตาม Group (Tie-breaker)
+    const groups = opts.groups || [];
+
+    for (const user of usersMap.values()) {
+      // วนลูปตามกลุ่มที่ User ตั้งไว้ (เช่น กฎหมายอาญา, กฎหมายแพ่ง)
+      const gScores: number[] = groups.map((group) => {
+        let sum = 0;
+        // รวมคะแนนเฉพาะข้อที่อยู่ในกลุ่มนี้
+        for (const item of group.items) {
+          const k = keyOf(item.sessionId, item.subjectId, item.questionNo);
+          const sc = user.scoresMap.get(k);
+          if (sc != null) sum += Number(sc);
+        }
+        return sum;
+      });
+
+      user.groupScores = gScores;
+    }
+
+    // 4. แปลงเป็น Array และ Filter
+    let rankingList = Array.from(usersMap.values());
+
+    if (opts.onlyCompleted) {
+      rankingList = rankingList.filter((u) => u.isCompleted);
+    }
+
+    // 5. Sorting Logic (หัวใจสำคัญ)
+    const sortBy = (opts.sortBy || "TOTAL_DESC") as SortBy;
+
+    rankingList.sort((a, b) => {
+      // 5.1 Sort ตามชื่อ หรือ รหัส (กรณีเลือก Sort แบบพิเศษ)
+      if (sortBy === "EXAMCODE_ASC") return a.userCode.localeCompare(b.userCode);
+      if (sortBy === "EXAMCODE_DESC") return b.userCode.localeCompare(a.userCode);
+      if (sortBy === "NAME_ASC") return a.fullName.localeCompare(b.fullName, "th");
+      if (sortBy === "NAME_DESC") return b.fullName.localeCompare(a.fullName, "th");
+
+      // 5.2 Sort ตามคะแนนรวม (TOTAL) เป็นหลัก
+      const dir = sortBy === "TOTAL_ASC" ? 1 : -1; // ปกติ DESC (-1)
+
+      if (Math.abs(a.totalScore - b.totalScore) > 0.0001) {
+        return (a.totalScore - b.totalScore) * dir;
+      }
+
+      // 5.3 Tie-break: คะแนนรวมเท่ากัน -> ดูคะแนน Group ตามลำดับ
+      for (let i = 0; i < groups.length; i++) {
+        const scoreA = a.groupScores[i];
+        const scoreB = b.groupScores[i];
+
+        if (Math.abs(scoreA - scoreB) > 0.0001) {
+          // คะแนนกลุ่มมาก = อันดับดีกว่า (ใช้ dir เหมือน Total)
+          return (scoreA - scoreB) * dir;
+        }
+      }
+
+      // 5.4 ยังเท่ากันอีก -> เรียงตามรหัสสอบ (น้อยไปมาก)
+      return a.userCode.localeCompare(b.userCode);
+    });
+
+    // 6. Limit Top N (ถ้ามี)
+    if (opts.limit > 0) {
+      rankingList = rankingList.slice(0, opts.limit);
+    }
+
+    // 7. Generate PDF
+    return GradingReportService.createRankingPdfDocument(rankingList, examInfo, opts);
+  }
+
+  // แยก function สร้าง PDF ออกมาเพื่อให้โค้ดสะอาด
+  // แยก function สร้าง PDF ออกมาเพื่อให้โค้ดสะอาด
+  private static createRankingPdfDocument(
+    data: RankingUserData[],
+    info: any,
+    opts: any
+  ): Promise<Buffer> {
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 40, bottom: 40, left: 40, right: 40 },
+      autoFirstPage: true,
+    });
+
+    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
+    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+
+    const buffers: Buffer[] = [];
+    doc.on("data", (b) => buffers.push(b));
+
+    const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+      doc.on("end", () => resolve(Buffer.concat(buffers)));
+      doc.on("error", reject);
+    });
+
+    // --- PDF Content Drawing ---
+    const drawHeaderInfo = () => {
+      doc.font(fontBold).fontSize(16).text("บัญชีรายชื่อเรียงลำดับคะแนน", { align: "center" });
+      doc.font(fontNormal).fontSize(12).text(
+        `สนามสอบ: ${info.site} (${info.campaign_size} ${info.year_be})`,
+        { align: "center" }
+      );
+      doc.moveDown(0.5);
+    };
+
+    drawHeaderInfo();
+
+    const pageWidth = doc.page.width - 80; // margins left+right
+    const colWidths = [
+      pageWidth * 0.1,  // ลำดับ
+      pageWidth * 0.2,  // รหัส
+      pageWidth * 0.4,  // ชื่อ
+      pageWidth * 0.15, // ห้อง/ที่นั่ง
+      pageWidth * 0.15  // คะแนนรวม
+    ];
+
+    const headers = ["ลำดับ", "รหัสประจำตัว", "ชื่อ-สกุล", "คะแนนรวม"];
+
+    // ฟังก์ชันวาดหัวตาราง (ใช้ซ้ำตอนขึ้นหน้าใหม่)
+    const drawTableHeader = (currentY: number) => {
+      let currentX = 40;
+      doc.font(fontBold).fontSize(12);
+
+      // วาดกรอบสี่เหลี่ยมรอบหัวตาราง
+      doc.lineWidth(0.5).rect(currentX, currentY, pageWidth, 20).stroke();
+
+      headers.forEach((h, i) => {
+        // วาดข้อความ
+        doc.text(h, currentX, currentY + 5, { width: colWidths[i], align: "center" });
+
+        // ขยับ X ไปจบที่ขอบขวาของคอลัมน์นี้
+        currentX += colWidths[i];
+
+        // วาดเส้นแนวตั้ง (ยกเว้นคอลัมน์สุดท้าย เพราะมีกรอบขวาอยู่แล้ว)
+        if (i < headers.length - 1) {
+          doc.moveTo(currentX, currentY)
+            .lineTo(currentX, currentY + 20)
+            .stroke();
+        }
+      });
+    };
+
+    // เริ่มวาดหัวตารางครั้งแรก
+    let y = doc.y;
+    drawTableHeader(y);
+    y += 20;
+
+    // Body
+    doc.font(fontNormal).fontSize(12);
+
+    data.forEach((row, idx) => {
+      // Check Page Break
+      if (y > doc.page.height - 50) {
+        doc.addPage();
+        drawHeaderInfo(); // วาดหัวกระดาษซ้ำ
+        y = doc.y;
+        drawTableHeader(y); // วาดหัวตารางซ้ำ
+        y += 20;
+        doc.font(fontNormal);
+      }
+
+      let x = 40;
+      // วาดกรอบสี่เหลี่ยมรอบแถว (Row Border)
+      doc.rect(x, y, pageWidth, 20).stroke();
+
+      // 1. ลำดับ
+      // if (opts.includeRankNo) {
+      //      doc.text(String(idx + 1), x, y + 4, { width: colWidths[0], align: "center" });
+      // }
+
+      doc.text(String(idx + 1), x, y + 4, { width: colWidths[0], align: "center" });
+      x += colWidths[0];
+      // เส้นคั่นแนวตั้งหลังจบช่องลำดับ
+      doc.moveTo(x, y).lineTo(x, y + 20).stroke();
+
+      // 2. รหัส
+      doc.text(row.userCode, x, y + 4, { width: colWidths[1], align: "center" });
+      x += colWidths[1];
+      // เส้นคั่นแนวตั้งหลังจบช่องรหัส
+      doc.moveTo(x, y).lineTo(x, y + 20).stroke();
+
+      // 3. ชื่อ
+      const name = `${row.title ? row.title : ''}${row.fullName}`;
+      doc.text(name, x + 5, y + 4, { width: colWidths[2] - 10, align: "left" });
+      x += colWidths[2];
+      // เส้นคั่นแนวตั้งหลังจบช่องชื่อ
+      doc.moveTo(x, y).lineTo(x, y + 20).stroke();
+
+      // // 4. ที่นั่ง
+      // if (opts.includeRoomSeat) {
+      //     doc.text(`${row.roomCode || '-'}/${row.seatCode || '-'}`, x, y + 4, { width: colWidths[3], align: "center" });
+      // }
+      // x += colWidths[3];
+      // // เส้นคั่นแนวตั้งหลังจบช่องที่นั่ง
+      // doc.moveTo(x, y).lineTo(x, y + 20).stroke();
+
+      // 5. คะแนนรวม (ไม่ต้องตีเส้นปิดท้าย เพราะมีกรอบ rect วาดไว้แล้ว)
+      doc.text(row.totalScore.toFixed(2), x, y + 4, { width: colWidths[4], align: "center" });
+
+      y += 20;
+    });
+
+    doc.end();
+    return pdfPromise;
+  }
 
 
 }

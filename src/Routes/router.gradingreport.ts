@@ -28,6 +28,17 @@ reportRouter.get(
   GradingReportController.exportPassListPdf
 );
 
+reportRouter.get(
+  "/campaigns/:campaignId/ranking/pdf",
+  GradingReportController.exportRankingPdf
+);
+
+// POST (แนะนำ)
+reportRouter.post(
+  "/campaigns/:campaignId/ranking/pdf",
+  GradingReportController.exportRankingPdfPost
+);
+
 
 
 export default reportRouter;
