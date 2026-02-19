@@ -273,15 +273,27 @@ SET is_active = 0 where id = ?;
     return rows[0]?.is_active ?? 0;
   }
 
-  async CampaignLists(
-    conn: PoolConnection
-  ): Promise<{ id: number; is_active: number }[]> {
-
-    const [rows] = await conn.query(
-      'SELECT id, is_active FROM exam_campaigns'
+  async CheckQRactive(
+    conn: PoolConnection,
+    campaign_id: number
+  ): Promise<boolean> {
+    const [rows]: any = await conn.query(
+      'SELECT qr_active FROM exam_campaigns WHERE id = ?',
+      [campaign_id]
     );
 
-    return rows as { id: number; is_active: number }[];
+    return rows[0]?.qr_active === 1 ;  
+  }
+
+  async CampaignLists(
+    conn: PoolConnection
+  ): Promise<{ id: number; is_active: number, qr_active: number }[]> {
+
+    const [rows] = await conn.query(
+      'SELECT id, is_active, qr_active FROM exam_campaigns'
+    );
+
+    return rows as { id: number; is_active: number, qr_active: number }[];
   }
 
   async fetchExamData(opts?: FetchOpts): Promise<ExamDataPayload> {
@@ -292,6 +304,26 @@ SET is_active = 0 where id = ?;
     ]);
     return { campaigns, sessions, subjects };
   }
+
+
+  async UpdateQRNoActive(conn: PoolConnection, campaign_id: number) {
+    const sql = `
+UPDATE exam_campaigns
+SET qr_active = 0 where id = ?;
+  `;
+
+    await conn.execute(sql, [campaign_id]);
+  }
+  async UpdateQRActive(conn: PoolConnection, campaign_id: number) {
+    const sql = `
+UPDATE exam_campaigns
+SET qr_active = 1 where id = ?;
+  `;
+
+    await conn.execute(sql, [campaign_id]);
+  }
+
+
 }
 
 const examDataRepo = new ExamDataRepo();

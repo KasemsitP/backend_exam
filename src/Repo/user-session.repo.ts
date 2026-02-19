@@ -10,6 +10,7 @@ interface UserSessionData {
   lastName: string;
   roomName: string | null;
   qr_payload: string | null;
+  subjectName: string;
 }
 
 export interface DbUserSessionRow extends RowDataPacket {

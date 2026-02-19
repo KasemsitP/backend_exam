@@ -142,7 +142,13 @@ LEFT JOIN subject_questions q ON s.id = q.subject_id
 WHERE s.id = ?
 GROUP BY s.id, s.code, s.name`
         const [rows] = await this.pool.execute<any[]>(sql, [subjectId]);
-        return rows[0] 
+        return rows[0]
+    }
+
+    async CheckHasSubjects(session_id: number,dbClient: DbClient = this.pool): Promise<boolean> {
+        const sql = `SELECT * FROM session_subjects where session_id = ?;`
+        const [rows] = await dbClient.execute<any[]>(sql, [session_id]);
+        return rows.length > 0;
     }
 }
 

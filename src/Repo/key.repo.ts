@@ -36,6 +36,8 @@ interface KeyData {
   active: number;
   order_num: number;
 }
+interface KeyinCamp extends RowDataPacket { id: number; active: number }
+
 
 class KeyRepo {
   private pool: Pool;
@@ -71,6 +73,8 @@ class KeyRepo {
     const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [campaignId]);
     return rows[0].count;
   }
+
+
 
 
 
@@ -206,6 +210,35 @@ class KeyRepo {
       key1_status: Boolean(result.key1_status),
       key2_status: Boolean(result.key2_status),
     };
+  }
+
+
+  async updateKeyStatusActive(campaign_id: number, dbClient: DbClient = this.pool): Promise<boolean> {
+    const sql = "UPDATE campaign_keys SET active = 1 WHERE campaign_id = ?";
+    const [result] = await dbClient.execute<any>(sql, [campaign_id]);
+    return result.affectedRows > 0;
+  }
+  async updateKeyStatusNonActive(campaign_id: number, dbClient: DbClient = this.pool): Promise<boolean> {
+    const sql = "UPDATE campaign_keys SET active = 0 WHERE campaign_id = ?";
+    const [result] = await dbClient.execute<any>(sql, [campaign_id]);
+    return result.affectedRows > 0;
+  }
+  async getKeyCamp(campaign_id: number, dbClient: DbClient = this.pool): Promise<KeyinCamp[]> {
+    const sql = "SELECT ck.id , ck.active from campaign_keys ck WHERE ck.campaign_id = ?;";
+    const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [campaign_id]);
+    if (rows.length === 0) {
+      throw new Error("ไม่พบคีย์สำหรับรอบสอบนี้");
+    }
+    return rows as KeyinCamp[];
+  }
+
+  async isKeyActive(id: number, dbClient: DbClient = this.pool): Promise<boolean> {
+    const sql = "SELECT active FROM campaign_keys WHERE id = ?";
+    const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [id]);
+    if (rows.length === 0) {
+      throw new Error("Key not found");
+    }
+    return rows[0].active === 1;
   }
 
 }

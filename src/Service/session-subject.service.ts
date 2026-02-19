@@ -16,19 +16,24 @@ export class sessionSubjectService {
             await connection.beginTransaction();
             console.log(payload);
 
+            const checkHasSubjects = await sessionSubjectRepo.CheckHasSubjects(payload.session_id, connection);
+            if (checkHasSubjects) {
+                throw new Error("วันที่สอบนี้มีวิชาอยู่แล้ว ไม่สามารถเพิ่มได้");
+            }
+
             const session = await sessionRepo.findById(payload.session_id, connection);
             if (!session) {
                 throw new Error(`Session with ID ${payload.session_id} not found.`);
             }
 
-            
-            const Qpayload = await sessionSubjectRepo.findNumberofQuestion(payload.subject_id)
-//            console.log(Qpayload.subject_id, payload.subject_id)
 
-            if(Qpayload.subject_id !== payload.subject_id ){
+            const Qpayload = await sessionSubjectRepo.findNumberofQuestion(payload.subject_id)
+            //            console.log(Qpayload.subject_id, payload.subject_id)
+
+            if (Qpayload.subject_id !== payload.subject_id) {
                 throw new Error("unmatach subject ID ")
             }
-            if(Qpayload.total_questions <= 0 ){
+            if (Qpayload.total_questions <= 0) {
                 throw new Error("no question found")
             }
 
@@ -50,7 +55,7 @@ export class sessionSubjectService {
 
             console.log("Start DateTime:", startDateTime);
             console.log("End DateTime:", endDateTime);
-        //    console.log(payload.question_count)
+            //    console.log(payload.question_count)
 
             const linkPayload: CreateSessionSubjectLinkPayload = {
                 session_id: payload.session_id,

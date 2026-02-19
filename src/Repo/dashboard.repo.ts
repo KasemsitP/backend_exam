@@ -332,28 +332,47 @@ ORDER BY s.exam_date, s.session_code;`
   // dashboard.repo.ts
 
 
-  async getScoreDistribution(campaign_id: number) {
+async getScoreDistribution(campaign_id: number) {
+    // แก้ไข SQL: คำนวณ Avg รายข้อก่อน แล้วค่อย Sum ทีหลัง
     const sql = `
-    WITH user_total AS (
+    WITH question_scores AS (
       SELECT
-        uc.id AS user_campaign_id,
         uc.user_id,
-        SUM(gs.score) AS total_score
-      FROM grading_scores gs
-      JOIN grading_slots s
-        ON gs.slot_id = s.id
-      JOIN booklets b
-        ON s.booklet_id = b.id
-      JOIN bags bg
-        ON b.bag_id = bg.id
-      JOIN sessions se
-        ON bg.session_id = se.id
-      JOIN user_sessions us
-        ON b.user_session_id = us.id
-      JOIN user_campaigns uc
-        ON us.user_campaign_id = uc.id
+        gs1.subject_id,
+        gs1.question_no,
+        -- สูตรเฉลี่ย: (คะแนนคน1 + คะแนนคน2) / 2
+        -- ถ้าต้องการ: ต้องมีครบ 2 คนถึงจะคิดคะแนน (INNER JOIN grading_scores ทั้งคู่)
+        (sc1.score + sc2.score) / 2 AS question_avg
+      FROM booklets b
+      JOIN bags bg ON b.bag_id = bg.id
+      JOIN sessions se ON bg.session_id = se.id
+      JOIN user_sessions us ON b.user_session_id = us.id
+      JOIN user_campaigns uc ON us.user_campaign_id = uc.id
+      
+      -- Join Grader 1
+      JOIN grading_slots gs1 
+        ON gs1.booklet_id = b.id 
+        AND gs1.grader_order = 1
+      JOIN grading_scores sc1 
+        ON sc1.slot_id = gs1.id
+
+      -- Join Grader 2
+      JOIN grading_slots gs2 
+        ON gs2.booklet_id = b.id 
+        AND gs2.grader_order = 2
+        AND gs2.subject_id = gs1.subject_id
+        AND gs2.question_no = gs1.question_no
+      JOIN grading_scores sc2 
+        ON sc2.slot_id = gs2.id
+
       WHERE se.campaign_id = ?
-      GROUP BY uc.id, uc.user_id
+    ),
+    user_total AS (
+      SELECT
+        user_id,
+        SUM(question_avg) AS total_score
+      FROM question_scores
+      GROUP BY user_id
     )
     SELECT total_score
     FROM user_total;
@@ -361,15 +380,14 @@ ORDER BY s.exam_date, s.session_code;`
 
     const [rows] = await this.pool.execute<ScoreTotalRow[]>(sql, [campaign_id]);
 
-    // ---------- config bucket ----------
-    const bucketSize = 5;     // 1-5, 6-10, ...
+    // ---------- ส่วน Config Bucket (Logic เดิม ใช้ต่อได้เลย) ----------
+    const bucketSize = 5;     
     const minScore = 1;
-    const maxScore = 150;     // แสดงถึง 150 ตามที่ต้องการ
+    const maxScore = 150;     
 
     let totalUsers = 0;
     let noScore = 0;
 
-    // map: bucketIndex -> count
     const bucketMap = new Map<number, number>();
 
     for (const row of rows) {
@@ -384,29 +402,25 @@ ORDER BY s.exam_date, s.session_code;`
 
       let s = Number(score);
 
-      // clamp คะแนนให้อยู่ในช่วง 1..150
+      // clamp
       if (s < minScore) s = minScore;
       if (s > maxScore) s = maxScore;
 
-      // แปลงเป็น index ของ bucket: 1-5 → idx 0, 6-10 → idx 1, ...
       const bucketIndex = Math.floor((s - minScore) / bucketSize);
       bucketMap.set(bucketIndex, (bucketMap.get(bucketIndex) ?? 0) + 1);
     }
 
-    // แปลง bucketMap -> array [{ label: "1-5", count }, ... , "146-150"]
     const buckets: { label: string; count: number }[] = [];
-
     const maxBucketIndex = Math.floor((maxScore - minScore) / bucketSize);
 
     for (let idx = 0; idx <= maxBucketIndex; idx++) {
-      const from = minScore + idx * bucketSize; // 1, 6, 11, ...
-      let to = from + bucketSize - 1;           // 5, 10, 15, ...
-      if (to > maxScore) to = maxScore;         // เผื่อกรณีท้ายสุด
+      const from = minScore + idx * bucketSize; 
+      let to = from + bucketSize - 1;           
+      if (to > maxScore) to = maxScore;         
 
       const label = `${from}-${to}`;
       const count = bucketMap.get(idx) ?? 0;
 
-      // ✅ ดันทุก bucket ออกไป แม้ count = 0
       buckets.push({ label, count });
     }
 
@@ -415,7 +429,7 @@ ORDER BY s.exam_date, s.session_code;`
       no_score: noScore,
       buckets,
     };
-  }
+}
   async getSubjectQuestionsByCampaign(
     campaign_id: number
   ): Promise<SubjectQuestionRow[]> {

@@ -127,7 +127,50 @@ SELECT
     ]);
     return rows;
   }
+
+
+  async findBookletsbyQRpayload(
+    conn: PoolConnection,
+    campaignId: number,
+    sessionId: number,
+    user_code: string,
+  ): Promise<DbBookletInBagRow | null> {
+    const sql = `
+SELECT
+        bk.id          AS booklet_id,
+        bk.session_id,
+        bk.bag_id,
+        bk.seq_in_bag,
+        bk.status,
+        us.qr_payload  AS qr_payload,
+        u.user_code,
+        u.full_name,
+        b.bag_no,
+        bk.created_at
+      FROM booklets bk
+      join bags b on b.id = bk.bag_id
+      JOIN user_sessions us
+        ON bk.user_session_id = us.id
+      JOIN user_campaigns uc
+        ON us.user_campaign_id = uc.id
+      JOIN users u
+        ON uc.user_id = u.id
+      WHERE us.campaign_id = ?
+        AND bk.session_id = ?
+        AND u.user_code = ?
+      ORDER BY bk.seq_in_bag ASC, bk.id ASC;
+    `;
+
+    const [rows] = await conn.execute<DbBookletInBagRow[]>(sql, [
+      campaignId,
+      sessionId,
+      user_code,
+    ]);
+    return rows[0] || null;
+  }
 }
+
+
 
 
 

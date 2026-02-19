@@ -48,6 +48,13 @@ VALUES
 
     return this.findById(newId, dbClient);
   }
+
+  async CheckActiveCamp (): Promise<boolean>  {
+    const sql = `SELECT * FROM exam_campaigns WHERE is_active = 1;`
+    const [rows] = await this.pool.execute<any[]>(sql);
+    return rows.length > 0;
+  }
+
   async update(
     payload: CreateCampaignPayload,
     dbClient: DbClient = this.pool

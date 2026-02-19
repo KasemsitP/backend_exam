@@ -1,7 +1,7 @@
 // src/Controller/gradingReport.controller.ts
 import { Request, Response } from "express";
 import { GradingReportService } from "../Service/grading-report.service";
-
+import { GraderReportService } from "../Service/grader-report.service";
 
 
 function asInt(v: any, fallback = 0) {
@@ -82,8 +82,8 @@ export class GradingReportController {
     }
   }
   static ReportScoreAllPDF = async (req: Request, res: Response) => {
-    const {campaign_id } = req.params
-   // console.log(campaign_id)
+    const { campaign_id } = req.params
+    // console.log(campaign_id)
     try {
       const buf = await GradingReportService.generateCampaignBagScoresPdf(Number(campaign_id));
       res.setHeader("Content-Type", "application/pdf");
@@ -99,12 +99,12 @@ export class GradingReportController {
   }
 
   static ReportScoreGraders = async (req: Request, res: Response) => {
-    const {bag_id , grader_id} = req.params
-   // console.log(campaign_id)
-       try {
+    const { bag_id, grader_id } = req.params
+    // console.log(campaign_id)
+    try {
       const bagId = Number(bag_id);
       const graderId = Number(grader_id);
-      console.log(bagId , graderId)
+      console.log(bagId, graderId)
 
       // ดึงชื่อผู้ตรวจจากฐานข้อมูลเอง
       const graderName = req.query.graderName as string || "................................";
@@ -121,11 +121,11 @@ export class GradingReportController {
         `inline; filename="grader-summary-bag-${bagId}-grader-${graderId}.pdf"`
       );
       res.send(pdfBuffer);
-    } catch (err : any) {
-       res.status(500).json({ message: "สร้าง PDF คะแนนผู้ตรวจไม่สำเร็จ" });
+    } catch (err: any) {
+      res.status(500).json({ message: "สร้าง PDF คะแนนผู้ตรวจไม่สำเร็จ" });
     }
   }
-    static async exportPassListPdf(req: Request, res: Response) {
+  static async exportPassListPdf(req: Request, res: Response) {
     try {
       const campaignId = asInt(req.params.campaignId, 0);
       if (!campaignId) {
@@ -252,6 +252,50 @@ export class GradingReportController {
     } catch (err: any) {
       console.error(err);
       return res.status(500).json({ message: err?.message || "Export ranking PDF ไม่สำเร็จ" });
+    }
+  }
+
+
+  static async exportBagGradersPdf(req: Request, res: Response) {
+    try {
+      const bagId = Number(req.params.bagId);
+      console.log("exportBagGradersPdf - bagId:", bagId, );
+      if (!bagId ) return res.status(400).json({ message: "bagId/subjectId ไม่ถูกต้อง" });
+
+      const pdf = await GraderReportService.generateBagGraderPdf(bagId);
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="bag-${bagId}-graders.pdf"`);
+      return res.status(200).send(pdf);
+    } catch (e: any) {
+      console.error(e);
+      return res.status(500).json({ message: e?.message ?? "export pdf failed" });
+    }
+  }
+  static async exportCampaignAllBagsGradersPdf(req: Request, res: Response) {
+    try {
+      const campaignId = asInt(req.params.campaignId, 0);
+
+      if (!campaignId) {
+        return res.status(400).json({ message: "campaignId ไม่ถูกต้อง" });
+      }
+
+      console.log(`Generating Grader Report for Campaign: ${campaignId}`);
+
+      // Call the optimized service method
+      const pdf = await GraderReportService.generateCampaignAllBagsGradersPdf(
+        campaignId
+      );
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="campaign-${campaignId}-allbags-graders.pdf"`
+      );
+      return res.status(200).send(pdf);
+    } catch (err: any) {
+      console.error("exportCampaignAllBagsGradersPdf Error:", err);
+      return res.status(500).json({ message: err?.message || "Export PDF ไม่สำเร็จ" });
     }
   }
 }

@@ -5,11 +5,16 @@ import { ApiCampaign, CreateCampaignPayload } from "../Repo/campaign.repo";
 
 export class campaignService {
   static create = async (payload: CreateCampaignPayload): Promise<ApiCampaign> => {
+    const checkCampActive = await campaignRepo.CheckActiveCamp()
+    if (checkCampActive) {
+      throw new Error("มีรอบสอบที่เปิดใช้งานอยู่แล้ว ไม่สามารถสร้างรอบสอบใหม่ได้");
+    }
+
     const newCampaign = await campaignRepo.create(payload);
     return newCampaign;
   };
 
-  static  update = async (payload: CreateCampaignPayload): Promise<ApiCampaign> => {
+  static update = async (payload: CreateCampaignPayload): Promise<ApiCampaign> => {
     const updatedCampaign = await campaignRepo.update(payload);
     return updatedCampaign;
   };
@@ -39,8 +44,8 @@ export class campaignService {
       connection.release();
     }
   };
-  static getIsUnlock = async(campaign_id :number) =>{
-    return  await campaignRepo.getIsDecrypted(campaign_id)
+  static getIsUnlock = async (campaign_id: number) => {
+    return await campaignRepo.getIsDecrypted(campaign_id)
   }
 }
 

@@ -23,6 +23,18 @@ export interface RawQuestionStatsRow extends RowDataPacket {
 
   final_score: number | null;
 }
+type BagBookletQuestionRow = {
+  questionNo: number;
+  label?: string;
+
+  grader1Score?: number | null;
+  grader2Score?: number | null;
+  finalScore?: number | null;
+
+  grader1Name?: string | null;
+  grader2Name?: string | null;
+};
+
 
 export interface CampaignSubjectRow extends RowDataPacket {
   campaign_id: number;
@@ -466,7 +478,7 @@ SELECT b.id as bag_id, b.bag_no
         FROM bags b
         JOIN sessions s ON b.session_id = s.id
         WHERE s.campaign_id = ?
-        ORDER BY s.id,b.bag_no;
+        ORDER BY s.day_no,b.bag_no;
   `;
 
   const [rows] = await pool.query<AllBags[]>(sql, [campaign_id]);

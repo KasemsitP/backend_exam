@@ -4,6 +4,7 @@ import crypto from "crypto";
 import userImportRepo from "../Repo/importuser.repo";
 import { PoolConnection } from "mysql2/promise";
 import dashboardRepo from "../Repo/dashboard.repo";
+import settingsRepo from "../Repo/Settings.repo";
 
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 const ALGORITHM = "aes-128-cbc";
@@ -312,11 +313,20 @@ export class keyService {
         ciphertext: string,
         campaignId: number
     ) => {
+         let flag_qr_inactive = false
         try {
+
+           
+            const isQrActive = await settingsRepo.QRStatus(campaignId);
+            if (!isQrActive) {
+                flag_qr_inactive = true;
+                throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            }
+            console.log("QR Status:", isQrActive);
             // 1. ดึงคีย์ (เหมือนเดิม)
             const keys = await keyRepo.findAllByCampaignId(campaignId);
             if (keys.length !== 2) {
-                throw new Error("Decryption failed: Campaign must have exactly 2 keys.");
+                throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากรอบสอบนี้ต้องมีคีย์ทั้งหมด 2 คีย์");
             }
 
             const [key1, key2] = keys;
@@ -353,9 +363,15 @@ export class keyService {
             const payload = JSON.parse(plainTextJsonString);
 
             return payload;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Service Error (Decryption):", error);
-            throw new Error("Decryption failed. Invalid payload or keys.");
+
+            if(flag_qr_inactive){
+                throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+
+            }
+
+            throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
         }
     };
 
@@ -390,11 +406,18 @@ export class keyService {
         campaignId: number,
         connection: PoolConnection
     ) => {
+         let flag_qr_inactive = false
         try {
+            const isQrActive = await settingsRepo.QRStatus(campaignId, connection);
+            if (!isQrActive) {
+                flag_qr_inactive = true;
+                throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            }
+            console.log("QR Status:", isQrActive);
             // 1. ดึงคีย์ (เหมือนเดิม)
-            const keys = await keyRepo.findAllByCampaignId(campaignId);
+            const keys = await keyRepo.findAllByCampaignId(campaignId, connection);
             if (keys.length !== 2) {
-                throw new Error("Decryption failed: Campaign must have exactly 2 keys.");
+                throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากรอบสอบนี้ต้องมีคีย์ทั้งหมด 2 คีย์");
             }
 
             const [key1, key2] = keys;
@@ -431,9 +454,15 @@ export class keyService {
             const payload = JSON.parse(plainTextJsonString);
 
             return payload;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Service Error (Decryption):", error);
-            throw new Error("Decryption failed. Invalid payload or keys.");
+
+            if(flag_qr_inactive){
+                throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+
+            }
+
+            throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
         }
     };
 

@@ -40,5 +40,12 @@ reportRouter.post(
 );
 
 
+reportRouter.get(
+  "/reports/campaigns/:bagId/score/pdf",
+  GradingReportController.exportBagGradersPdf
+);
+
+reportRouter.get("/reports/campaigns/:campaignId/bags/graders/pdf", GradingReportController.exportCampaignAllBagsGradersPdf);
+
 
 export default reportRouter;
