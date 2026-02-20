@@ -27,8 +27,8 @@ export class SeatPlanService {
             autoFirstPage: true,
         });
 
-        const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-        const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+        const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+        const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
 
         const chunks: Buffer[] = [];
         doc.on("data", (chunk) => chunks.push(chunk));
@@ -184,9 +184,8 @@ export class SeatPlanService {
             autoFirstPage: true,
         });
 
-        const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-        const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
-
+        const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+        const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
         const buffers: Buffer[] = [];
         doc.on("data", (b) => buffers.push(b));
         const pdfPromise = new Promise<Buffer>((resolve, reject) => {

@@ -218,8 +218,8 @@ export class GradingReportService {
     questionCount: number,
     questionLabels: { question_no: number; label: string }[]
   ) {
-    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+    const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+    const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
 
     const pageWidth = doc.page.width;
     const { left, right, bottom } = doc.page.margins;
@@ -565,9 +565,8 @@ export class GradingReportService {
       margins: { top: 40, bottom: 40, left: 40, right: 40 },
     });
 
-    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
-
+const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
     const chunks: Buffer[] = [];
     doc.on("data", (c) => chunks.push(c));
     const pdfPromise = new Promise<Buffer>((resolve, reject) => {
@@ -863,8 +862,8 @@ export class GradingReportService {
         margins: { top: 60, bottom: 50, left: 50, right: 50 },
       });
 
-      const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-      const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
 
       const chunks: Buffer[] = [];
       doc.on("data", (c) => chunks.push(c));
@@ -1120,9 +1119,8 @@ export class GradingReportService {
       autoFirstPage: true,
     });
 
-    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
-
+const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
     const buffers: Buffer[] = [];
     doc.on("data", (b) => buffers.push(b));
     const pdfPromise = new Promise<Buffer>((resolve, reject) => {
@@ -1379,9 +1377,8 @@ export class GradingReportService {
       autoFirstPage: true,
     });
 
-    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
-
+const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
     const buffers: Buffer[] = [];
     doc.on("data", (b) => buffers.push(b));
 

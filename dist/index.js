@@ -58,7 +58,10 @@ const router_settings_1 = __importDefault(require("./Routes/router.settings"));
 dotenv_1.default.config();
 exports.app = (0, express_1.default)();
 exports.app.set('trust proxy', 1);
-exports.app.use((0, compression_1.default)()); // ✅ ใส่ตรงนี้
+exports.app.use((0, compression_1.default)({
+    threshold: 0, //  บีบทุกอย่างทันที (เอาไว้เทสก่อน)
+}));
+exports.app.disable("x-powered-by");
 exports.app.use(express_1.default.json({ limit: "10mb" }));
 exports.app.use(express_1.default.urlencoded({ extended: true, limit: "10mb" }));
 exports.app.use((0, cookie_parser_1.default)(process.env.COOKIE_SECRET));
@@ -158,6 +161,10 @@ exports.app.use((0, express_session_1.default)({
 //   const token = (req as any).csrfToken();
 //   res.json({ csrfToken: token });
 // });
+exports.app.get("/big-test", (req, res) => {
+    const bigData = Array(10000).fill({ name: "test", value: "1234567890" });
+    res.json(bigData);
+});
 exports.app.use("/api/auth/", routes_auth_1.default);
 exports.app.use("/api", authentication_1.isAuthenticated);
 exports.app.use("/api/", router_user_1.default);
@@ -202,9 +209,26 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
 const frontendPath = path_1.default.join(process.cwd(), "client-dist");
 console.log("👉 frontendPath:", frontendPath, "exists:", fs_1.default.existsSync(frontendPath));
 // เสิร์ฟไฟล์ static: /assets/...
-exports.app.use(express_1.default.static(frontendPath, { index: false }));
+// app.use(express.static(frontendPath, { index: false }));
+// // SPA fallback (กัน /api และ /assets ไม่ให้โดนส่ง index.html)
+// app.get(/^\/(?!api\/|assets\/).*/, (req: Request, res: Response) => {
+//   res.sendFile(path.join(frontendPath, "index.html"));
+// });
+//prod
+exports.app.use(express_1.default.static(frontendPath, {
+    index: false,
+    maxAge: "1y",
+    immutable: true,
+    setHeaders: (res, filePath) => {
+        // กัน index.html ติด cache 1 ปี (เผื่อมีคนเรียกตรงๆ)
+        if (filePath.endsWith("index.html")) {
+            res.setHeader("Cache-Control", "no-cache");
+        }
+    },
+}));
 // SPA fallback (กัน /api และ /assets ไม่ให้โดนส่ง index.html)
-exports.app.get(/^\/(?!api\/|assets\/).*/, (req, res) => {
+exports.app.get(/^\/(?!api\/)(?!.*\.[a-zA-Z0-9]+$).*/, (req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path_1.default.join(frontendPath, "index.html"));
 });
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {

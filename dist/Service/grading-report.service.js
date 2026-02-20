@@ -118,8 +118,8 @@ class GradingReportService {
      */
     static drawBagScorePage(doc, info, booklets, questionCount, questionLabels) {
         var _a, _b, _c;
-        const fontNormal = path_1.default.join(__dirname, "../fonts/THSarabunNew.ttf");
-        const fontBold = path_1.default.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+        const fontNormal = path_1.default.resolve("fonts/THSarabunNew.ttf");
+        const fontBold = path_1.default.resolve("fonts/THSarabunNew-Bold.ttf");
         const pageWidth = doc.page.width;
         const { left, right, bottom } = doc.page.margins;
         const tableWidth = pageWidth - left - right;
@@ -366,8 +366,8 @@ class GradingReportService {
                 layout: "landscape", // 👈 ตรงนี้ทำให้เป็นแนวนอน
                 margins: { top: 40, bottom: 40, left: 40, right: 40 },
             });
-            const fontNormal = path_1.default.join(__dirname, "../fonts/THSarabunNew.ttf");
-            const fontBold = path_1.default.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+            const fontNormal = path_1.default.resolve("fonts/THSarabunNew.ttf");
+            const fontBold = path_1.default.resolve("fonts/THSarabunNew-Bold.ttf");
             const chunks = [];
             doc.on("data", (c) => chunks.push(c));
             const pdfPromise = new Promise((resolve, reject) => {
@@ -576,8 +576,8 @@ class GradingReportService {
                     layout: "portrait", // ใบตัวอย่างเป็นแนวตั้ง
                     margins: { top: 60, bottom: 50, left: 50, right: 50 },
                 });
-                const fontNormal = path_1.default.join(__dirname, "../fonts/THSarabunNew.ttf");
-                const fontBold = path_1.default.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+                const fontNormal = path_1.default.resolve("fonts/THSarabunNew.ttf");
+                const fontBold = path_1.default.resolve("fonts/THSarabunNew-Bold.ttf");
                 const chunks = [];
                 doc.on("data", (c) => chunks.push(c));
                 const pdfPromise = new Promise((resolve, reject) => {
@@ -773,8 +773,8 @@ class GradingReportService {
                 margins: { top: 40, bottom: 40, left: 48, right: 48 },
                 autoFirstPage: true,
             });
-            const fontNormal = path_1.default.join(__dirname, "../fonts/THSarabunNew.ttf");
-            const fontBold = path_1.default.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+            const fontNormal = path_1.default.resolve("fonts/THSarabunNew.ttf");
+            const fontBold = path_1.default.resolve("fonts/THSarabunNew-Bold.ttf");
             const buffers = [];
             doc.on("data", (b) => buffers.push(b));
             const pdfPromise = new Promise((resolve, reject) => {
@@ -970,8 +970,8 @@ class GradingReportService {
             margins: { top: 40, bottom: 40, left: 40, right: 40 },
             autoFirstPage: true,
         });
-        const fontNormal = path_1.default.join(__dirname, "../fonts/THSarabunNew.ttf");
-        const fontBold = path_1.default.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+        const fontNormal = path_1.default.resolve("fonts/THSarabunNew.ttf");
+        const fontBold = path_1.default.resolve("fonts/THSarabunNew-Bold.ttf");
         const buffers = [];
         doc.on("data", (b) => buffers.push(b));
         const pdfPromise = new Promise((resolve, reject) => {

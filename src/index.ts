@@ -45,7 +45,12 @@ import settingsRouter from './Routes/router.settings';
 dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
-app.use(compression()); // ✅ ใส่ตรงนี้
+app.use(
+  compression({
+    threshold: 0, //  บีบทุกอย่างทันที (เอาไว้เทสก่อน)
+  })
+);
+app.disable("x-powered-by");
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
@@ -67,6 +72,7 @@ if (!isProduction) {
     })
   );
 }
+
 
 const MySQLStore = MySQLStoreFactory(session);
 
@@ -167,7 +173,10 @@ app.use(
 //   res.json({ csrfToken: token });
 // });
 
-
+app.get("/big-test", (req, res) => {
+  const bigData = Array(10000).fill({ name: "test", value: "1234567890" });
+  res.json(bigData);
+});
 app.use("/api/auth/", authrouter)
 app.use("/api", isAuthenticated);
 app.use("/api/", userrouter)
@@ -213,10 +222,31 @@ const frontendPath = path.join(process.cwd(), "client-dist");
 console.log("👉 frontendPath:", frontendPath, "exists:", fs.existsSync(frontendPath));
 
 // เสิร์ฟไฟล์ static: /assets/...
-app.use(express.static(frontendPath, { index: false }));
+// app.use(express.static(frontendPath, { index: false }));
+
+
+// // SPA fallback (กัน /api และ /assets ไม่ให้โดนส่ง index.html)
+// app.get(/^\/(?!api\/|assets\/).*/, (req: Request, res: Response) => {
+//   res.sendFile(path.join(frontendPath, "index.html"));
+// });
+//prod
+app.use(
+  express.static(frontendPath, {
+    index: false,
+    maxAge: "1y",
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      // กัน index.html ติด cache 1 ปี (เผื่อมีคนเรียกตรงๆ)
+      if (filePath.endsWith("index.html")) {
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    },
+  })
+);
 
 // SPA fallback (กัน /api และ /assets ไม่ให้โดนส่ง index.html)
-app.get(/^\/(?!api\/|assets\/).*/, (req: Request, res: Response) => {
+app.get(/^\/(?!api\/)(?!.*\.[a-zA-Z0-9]+$).*/, (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "no-cache");
   res.sendFile(path.join(frontendPath, "index.html"));
 });
 

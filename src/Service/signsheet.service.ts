@@ -46,8 +46,8 @@ export class SignSheetService {
     });
 
     // Pre-load fonts (Load ครั้งเดียว)
-    const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-    const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+    const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+    const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
 
     // Setup Buffer Stream
     const chunks: Buffer[] = [];

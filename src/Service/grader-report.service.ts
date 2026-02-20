@@ -131,8 +131,8 @@ export class GraderReportService {
       const bufferPromise = this.streamToBuffer(doc);
 
       // Font Paths
-      const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-      const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
 
       // วาดหน้ากระดาษ
       this.drawBagGraderMatrixPage(doc, report, fontNormal, fontBold);
@@ -170,8 +170,8 @@ export class GraderReportService {
 
       const bufferPromise = this.streamToBuffer(doc);
       
-      const fontNormal = path.join(__dirname, "../fonts/THSarabunNew.ttf");
-      const fontBold = path.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+const fontNormal = path.resolve("fonts/THSarabunNew.ttf");
+const fontBold = path.resolve("fonts/THSarabunNew-Bold.ttf");
 
       // 2. วนลูปถุง ทีละใบ
       for (const b of bags) {

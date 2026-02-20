@@ -33,8 +33,8 @@ class SignSheetService {
                 bufferPages: true, // ช่วยเรื่อง Memory Management ของ PDFKit
             });
             // Pre-load fonts (Load ครั้งเดียว)
-            const fontNormal = path_1.default.join(__dirname, "../fonts/THSarabunNew.ttf");
-            const fontBold = path_1.default.join(__dirname, "../fonts/THSarabunNew-Bold.ttf");
+            const fontNormal = path_1.default.resolve("fonts/THSarabunNew.ttf");
+            const fontBold = path_1.default.resolve("fonts/THSarabunNew-Bold.ttf");
             // Setup Buffer Stream
             const chunks = [];
             doc.on("data", (chunk) => chunks.push(chunk));
