@@ -79,11 +79,28 @@ exports.app.use((0, cors_1.default)({
     credentials: true
 }));
 const MySQLStore = (0, express_mysql_session_1.default)(express_session_1.default);
+//dev
+// const sessionStore = new MySQLStore({
+//         host: process.env.host, 
+//         user: process.env.user,
+//         password: process.env.password,
+//         database: process.env.database,
+//   schema: {
+//     tableName: "auth_sessions",
+//     columnNames: {
+//       session_id: "sid",
+//       expires: "expires",
+//       data: "data",
+//     },
+//   },
+// });
+//prod
 const sessionStore = new MySQLStore({
-    host: process.env.host,
-    user: process.env.user,
-    password: process.env.password,
-    database: process.env.database,
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    port: Number(process.env.DB_PORT) || 3306,
     schema: {
         tableName: "auth_sessions",
         columnNames: {
