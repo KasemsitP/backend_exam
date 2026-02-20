@@ -167,7 +167,7 @@ exports.app.use((0, express_session_1.default)({
 // });
 exports.app.use("/api/auth/", routes_auth_1.default);
 // app.use(isAuthenticated)
-exports.app.use("/api/", authentication_1.isAuthenticated); // <--- แก้ตรงนี้ครับ
+//app.use("/api/", isAuthenticated)  // <--- แก้ตรงนี้ครับ
 exports.app.use("/api/", router_user_1.default);
 exports.app.use("/api/", router_bag_1.default);
 exports.app.use("/api/", router_exam_1.default);
@@ -221,11 +221,12 @@ exports.app.get("/api/debug-folder", (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// 🚨 แก้จุดที่ 1: เปลี่ยนมาใช้ __dirname และ '../client-dist'
-exports.app.use(express_1.default.static(path_1.default.join(__dirname, '../client-dist')));
-// 🚨 แก้จุดที่ 2: เปลี่ยนมาใช้ __dirname และ '../client-dist'
+const frontendPath = path_1.default.join(process.cwd(), 'client-dist');
+// แอบปริ้นต์ออกมาดูใน Log ของ Render เพื่อความสบายใจว่าหาเจอชัวร์
+console.log("👉 โฟลเดอร์หน้าเว็บตั้งอยู่ที่: ", frontendPath);
+exports.app.use(express_1.default.static(frontendPath));
 exports.app.get(/.*/, (req, res) => {
-    res.sendFile(path_1.default.join(__dirname, '../client-dist', 'index.html'));
+    res.sendFile(path_1.default.join(frontendPath, 'index.html'));
 });
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     yield DB_1.DB.testConnection();

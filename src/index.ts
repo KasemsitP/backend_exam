@@ -172,7 +172,7 @@ app.use(
 
 app.use("/api/auth/",authrouter)
 // app.use(isAuthenticated)
-app.use("/api/", isAuthenticated)  // <--- แก้ตรงนี้ครับ
+                       //app.use("/api/", isAuthenticated)  // <--- แก้ตรงนี้ครับ
 app.use("/api/",userrouter)
 app.use("/api/",bagRouter)
 app.use("/api/",examDataRouter)
@@ -227,12 +227,15 @@ app.get("/api/debug-folder", (req: Request, res: Response) => {
   }
 });
 
-// 🚨 แก้จุดที่ 1: เปลี่ยนมาใช้ __dirname และ '../client-dist'
-app.use(express.static(path.join(__dirname, '../client-dist')));
+const frontendPath = path.join(process.cwd(), 'client-dist');
 
-// 🚨 แก้จุดที่ 2: เปลี่ยนมาใช้ __dirname และ '../client-dist'
+// แอบปริ้นต์ออกมาดูใน Log ของ Render เพื่อความสบายใจว่าหาเจอชัวร์
+console.log("👉 โฟลเดอร์หน้าเว็บตั้งอยู่ที่: ", frontendPath); 
+
+app.use(express.static(frontendPath));
+
 app.get(/.*/, (req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, '../client-dist', 'index.html'));
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 app.listen(process.env.PORT, async () => {
