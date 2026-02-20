@@ -1,3 +1,4 @@
+import path from 'path';
 import express, { Express, Request, Response } from 'express';
 import "dotenv/config";
 import cookieParser from "cookie-parser";
@@ -127,6 +128,8 @@ const sessionStore = new MySQLStore({
 //prod
 
 
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(
   session({
     name: "sid",
@@ -136,13 +139,14 @@ app.use(
     store: sessionStore,
     cookie: {
       httpOnly: true,
-      secure: true,        // ต้อง true
-      sameSite: "none",    // ใช้ได้เมื่อ secure=true
+      // ถ้าอยู่บน Render (HTTPS) จะเป็น true, ถ้าเทสต์เครื่องตัวเอง (HTTP) จะเป็น false
+      secure: isProduction, 
+      // อยู่โดเมนเดียวกันแล้ว ใช้ lax ได้เลย (แถมปลอดภัยกว่าด้วย)
+      sameSite: "lax", 
       maxAge: 1000 * 60 * 60,
     },
   })
 );
-
 
 // app.use(session({
 //   secret: "your-secret-key",
@@ -207,6 +211,16 @@ app.get("/test",isAuthenticated, async (req, res) => {
     res.status(500).send({message: error.message});
   }
 });
+
+// ใช้ process.cwd() เพื่อให้อ้างอิงจาก root ของโปรเจกต์เสมอ จะได้ไม่หลงโฟลเดอร์
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+// 2. Catch-all Route: ถ้าเปิด URL อื่นๆ ที่ไม่ใช่ /api ให้ส่งหน้า index.html ไปให้
+// (ป้องกันปัญหาเวลากด Refresh หน้าเว็บแล้วขึ้น Cannot GET)
+app.get('*', (req: Request, res: Response) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+});
+// ---------------------------------------------------------
 
 
 
