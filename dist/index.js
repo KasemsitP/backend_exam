@@ -17,6 +17,7 @@ const express_1 = __importDefault(require("express"));
 require("dotenv/config");
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
+const compression_1 = __importDefault(require("compression"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const express_mysql_session_1 = __importDefault(require("express-mysql-session"));
 const express_session_1 = __importDefault(require("express-session"));
@@ -55,6 +56,7 @@ const router_settings_1 = __importDefault(require("./Routes/router.settings"));
 dotenv_1.default.config();
 exports.app = (0, express_1.default)();
 exports.app.set('trust proxy', 1);
+exports.app.use((0, compression_1.default)()); // ✅ ใส่ตรงนี้
 exports.app.use(express_1.default.json({ limit: "10mb" }));
 exports.app.use(express_1.default.urlencoded({ extended: true, limit: "10mb" }));
 exports.app.use((0, cookie_parser_1.default)(process.env.COOKIE_SECRET));

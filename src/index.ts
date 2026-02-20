@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import "dotenv/config";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import compression from "compression";
 import dotenv from "dotenv"
 import MySQLStoreFactory from "express-mysql-session";
 import session from 'express-session';
@@ -42,6 +43,7 @@ import settingsRouter from './Routes/router.settings';
 dotenv.config()
 export const app = express();
 app.set('trust proxy', 1);
+app.use(compression()); // ✅ ใส่ตรงนี้
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
