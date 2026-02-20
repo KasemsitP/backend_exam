@@ -2,7 +2,7 @@ import seatrepo from "../Repo/seat.repo"
 import { DB } from "../model/DB";
 import { UserData } from "../Repo/seat.repo";
 import { SeatAssignment } from "../Repo/seat.repo";
-import examRoomRepo from "../Repo/examRoom.repo";
+import examRoomRepo from "../Repo/examroom.repo";
 
 
 

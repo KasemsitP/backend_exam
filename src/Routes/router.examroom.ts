@@ -1,6 +1,6 @@
 // src/Routes/router.examRoom.ts
 import { Router } from "express";
-import { examRoomController } from "../Controller/examRoom.controller";
+import { examRoomController } from "../Controller/examroom.controller";
 
 const examRoomRouter = Router();
 

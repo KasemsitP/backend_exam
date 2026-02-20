@@ -4,7 +4,7 @@ import crypto from "crypto";
 import userImportRepo from "../Repo/importuser.repo";
 import { PoolConnection } from "mysql2/promise";
 import dashboardRepo from "../Repo/dashboard.repo";
-import settingsRepo from "../Repo/Settings.repo";
+import settingsRepo from "../Repo/settings.repo";
 
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 const ALGORITHM = "aes-128-cbc";

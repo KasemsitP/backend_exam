@@ -1,6 +1,6 @@
 // src/Controller/examRoom.controller.ts
 import { Request, Response } from "express";
-import { examRoomService } from "../Service/examRoom.service";
+import { examRoomService } from "../Service/examroom.service";
 
 export class examRoomController {
     // GET /api/exam-rooms/campaign/:campaignId

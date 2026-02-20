@@ -1,6 +1,6 @@
 // src/Service/examRoom.service.ts
 import { DB } from "../model/DB";
-import examRoomRepo, { ExamRoom } from "../Repo/examRoom.repo";
+import examRoomRepo, { ExamRoom } from "../Repo/examroom.repo";
 
 interface FrontendExamRoom {
   campaignId: number;

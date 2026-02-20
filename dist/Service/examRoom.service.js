@@ -16,7 +16,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.examRoomService = void 0;
 // src/Service/examRoom.service.ts
 const DB_1 = require("../model/DB");
-const examRoom_repo_1 = __importDefault(require("../Repo/examRoom.repo"));
+const examroom_repo_1 = __importDefault(require("../Repo/examroom.repo"));
 const toFrontendRoom = (dbRoom) => {
     return {
         campaignId: dbRoom.campaign_id,
@@ -35,7 +35,7 @@ examRoomService.getAllByCampaign = (campaignIdStr) => __awaiter(void 0, void 0, 
         const campaignId = Number(campaignIdStr);
         if (isNaN(campaignId))
             throw new Error("Invalid Campaign ID format");
-        const dbRooms = yield examRoom_repo_1.default.findByCampaignId(campaignId, connection);
+        const dbRooms = yield examroom_repo_1.default.findByCampaignId(campaignId, connection);
         return dbRooms.map(toFrontendRoom);
     }
     catch (error) {
@@ -58,7 +58,7 @@ examRoomService.saveRoom = (payload) => __awaiter(void 0, void 0, void 0, functi
             room_code: payload.roomCode,
             capacity: payload.capacity,
         };
-        yield examRoom_repo_1.default.upsert(roomData, connection);
+        yield examroom_repo_1.default.upsert(roomData, connection);
         // ส่งกลับเป็นรูป frontend
         return toFrontendRoom(roomData);
     }
@@ -77,7 +77,7 @@ examRoomService.deleteRoom = (campaignIdStr, roomCode) => __awaiter(void 0, void
         const campaignId = Number(campaignIdStr);
         if (isNaN(campaignId))
             throw new Error("Invalid Campaign ID");
-        yield examRoom_repo_1.default.delete(campaignId, roomCode, connection);
+        yield examroom_repo_1.default.delete(campaignId, roomCode, connection);
         return { campaignId: campaignIdStr, roomCode };
     }
     catch (error) {

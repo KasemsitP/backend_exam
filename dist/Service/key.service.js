@@ -19,7 +19,7 @@ const key_repo_1 = __importDefault(require("../Repo/key.repo"));
 const crypto_1 = __importDefault(require("crypto"));
 const importuser_repo_1 = __importDefault(require("../Repo/importuser.repo"));
 const dashboard_repo_1 = __importDefault(require("../Repo/dashboard.repo"));
-const Settings_repo_1 = __importDefault(require("../Repo/Settings.repo"));
+const settings_repo_1 = __importDefault(require("../Repo/settings.repo"));
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 const ALGORITHM = "aes-128-cbc";
 const PAYLOAD_ENCODING = "utf8";
@@ -244,7 +244,7 @@ keyService.runBulkEncryptionForSession = (campaignId) => __awaiter(void 0, void 
 keyService.decryptQrPayload = (ciphertext, campaignId) => __awaiter(void 0, void 0, void 0, function* () {
     let flag_qr_inactive = false;
     try {
-        const isQrActive = yield Settings_repo_1.default.QRStatus(campaignId);
+        const isQrActive = yield settings_repo_1.default.QRStatus(campaignId);
         if (!isQrActive) {
             flag_qr_inactive = true;
             throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
@@ -315,7 +315,7 @@ keyService.decrypteKeyForUnlock = (campaignId, connection) => __awaiter(void 0, 
 keyService.decryptQrPayloadConnection = (ciphertext, campaignId, connection) => __awaiter(void 0, void 0, void 0, function* () {
     let flag_qr_inactive = false;
     try {
-        const isQrActive = yield Settings_repo_1.default.QRStatus(campaignId, connection);
+        const isQrActive = yield settings_repo_1.default.QRStatus(campaignId, connection);
         if (!isQrActive) {
             flag_qr_inactive = true;
             throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");

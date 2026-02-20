@@ -15,7 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.seatService = exports.mockUsers = void 0;
 const seat_repo_1 = __importDefault(require("../Repo/seat.repo"));
 const DB_1 = require("../model/DB");
-const examRoom_repo_1 = __importDefault(require("../Repo/examRoom.repo"));
+const examroom_repo_1 = __importDefault(require("../Repo/examroom.repo"));
 function hasConflict(rows, i, j) {
     var _a, _b;
     const row = rows[i];
@@ -87,7 +87,7 @@ class seatService {
             // 1) ดึงคนที่ "ยังไม่ถูกจัด" ใน campaign นี้
             const users = yield seat_repo_1.default.GetAllUserByCampaign(Number(campaign_id));
             // 2) ดึงข้อมูลห้องใน campaign นี้ แล้วหาเฉพาะห้องที่เราจัดอยู่
-            const examrooms = yield examRoom_repo_1.default.findByCampaignIdCon(campaign_id);
+            const examrooms = yield examroom_repo_1.default.findByCampaignIdCon(campaign_id);
             const realRoom = examrooms.find(r => r.room_code === RoomCode);
             // กันกรณีหาไม่เจอ
             if (!realRoom) {

@@ -11,7 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.examRoomController = void 0;
-const examRoom_service_1 = require("../Service/examRoom.service");
+const examroom_service_1 = require("../Service/examroom.service");
 class examRoomController {
 }
 exports.examRoomController = examRoomController;
@@ -20,7 +20,7 @@ _a = examRoomController;
 examRoomController.getAllByCampaign = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { campaignId } = req.params;
-        const rooms = yield examRoom_service_1.examRoomService.getAllByCampaign(campaignId);
+        const rooms = yield examroom_service_1.examRoomService.getAllByCampaign(campaignId);
         res.status(200).json(rooms);
     }
     catch (error) {
@@ -43,7 +43,7 @@ examRoomController.save = (req, res) => __awaiter(void 0, void 0, void 0, functi
                 .send({ message: "Missing required fields (campaignId, roomCode, capacity)" });
         }
         console.log("asdasd");
-        const result = yield examRoom_service_1.examRoomService.saveRoom(payload);
+        const result = yield examroom_service_1.examRoomService.saveRoom(payload);
         res.status(201).json(result);
     }
     catch (error) {
@@ -59,7 +59,7 @@ examRoomController.delete = (req, res) => __awaiter(void 0, void 0, void 0, func
                 .status(400)
                 .send({ message: "Missing campaignId or roomCode" });
         }
-        const result = yield examRoom_service_1.examRoomService.deleteRoom(campaignId, roomCode);
+        const result = yield examroom_service_1.examRoomService.deleteRoom(campaignId, roomCode);
         res.status(200).json(result);
     }
     catch (error) {
