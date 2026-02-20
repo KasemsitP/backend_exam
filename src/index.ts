@@ -170,7 +170,8 @@ app.use(
 // });
 
 app.use("/api/auth/",authrouter)
-app.use(isAuthenticated)
+// app.use(isAuthenticated)
+app.use("/api/", isAuthenticated)  // <--- แก้ตรงนี้ครับ
 app.use("/api/",userrouter)
 app.use("/api/",bagRouter)
 app.use("/api/",examDataRouter)
@@ -209,17 +210,16 @@ app.get("/test", isAuthenticated, async (req: Request, res: Response) => {
   } catch (error : any) {
     res.status(500).send({message: error.message});
   }
-});;
+});
 
 // ใช้ process.cwd() เพื่อให้อ้างอิงจาก root ของโปรเจกต์เสมอ จะได้ไม่หลงโฟลเดอร์
-app.use(express.static(path.join(process.cwd(), 'public')));
+app.use(express.static(path.join(process.cwd(), 'client-dist')));
 
 // 2. Catch-all Route: ถ้าเปิด URL อื่นๆ ที่ไม่ใช่ /api ให้ส่งหน้า index.html ไปให้
 // (ป้องกันปัญหาเวลากด Refresh หน้าเว็บแล้วขึ้น Cannot GET)
 app.get(/.*/, (req: Request, res: Response) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+  res.sendFile(path.join(process.cwd(), 'client-dist', 'index.html'));
 });
-
 
 app.listen(process.env.PORT, async () => {
   await DB.testConnection();

@@ -165,7 +165,8 @@ exports.app.use((0, express_session_1.default)({
 //   res.json({ csrfToken: token });
 // });
 exports.app.use("/api/auth/", routes_auth_1.default);
-exports.app.use(authentication_1.isAuthenticated);
+// app.use(isAuthenticated)
+exports.app.use("/api/", authentication_1.isAuthenticated); // <--- แก้ตรงนี้ครับ
 exports.app.use("/api/", router_user_1.default);
 exports.app.use("/api/", router_bag_1.default);
 exports.app.use("/api/", router_exam_1.default);
@@ -205,13 +206,12 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
         res.status(500).send({ message: error.message });
     }
 }));
-;
 // ใช้ process.cwd() เพื่อให้อ้างอิงจาก root ของโปรเจกต์เสมอ จะได้ไม่หลงโฟลเดอร์
-exports.app.use(express_1.default.static(path_1.default.join(process.cwd(), 'public')));
+exports.app.use(express_1.default.static(path_1.default.join(process.cwd(), 'client-dist')));
 // 2. Catch-all Route: ถ้าเปิด URL อื่นๆ ที่ไม่ใช่ /api ให้ส่งหน้า index.html ไปให้
 // (ป้องกันปัญหาเวลากด Refresh หน้าเว็บแล้วขึ้น Cannot GET)
 exports.app.get(/.*/, (req, res) => {
-    res.sendFile(path_1.default.join(process.cwd(), 'public', 'index.html'));
+    res.sendFile(path_1.default.join(process.cwd(), 'client-dist', 'index.html'));
 });
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     yield DB_1.DB.testConnection();
