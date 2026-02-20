@@ -185,7 +185,7 @@ export class gradingRecheckService {
 
   static async listDisputedQuestions(
     thresholdDiff: number = 4,
-    campaign_id : number
+    campaign_id: number
   ): Promise<DisputedQuestionRow[]> {
     const conn = await DB.getInstance().getConnection();
     console.log(campaign_id)
