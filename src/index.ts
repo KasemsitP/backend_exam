@@ -216,11 +216,9 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 
 // 2. Catch-all Route: ถ้าเปิด URL อื่นๆ ที่ไม่ใช่ /api ให้ส่งหน้า index.html ไปให้
 // (ป้องกันปัญหาเวลากด Refresh หน้าเว็บแล้วขึ้น Cannot GET)
-app.get('*', (req: Request, res: Response) => {
+app.get(/.*/, (req: Request, res: Response) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
-// ---------------------------------------------------------
-
 
 
 app.listen(process.env.PORT, async () => {

@@ -210,10 +210,9 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
 exports.app.use(express_1.default.static(path_1.default.join(process.cwd(), 'public')));
 // 2. Catch-all Route: ถ้าเปิด URL อื่นๆ ที่ไม่ใช่ /api ให้ส่งหน้า index.html ไปให้
 // (ป้องกันปัญหาเวลากด Refresh หน้าเว็บแล้วขึ้น Cannot GET)
-exports.app.get('*', (req, res) => {
+exports.app.get(/.*/, (req, res) => {
     res.sendFile(path_1.default.join(process.cwd(), 'public', 'index.html'));
 });
-// ---------------------------------------------------------
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     yield DB_1.DB.testConnection();
     console.log("เซิร์ฟเวอร์เริ่มทำงานที่พอร์ต 8000");
