@@ -63,24 +63,18 @@ exports.app.use(express_1.default.json({ limit: "10mb" }));
 exports.app.use(express_1.default.urlencoded({ extended: true, limit: "10mb" }));
 exports.app.use((0, cookie_parser_1.default)(process.env.COOKIE_SECRET));
 exports.app.use(logging_1.Logging);
-const allowedOrigins = [
-    'http://localhost:5173', // frontend dev
-    'http://192.168.1.39:5173',
-    'https://exam-management-uyce.onrender.com', // frontend prod
-];
-exports.app.use((0, cors_1.default)({
-    origin: function (origin, callback) {
-        if (!origin)
-            return callback(null, true);
-        if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-        }
-        else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true
-}));
+// const allowedOrigins = [
+//   'http://localhost:5173',               // frontend dev
+//   'http://192.168.1.39:5173',
+//   'https://exam-management-uyce.onrender.com', // frontend prod
+// ];
+const isProduction = process.env.NODE_ENV === "production";
+if (!isProduction) {
+    exports.app.use((0, cors_1.default)({
+        origin: ["http://localhost:5173", "http://192.168.1.39:5173"],
+        credentials: true,
+    }));
+}
 const MySQLStore = (0, express_mysql_session_1.default)(express_session_1.default);
 //dev
 // const sessionStore = new MySQLStore({
@@ -129,7 +123,6 @@ const sessionStore = new MySQLStore({
 //   })
 // );
 //prod
-const isProduction = process.env.NODE_ENV === "production";
 exports.app.use((0, express_session_1.default)({
     name: "sid",
     secret: process.env.SESSION_SECRET || "dev-secret",
@@ -165,11 +158,8 @@ exports.app.use((0, express_session_1.default)({
 //   const token = (req as any).csrfToken();
 //   res.json({ csrfToken: token });
 // });
-exports.app.use('/assets', express_1.default.static(path_1.default.join(process.cwd(), 'client-dist', 'assets')));
-exports.app.use(express_1.default.static(path_1.default.join(process.cwd(), 'client-dist')));
 exports.app.use("/api/auth/", routes_auth_1.default);
-// app.use(isAuthenticated)
-//app.use("/api/", isAuthenticated)  // <--- แก้ตรงนี้ครับ
+exports.app.use(authentication_1.isAuthenticated);
 exports.app.use("/api/", router_user_1.default);
 exports.app.use("/api/", router_bag_1.default);
 exports.app.use("/api/", router_exam_1.default);
@@ -209,24 +199,13 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
         res.status(500).send({ message: error.message });
     }
 }));
-exports.app.get("/api/debug-folder", (req, res) => {
-    try {
-        const rootPath = process.cwd();
-        // อ่านรายชื่อไฟล์และโฟลเดอร์ทั้งหมดในโปรเจกต์
-        const files = fs_1.default.readdirSync(rootPath);
-        res.json({
-            currentPath: rootPath,
-            filesFound: files
-        });
-    }
-    catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-exports.app.get(/.*/, (req, res) => {
-    // ใช้ path.resolve เพื่อให้ได้พาธแบบ Absolute ที่แน่นอนที่สุด
-    const indexPath = path_1.default.resolve(process.cwd(), 'client-dist', 'index.html');
-    res.sendFile(indexPath);
+const frontendPath = path_1.default.join(process.cwd(), "client-dist");
+console.log("👉 frontendPath:", frontendPath, "exists:", fs_1.default.existsSync(frontendPath));
+// เสิร์ฟไฟล์ static: /assets/...
+exports.app.use(express_1.default.static(frontendPath, { index: false }));
+// SPA fallback (กัน /api และ /assets ไม่ให้โดนส่ง index.html)
+exports.app.get(/^\/(?!api\/|assets\/).*/, (req, res) => {
+    res.sendFile(path_1.default.join(frontendPath, "index.html"));
 });
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     yield DB_1.DB.testConnection();

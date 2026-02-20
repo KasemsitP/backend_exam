@@ -50,25 +50,23 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
 app.use(Logging);
-const allowedOrigins = [
-  'http://localhost:5173',               // frontend dev
+// const allowedOrigins = [
+//   'http://localhost:5173',               // frontend dev
 
-  'http://192.168.1.39:5173',
-  'https://exam-management-uyce.onrender.com', // frontend prod
-];
+//   'http://192.168.1.39:5173',
+//   'https://exam-management-uyce.onrender.com', // frontend prod
+// ];
 
-app.use(cors({
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    if (!origin) return callback(null, true);
+const isProduction = process.env.NODE_ENV === "production";
 
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
-}));
+if (!isProduction) {
+  app.use(
+    cors({
+      origin: ["http://localhost:5173", "http://192.168.1.39:5173"],
+      credentials: true,
+    })
+  );
+}
 
 const MySQLStore = MySQLStoreFactory(session);
 
@@ -128,7 +126,6 @@ const sessionStore = new MySQLStore({
 //prod
 
 
-const isProduction = process.env.NODE_ENV === "production";
 
 app.use(
   session({
@@ -170,12 +167,9 @@ app.use(
 //   res.json({ csrfToken: token });
 // });
 
-app.use('/assets', express.static(path.join(process.cwd(), 'client-dist', 'assets')));
-app.use(express.static(path.join(process.cwd(), 'client-dist')))
 
 app.use("/api/auth/", authrouter)
-// app.use(isAuthenticated)
-//app.use("/api/", isAuthenticated)  // <--- แก้ตรงนี้ครับ
+app.use(isAuthenticated)
 app.use("/api/", userrouter)
 app.use("/api/", bagRouter)
 app.use("/api/", examDataRouter)
@@ -215,26 +209,15 @@ app.get("/test", isAuthenticated, async (req: Request, res: Response) => {
     res.status(500).send({ message: error.message });
   }
 });
+const frontendPath = path.join(process.cwd(), "client-dist");
+console.log("👉 frontendPath:", frontendPath, "exists:", fs.existsSync(frontendPath));
 
-app.get("/api/debug-folder", (req: Request, res: Response) => {
-  try {
-    const rootPath = process.cwd();
-    // อ่านรายชื่อไฟล์และโฟลเดอร์ทั้งหมดในโปรเจกต์
-    const files = fs.readdirSync(rootPath);
-    res.json({
-      currentPath: rootPath,
-      filesFound: files
-    });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// เสิร์ฟไฟล์ static: /assets/...
+app.use(express.static(frontendPath, { index: false }));
 
-
-app.get(/.*/, (req: Request, res: Response) => {
-  // ใช้ path.resolve เพื่อให้ได้พาธแบบ Absolute ที่แน่นอนที่สุด
-  const indexPath = path.resolve(process.cwd(), 'client-dist', 'index.html');
-  res.sendFile(indexPath);
+// SPA fallback (กัน /api และ /assets ไม่ให้โดนส่ง index.html)
+app.get(/^\/(?!api\/|assets\/).*/, (req: Request, res: Response) => {
+  res.sendFile(path.join(frontendPath, "index.html"));
 });
 
 app.listen(process.env.PORT, async () => {
