@@ -118,7 +118,7 @@ exports.app.use((0, express_session_1.default)({
     cookie: {
         httpOnly: true,
         secure: true, // ต้อง true
-        //    sameSite: "none",    // ใช้ได้เมื่อ secure=true
+        sameSite: "none", // ใช้ได้เมื่อ secure=true
         maxAge: 1000 * 60 * 60,
     },
 }));
