@@ -49,20 +49,16 @@ class BagHandoverController {
         return __awaiter(this, void 0, void 0, function* () {
             var _a, _b;
             try {
-                const { campaignId, sessionId, bagNo, graderId, operatorId, note, } = (_a = req.body) !== null && _a !== void 0 ? _a : {};
-                if (!campaignId ||
-                    !sessionId ||
-                    !bagNo ||
-                    !graderId ||
-                    !operatorId) {
+                const { campaignId, bagId, // 👈 เปลี่ยนจาก bagNo → bagId
+                graderId, operatorId, note, } = (_a = req.body) !== null && _a !== void 0 ? _a : {};
+                if (!campaignId || !bagId || !graderId || !operatorId) {
                     return res
                         .status(400)
                         .json({ message: "Missing required fields for check-in" });
                 }
                 yield baghandover_service_1.BagHandoverService.checkIn({
                     campaignId,
-                    sessionId: Number(sessionId),
-                    bagNo: Number(bagNo),
+                    bagId: Number(bagId),
                     graderId: Number(graderId),
                     operatorId: Number(operatorId),
                     note,
@@ -75,27 +71,18 @@ class BagHandoverController {
             }
         });
     }
-    /**
-     * POST /api/bag-handover/check-out
-     * body:
-     * {
-     *   campaignId: "camp-1",
-     *   sessionId: 10,
-     *   bagNo: 3,
-     *   operatorId: 1,
-     *   note?: "..."
-     * }
-     */
     static checkOut(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             var _a, _b;
+            console.log(req.body);
             try {
-                const { campaignId, sessionId, bagNo, operatorId, note } = (_a = req.body) !== null && _a !== void 0 ? _a : {};
-                if (!campaignId || !sessionId || !bagNo || !operatorId) {
+                const { campaignId, bagNo, operatorId, note, sessionId } = (_a = req.body) !== null && _a !== void 0 ? _a : {};
+                if (!campaignId || !bagNo || !operatorId || !sessionId) {
                     return res
                         .status(400)
                         .json({ message: "Missing required fields for check-out" });
                 }
+                console.log(bagNo, campaignId, operatorId, sessionId);
                 yield baghandover_service_1.BagHandoverService.checkOut({
                     campaignId,
                     sessionId: Number(sessionId),

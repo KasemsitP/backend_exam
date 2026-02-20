@@ -16,22 +16,30 @@ class CampaignRepo {
     }
     create(payload_1) {
         return __awaiter(this, arguments, void 0, function* (payload, dbClient = this.pool) {
+            console.log(payload);
             const sql = `
-      INSERT INTO exam_campaigns 
-        (code, name, start_date, end_date, is_active, note) 
-      VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO exam_campaigns
+  (year_be, site, campaign_size, name, is_active)
+VALUES
+  (?, ?, ?, ?, ?);
     `;
             const params = [
-                payload.code,
+                payload.year_be,
+                payload.site,
+                payload.campaign_size,
                 payload.name,
-                payload.start_date,
-                payload.end_date,
-                payload.is_active,
-                payload.note,
+                payload.is_active ? 1 : 1,
             ];
-            const [result] = yield dbClient.execute(sql, params); // 👈 ใช้ dbClient
+            const [result] = yield dbClient.execute(sql, params);
             const newId = result.insertId;
-            return this.findById(newId, dbClient); // 👈 ส่ง dbClient ต่อ
+            return this.findById(newId, dbClient);
+        });
+    }
+    CheckActiveCamp() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `SELECT * FROM exam_campaigns WHERE is_active = 1;`;
+            const [rows] = yield this.pool.execute(sql);
+            return rows.length > 0;
         });
     }
     update(payload_1) {
@@ -93,6 +101,29 @@ class CampaignRepo {
             }
             const newCampaign = yield this.create(payload, dbClient);
             return { campaign: newCampaign, created: true };
+        });
+    }
+    getIsDecrypted(campaign_id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT e.is_unlock
+    FROM exam_campaigns e
+    WHERE e.id = ?
+    LIMIT 1
+  `;
+            const [rows] = yield this.pool.execute(sql, [campaign_id]);
+            if (!rows.length) {
+                throw new Error("ไม่พบ campaign");
+            }
+            return rows[0].is_unlock === 1;
+        });
+    }
+    unlockCampaign(campaign_id_1) {
+        return __awaiter(this, arguments, void 0, function* (campaign_id, dbClient = this.pool) {
+            const sql = `            UPDATE exam_campaigns
+             SET is_unlock = 1
+             WHERE id = ?`;
+            yield dbClient.execute(sql, [campaign_id]);
         });
     }
 }

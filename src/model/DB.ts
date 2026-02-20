@@ -14,11 +14,23 @@ export class DB {
       //   password: "root",
       //   database: "Exam",
       // });
+
+      // DB.instance = mysql.createPool({
+      //   host: process.env.host, 
+      //   user: process.env.user,
+      //   password: process.env.password,
+      //   database: process.env.database,
+      // });
+      console.log(process.env.DB_HOST, process.env.DB_USER, process.env.DB_PASS, process.env.DB_NAME, process.env.DB_PORT);
       DB.instance = mysql.createPool({
-        host: process.env.host, 
-        user: process.env.user,
-        password: process.env.password,
-        database: process.env.database,
+        host: process.env.DB_HOST,    // จะดึงค่า 35.240.222.183 มาอัตโนมัติ
+        user: process.env.DB_USER,
+        password: process.env.DB_PASS,
+        database: process.env.DB_NAME,
+        port: Number(process.env.DB_PORT) || 3306,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
       });
       // DB.instance = mysql.createPool({
       //   host: "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",

@@ -4,7 +4,7 @@ exports.checkRole = checkRole;
 function checkRole(requiredRole) {
     return (req, res, next) => {
         var _a;
-        const userRole = (_a = req.session.userData) === null || _a === void 0 ? void 0 : _a.role; // สมมติเก็บ role ไว้ใน session
+        const userRole = (_a = req.session.roles) === null || _a === void 0 ? void 0 : _a[0];
         if (!userRole) {
             return res.status(401).send({ message: "ไม่มีสิทธิ์" });
         }

@@ -110,12 +110,15 @@ export class userImportService {
           row["prefix"];
 
         const firstName =
+          row.firstname ??
           row.first_name ??
           row.firstName ??
           row["ชื่อ"] ??
           row["first name"];
 
+
         const lastName =
+          row.lastname ??
           row.last_name ??
           row.lastName ??
           row["นามสกุล"] ??
@@ -143,8 +146,8 @@ export class userImportService {
 
         // 4) birth_date (พยายาม normalize เป็น YYYY-MM-DD ถ้า parse ได้)
         const birthDateRaw =
+          row.dateofbirth ??        
           row.birth_date ??
-          row["birth_date"] ??
           row["birth date"] ??
           row["วันเกิด"] ??
           row["วัน/เดือน/ปีเกิด"] ??

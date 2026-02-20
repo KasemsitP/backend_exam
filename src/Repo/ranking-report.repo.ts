@@ -55,7 +55,6 @@ class RankingReportRepo {
         u.full_name,
         u.title,
         uc.room_code,
-        uc.seat_code,
         gs1.subject_id,
         gs1.question_no,
         

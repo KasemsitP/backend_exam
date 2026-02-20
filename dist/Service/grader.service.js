@@ -32,10 +32,14 @@ graderService.getAllByCampaignId = (campaignIdNumeric) => __awaiter(void 0, void
             session_id: r.session_id,
             session_code: r.session_code,
             exam_date: r.exam_date,
+            grader_name: r.grader_name,
             subject_id: r.subject_id,
             subject_code: r.subject_code,
             subject_name: r.subject_name,
+            subject_question_id: r.subject_question_id,
             question_no: r.question_no,
+            question_label: r.question_label,
+            max_score: r.max_score
         }));
         return assignments;
     }
@@ -47,16 +51,18 @@ graderService.getAllByCampaignId = (campaignIdNumeric) => __awaiter(void 0, void
         connection.release();
     }
 });
-// ---- ด้านล่างยังเก็บ create/update/delete เดิมไว้ได้เหมือนเดิม ----
+graderService.getAssignmentByAccountId = (campaign_id, account_id) => __awaiter(void 0, void 0, void 0, function* () {
+    const result = yield grader_repo_1.default.getAssignmentByAccountId(campaign_id, account_id);
+    return result;
+});
 graderService.create = (payload) => __awaiter(void 0, void 0, void 0, function* () {
+    var _b;
     const connection = yield DB_1.DB.getInstance().getConnection();
     try {
         yield connection.beginTransaction();
         const result = yield grader_repo_1.default.create({
             campaign_id: payload.campaignId,
-            name: payload.name,
-            active: payload.active,
-            account_id: payload.accountId,
+            account_id: (_b = payload.accountId) !== null && _b !== void 0 ? _b : null, // << สำคัญ
         }, connection);
         yield connection.commit();
         return result;
@@ -76,7 +82,6 @@ graderService.updateById = (id, payload) => __awaiter(void 0, void 0, void 0, fu
         yield connection.beginTransaction();
         const result = yield grader_repo_1.default.updateById(id, {
             name: payload.name,
-            active: payload.active,
             account_id: payload.accountId,
         }, connection);
         yield connection.commit();

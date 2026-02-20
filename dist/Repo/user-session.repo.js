@@ -25,12 +25,12 @@ class UserSessionsRepo {
                 //
                 const sql = `
 SELECT
-    us.id            AS user_session_id,
-    u.id             AS user_id,
-    u.user_code      AS userCode,
-    u.full_name      AS firstName,
-    ''               AS lastName,
-    er.room_code     AS roomName,    -- ใช้ room_code เป็นชื่อห้อง (ถ้ายังไม่มีคอลัมน์ name)
+    us.id        AS user_session_id,
+    u.id         AS user_id,
+    u.user_code  AS userCode,
+    u.full_name  AS firstName,
+    ''           AS lastName,
+    er.room_code AS roomName,
     us.qr_payload
 FROM user_sessions us
 JOIN user_campaigns uc
@@ -38,9 +38,10 @@ JOIN user_campaigns uc
 JOIN users u
   ON uc.user_id = u.id
 LEFT JOIN exam_rooms er
-  ON er.session_id = us.session_id
- AND er.room_code  = us.room_code
+  ON er.room_code = uc.room_code
+ AND er.campaign_id = uc.campaign_id
 WHERE us.session_id = ?;
+
     `;
                 const [rows] = (yield connection.execute(sql, [sessionId]));
                 return rows;
@@ -92,18 +93,69 @@ LIMIT 1;
             console.log(userCode);
             const sql = `
 SELECT 
-    us.id AS user_session_id,
-    u.id AS user_id,
-    u.user_code AS userCode,
-    u.full_name AS firstName,
-    '' AS lastName,
-    us.room_code AS roomName,
-    us.qr_payload
+    us.id              AS user_session_id,
+    u.id               AS user_id,
+    u.user_code        AS userCode,
+    u.first_name       AS firstName,
+    u.last_name        AS lastName,
+    uc.room_code       AS roomName,
+    us.qr_payload,
+    uc.row_no as rowNo
 FROM user_sessions us
-JOIN user_campaigns uc ON us.user_campaign_id = uc.id
-JOIN users u ON uc.user_id = u.id
+JOIN user_campaigns uc 
+  ON us.user_campaign_id = uc.id
+  AND us.campaign_id = uc.campaign_id
+JOIN users u 
+  ON uc.user_id = u.id
 WHERE 
-    u.user_code = ? AND us.session_id = ?
+    u.user_code =?
+    AND us.session_id = ?
+LIMIT 1;;
+`;
+            try {
+                const [rows] = (yield connection.execute(sql, [userCode, sessionId]));
+                return rows[0];
+            }
+            catch (error) {
+                console.error("Repo Error (findByUserCodeAndSessionId):", error);
+                throw error;
+            }
+        });
+    }
+    findByUserCodeAndSessionIdForQRcode(userCode, sessionId, connection) {
+        return __awaiter(this, void 0, void 0, function* () {
+            console.log(userCode);
+            const sql = `
+SELECT 
+    us.id              AS userSessionId,
+    u.id               AS userId,
+    u.user_code        AS userCode,
+    u.first_name       AS firstName,
+    u.last_name        AS lastName,
+    uc.room_code       AS roomName,
+    uc.row_no          AS rowNo,
+
+    s.session_code,
+
+    sub.name           AS subjectName,
+    ec.name            AS campaignName
+FROM user_sessions us
+JOIN user_campaigns uc 
+  ON us.user_campaign_id = uc.id
+  AND us.campaign_id = uc.campaign_id
+JOIN users u 
+  ON uc.user_id = u.id
+JOIN sessions s 
+  ON s.id = us.session_id
+JOIN session_subjects sj 
+  ON sj.session_id = s.id
+JOIN subjects sub 
+  ON sub.id = sj.subject_id
+JOIN exam_campaigns ec 
+  ON ec.id = us.campaign_id
+WHERE 
+    u.user_code = ?
+    AND us.session_id = ?
 LIMIT 1;
 `;
             try {

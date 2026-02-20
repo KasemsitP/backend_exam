@@ -16,9 +16,6 @@ class keyController {
 }
 exports.keyController = keyController;
 _a = keyController;
-/**
- * [ GET (เหมือนเดิม) ]
- */
 keyController.getAllForCampaign = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const campaignId = parseInt(req.params.campaignId, 10);
@@ -32,19 +29,32 @@ keyController.getAllForCampaign = (req, res) => __awaiter(void 0, void 0, void 0
         res.status(500).send({ message: error.message });
     }
 });
+keyController.getAllForCampaignManager = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const campaignId = parseInt(req.params.campaignId, 10);
+        const AccountId = parseInt(req.params.AccountId, 10);
+        if (isNaN(campaignId) || isNaN(AccountId)) {
+            return res.status(400).send({ message: "Invalid Campaign ID  or Accoun ID" });
+        }
+        const keys = yield key_service_1.keyService.getAllForCampaignManager(campaignId, AccountId);
+        res.status(200).json(keys);
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+    }
+});
 /**
- * [ ⭐️ POST (แก้ไข) ⭐️ ]
  * (keyAlias -> key)
  */
 keyController.create = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { campaignId, key } = req.body; // [ ⭐️ FIX ⭐️ ]
-        if (!campaignId || !key) { // [ ⭐️ FIX ⭐️ ]
+        const { campaignId, key, account_id, order_num } = req.body;
+        if (!campaignId || !key || !account_id || !order_num) {
             return res
                 .status(400)
-                .send({ message: "Missing campaignId or key" }); // [ ⭐️ FIX ⭐️ ]
+                .send({ message: "Missing campaignId or key or order_num" });
         }
-        const keyData = yield key_service_1.keyService.create(campaignId, key); // [ ⭐️ FIX ⭐️ ]
+        const keyData = yield key_service_1.keyService.create(campaignId, key, account_id, order_num);
         res.status(201).json(keyData);
     }
     catch (error) {
@@ -59,15 +69,19 @@ keyController.create = (req, res) => __awaiter(void 0, void 0, void 0, function*
  */
 keyController.delete = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const keyId = parseInt(req.params.id, 10);
-        if (isNaN(keyId)) {
-            return res.status(400).send({ message: "Invalid Key ID" });
+        const keyId = parseInt(req.params.keyId, 10);
+        const campaignId = parseInt(req.params.campaignId, 10);
+        const accountId = parseInt(req.params.accountId, 10);
+        console.log("keyId:", keyId, "campaignId:", campaignId, "accountId:", accountId);
+        if (isNaN(keyId) || isNaN(campaignId) || isNaN(accountId)) {
+            return res.status(400).send({ message: "Invalid Key ID, Campaign ID, or Account ID" });
         }
-        yield key_service_1.keyService.delete(keyId);
-        res.status(204).send();
+        yield key_service_1.keyService.delete(keyId, campaignId, accountId);
+        res.status(204).send({ message: "ลบคีย์สำเร็จแล้ว" });
     }
     catch (error) {
         res.status(500).send({ message: error.message });
+        // console.log("Error in delete controller:", error);
     }
 });
 keyController.getPrerequisites = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -83,23 +97,18 @@ keyController.getPrerequisites = (req, res) => __awaiter(void 0, void 0, void 0,
         res.status(500).send({ message: error.message });
     }
 });
-/**
- * [ ⭐️ POST (แก้ไข) ⭐️ ]
- * @desc POST /api/keys/encrypt-session-bulk
- */
 keyController.runBulkEncryption = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // ( 1. รับแค่ campaignId, sessionId )
-        const { campaignId, sessionId } = req.body;
-        if (!campaignId || !sessionId) {
+        const { campaignId } = req.body;
+        console.log(campaignId);
+        if (!campaignId) {
             return res
                 .status(400)
                 .send({ message: "Missing campaignId or sessionId" });
         }
-        // 2. ส่งต่อให้ Service (สมอง)
-        const stats = yield key_service_1.keyService.runBulkEncryptionForSession(campaignId, sessionId);
-        // 3. ส่งผลลัพธ์ (Stats) กลับไป
-        res.status(200).json(stats); // (เช่น { usersEncrypted: 150 })
+        const stats = yield key_service_1.keyService.runBulkEncryptionForSession(campaignId);
+        res.status(200).json(stats);
     }
     catch (error) {
         if (error.message.includes("Key") ||
@@ -120,5 +129,19 @@ keyController.testDecrypt = (req, res) => __awaiter(void 0, void 0, void 0, func
     }
     catch (error) {
         res.status(500).send({ message: error.message });
+    }
+});
+keyController.getDashboard = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const campaignId = Number(req.params.campaignId);
+        if (Number.isNaN(campaignId)) {
+            return res.status(400).json({ message: "invalid campaign id" });
+        }
+        const data = yield key_service_1.keyService.GetDashBoard(campaignId);
+        return res.json(data);
+    }
+    catch (err) {
+        console.error("getDashboard error:", err);
+        return res.status(500).json({ message: "Internal server error" });
     }
 });

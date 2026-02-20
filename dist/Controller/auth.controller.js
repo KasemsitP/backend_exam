@@ -16,31 +16,92 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.authcontroller = void 0;
 const auth_service_1 = require("../Service/auth.service");
 const utills_1 = require("../utills/utills");
+const DB_1 = require("../model/DB");
 const auth_repo_1 = __importDefault(require("../Repo/auth.repo"));
+const grader_repo_1 = __importDefault(require("../Repo/grader.repo"));
 class authcontroller {
 }
 exports.authcontroller = authcontroller;
 _a = authcontroller;
 authcontroller.register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try { //full name not null , role
-        const { username, password, full_name, email, role } = req.body;
+    var _b;
+    const conn = yield DB_1.DB.getInstance().getConnection();
+    try {
+        const { username, password, full_name, email, role, campaignId } = req.body;
+        yield conn.beginTransaction();
         yield auth_service_1.authservice.IsDuplicate(username);
+        const roleExists = yield auth_repo_1.default.checkRole(role);
+        if (!roleExists)
+            throw new Error("ไม่พบ role ที่ระบุ");
+        const isGrader = roleExists.code === "GRADER";
         const hash = yield utills_1.utills.hash(password);
         const userData = { username, password: hash, full_name, email, role };
-        const result = yield auth_repo_1.default.createAccount(userData);
-        res.status(201).send({ message: "ลงทะเบียนสำเร็จ" });
+        const insertId = yield auth_repo_1.default.createAccount(userData);
+        const accountId = insertId;
+        if (!accountId)
+            throw new Error("สร้างบัญชีไม่สำเร็จ");
+        console.log(accountId);
+        console.log(isGrader, campaignId);
+        if (isGrader && campaignId) {
+            yield grader_repo_1.default.create({
+                account_id: accountId,
+                campaign_id: Number(campaignId),
+            }, conn);
+        }
+        yield conn.commit();
+        return res.status(201).json({ message: "ลงทะเบียนสำเร็จ", id: accountId });
     }
     catch (error) {
-        return res.status(400).send({ message: error.message });
+        yield conn.rollback();
+        return res
+            .status(400)
+            .json({ message: (_b = error.message) !== null && _b !== void 0 ? _b : "register failed" });
+    }
+    finally {
+        conn.release();
     }
 });
+//   static register = async (req: Request, res: Response) => {
+//   try {  //full name not null , role
+//     const { username, password, full_name, email, role } = req.body;
+//     await authservice.IsDuplicate(username)
+//     const hash = await utills.hash(password)
+//     const userData = { username, password: hash, full_name, email, role };
+//     const result = await authrepo.createAccount(userData)
+//     res.status(201).send({ message: "ลงทะเบียนสำเร็จ", id: result });
+//   } catch (error: any) {
+//     return res.status(400).send({ message: error.message });
+//   }
+// }
 authcontroller.login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { username, password } = req.body;
     try {
         const result = yield auth_service_1.authservice.CheckUsername(username, password);
         req.session.userId = Number(result.id);
-        req.session.userData = result;
-        res.status(200).json({
+        req.session.sessionVersion = Number(result.sessionVersion);
+        req.session.roles = result.roles;
+        // console.log(result.id , req.sessionID)
+        // const resUpdate = await authrepo.updateAuthsession(result.id , req.sessionID)
+        // console.log(resUpdate)
+        // res.status(200).json({
+        //   message: "เข้าสู่ระบบสำเร็จ",
+        //   user: result,
+        // });
+        try {
+            yield new Promise((resolve, reject) => {
+                req.session.save((err) => (err ? reject(err) : resolve()));
+            });
+            console.log("login sid =", req.sessionID, "userId =", result.id);
+            // อัปเดต account_id ใน auth_sessions
+            yield auth_repo_1.default.updateAuthsession(result.id, req.sessionID);
+        }
+        catch (err) {
+            console.error("Session or auth_sessions update failed:", err);
+            // ตรงนี้เลือกได้ว่าจะให้ login ผ่านอยู่ดี หรือจะ response 500
+            // ถ้าอยากให้ล็อกอินได้ต่อแม้ updateAuthsession fail:
+            // ไม่ต้อง throw ต่อ
+        }
+        return res.status(200).json({
             message: "เข้าสู่ระบบสำเร็จ",
             user: result,
         });
@@ -49,26 +110,59 @@ authcontroller.login = (req, res) => __awaiter(void 0, void 0, void 0, function*
         return res.status(400).send({ message: error.message });
     }
 });
-authcontroller.getMe = (req, res) => {
-    if (req.session.userData) {
-        res.status(200).json(req.session.userData);
-    }
-    else {
-        res.status(401).send({ message: "Not authenticated" });
-    }
-};
-authcontroller.logout = (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            return res.status(500).send({ message: "ออกจากระบบไม่สำเร็จ" });
+authcontroller.getMe = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.session.userId;
+        if (!userId)
+            return res.status(401).json({ message: "Not authenticated" });
+        // ดึงข้อมูลสดจาก DB (รวม roles)
+        const row = yield auth_repo_1.default.findMeById(userId);
+        if (!row)
+            return res.status(401).json({ message: "Not authenticated" });
+        // กัน user โดน revoke
+        if (Number(row.active) !== 1) {
+            req.session.destroy(() => { });
+            return res.status(403).json({ message: "Account revoked/disabled" });
         }
-        res.clearCookie("connect.sid");
-        res.send({ message: "ออกจากระบบเรียบร้อยแล้ว" });
+        const roleCode = (row.role_code || "staff").toLowerCase();
+        return res.status(200).json({
+            id: String(row.id),
+            name: row.full_name,
+            username: row.username,
+            roles: [roleCode],
+        });
+    }
+    catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+});
+authcontroller.logout = (req, res) => {
+    if (!req.session) {
+        return res.status(200).json({ message: "ออกจากระบบแล้ว" });
+    }
+    req.session.destroy((err) => {
+        if (err) {
+            console.error("Failed to destroy session:", err);
+            return res.status(500).json({ message: "ออกจากระบบไม่สำเร็จ" });
+        }
+        // ชื่อ cookie ต้องตรงกับ session.name ในตอน config เช่น "sid"
+        res.clearCookie("sid");
+        return res.status(200).json({ message: "ออกจากระบบสำเร็จ" });
     });
 };
 authcontroller.getAll = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const accounts = yield auth_service_1.authservice.getAllAccounts();
+        res.status(200).json(accounts);
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+    }
+});
+authcontroller.getAllGraders = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const campaign_id = parseInt(req.params.id, 10);
+    try {
+        const accounts = yield auth_service_1.authservice.getAllGradersAccounts(Number(campaign_id));
         res.status(200).json(accounts);
     }
     catch (error) {
@@ -97,11 +191,40 @@ authcontroller.update = (req, res) => __awaiter(void 0, void 0, void 0, function
 });
 authcontroller.delete = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        console.log("Deleting account id:", req.params.id);
         const id = parseInt(req.params.id, 10);
         yield auth_service_1.authservice.deleteAccount(id);
         res.status(200).json({ id: id });
     }
     catch (error) {
         res.status(500).send({ message: error.message });
+    }
+});
+authcontroller.revokeAccount = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const targetId = Number(req.params.id);
+        if (Number.isNaN(targetId)) {
+            return res.status(400).json({ message: "Invalid account id" });
+        }
+        // actor id (คนที่กด revoke) ถ้าคุณเก็บใน session
+        const actorId = req.session.userId;
+        const result = yield auth_service_1.authservice.revokeAccount(targetId, actorId);
+        return res.status(200).json(Object.assign({ message: "revoked" }, result));
+    }
+    catch (e) {
+        return res.status(400).json({ message: e.message });
+    }
+});
+authcontroller.unrevokeAccount = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const targetId = Number(req.params.id);
+        if (Number.isNaN(targetId)) {
+            return res.status(400).json({ message: "Invalid account id" });
+        }
+        const result = yield auth_service_1.authservice.unrevokeAccount(targetId);
+        return res.status(200).json(Object.assign({ message: "unrevoked" }, result));
+    }
+    catch (e) {
+        return res.status(400).json({ message: e.message });
     }
 });

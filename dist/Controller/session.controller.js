@@ -16,31 +16,23 @@ class sessionController {
 }
 exports.sessionController = sessionController;
 _a = sessionController;
-/**
- * POST /api/sessions
- * (รองรับ createSessionThunk)
- */
 sessionController.create = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const payload = req.body;
         const newSession = yield session_service_1.sessionService.create(payload);
-        // ส่งข้อมูล Session ใหม่กลับไปให้ Thunk
         res.status(201).json(newSession);
     }
     catch (error) {
         res.status(400).send({ message: error.message });
     }
 });
-/**
- * DELETE /api/sessions/:id
- * (รองรับ deleteSessionThunk)
- */
 sessionController.delete = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) {
             return res.status(400).send({ message: "Invalid ID format" });
         }
+        console.log(id);
         yield session_service_1.sessionService.delete(id);
         res.status(204).send();
     }

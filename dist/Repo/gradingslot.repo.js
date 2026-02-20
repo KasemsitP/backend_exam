@@ -17,24 +17,28 @@ class GradingslotRepo {
     findBookletForUser(conn, campaignId, sessionId, userCode) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-      SELECT
-        b.id              AS booklet_id,
-        b.user_session_id AS user_session_id,
-        us.user_campaign_id,
-        u.id              AS user_id,
-        u.user_code       AS user_code
-      FROM users u
-      JOIN user_campaigns uc
-        ON uc.user_id = u.id
-       AND uc.campaign_id = ?
-      JOIN user_sessions us
-        ON us.user_campaign_id = uc.id
-       AND us.session_id = ?
-       AND us.campaign_id = ?
-      JOIN booklets b
-        ON b.user_session_id = us.id
-      WHERE u.user_code = ?
-      LIMIT 1;
+SELECT
+    b.id              AS booklet_id,
+    b.user_session_id AS user_session_id,
+    us.user_campaign_id,
+    us.qr_payload,          -- เพิ่มตรงนี้
+    u.id              AS user_id,
+    u.user_code       AS user_code,
+    bg.id              AS bag_id,
+    bg.bag_no          AS bag_no
+FROM users u
+JOIN user_campaigns uc
+  ON uc.user_id = u.id
+ AND uc.campaign_id = ?
+JOIN user_sessions us
+  ON us.user_campaign_id = uc.id
+ AND us.session_id = ?
+ AND us.campaign_id = ?
+JOIN booklets b
+  ON b.user_session_id = us.id
+JOIN bags bg ON bg.id = b.bag_id 
+WHERE u.user_code = ?
+LIMIT 1;
     `;
             const params = [campaignId, sessionId, campaignId, userCode];
             const [rows] = yield conn.execute(sql, params);
@@ -94,6 +98,53 @@ class GradingslotRepo {
                 throw new Error("ไม่พบ slot ที่เพิ่งสร้าง");
             }
             return rows[0];
+        });
+    }
+    //ยังไม่มีใช้นะ
+    findAssignmentForGraderInSession(conn, graderId, sessionId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            const [rows] = yield conn.query(`
+      SELECT 
+        ga.grader_id,
+        ga.session_id,
+        ga.subject_id,
+        ga.subject_question_id,
+        sq.question_no,
+        sq.label AS question_label
+      FROM grader_assignments ga
+      JOIN subject_questions sq
+        ON ga.subject_question_id = sq.id
+      WHERE ga.grader_id = ?
+        AND ga.session_id = ?
+    `, [graderId, sessionId]);
+            // กรณี 1 grader มีได้แค่ 1 ข้อใน 1 session (ตามที่คุณเลือก)
+            return (_a = rows) !== null && _a !== void 0 ? _a : null;
+        });
+    }
+    findUnscoredSlotForGrader(conn, bookletId, subjectId, questionNo, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            const sql = `
+      SELECT s.*
+      FROM grading_slots s
+      LEFT JOIN grading_scores gs
+        ON gs.slot_id = s.id
+      WHERE s.booklet_id = ?
+        AND s.subject_id = ?
+        AND s.question_no = ?
+        AND s.grader_id  = ?
+        AND gs.id IS NULL         -- ยังไม่มีคะแนนเลย
+      LIMIT 1
+      FOR UPDATE
+    `;
+            const [rows] = yield conn.execute(sql, [
+                bookletId,
+                subjectId,
+                questionNo,
+                graderId,
+            ]);
+            return (_a = rows[0]) !== null && _a !== void 0 ? _a : null;
         });
     }
 }

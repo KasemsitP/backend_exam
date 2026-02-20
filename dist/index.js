@@ -18,7 +18,9 @@ require("dotenv/config");
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const express_mysql_session_1 = __importDefault(require("express-mysql-session"));
 const express_session_1 = __importDefault(require("express-session"));
+const logging_1 = require("./Middleware/logging");
 const DB_1 = require("./model/DB");
 const routes_auth_1 = __importDefault(require("./Routes/routes.auth"));
 const router_user_1 = __importDefault(require("./Routes/router.user"));
@@ -39,13 +41,27 @@ const router_baghandover_1 = __importDefault(require("./Routes/router.baghandove
 const router_grader_1 = __importDefault(require("./Routes/router.grader"));
 const router_gradingslot_1 = __importDefault(require("./Routes/router.gradingslot"));
 const router_gradingscore_1 = __importDefault(require("./Routes/router.gradingscore"));
+const router_subject_1 = __importDefault(require("./Routes/router.subject"));
+const router_grader_assignment_1 = __importDefault(require("./Routes/router.grader-assignment"));
+const router_gradingsummary_1 = __importDefault(require("./Routes/router.gradingsummary"));
+const router_gradingreport_1 = __importDefault(require("./Routes/router.gradingreport"));
+const router_seat_1 = __importDefault(require("./Routes/router.seat"));
+const router_dashboard_1 = __importDefault(require("./Routes/router.dashboard"));
+const router_signsheet_1 = __importDefault(require("./Routes/router.signsheet"));
+const router_seatplan_1 = __importDefault(require("./Routes/router.seatplan"));
+const router_decrypt_1 = __importDefault(require("./Routes/router.decrypt"));
+const router_graderrecheck_1 = __importDefault(require("./Routes/router.graderrecheck"));
+const router_settings_1 = __importDefault(require("./Routes/router.settings"));
 dotenv_1.default.config();
 exports.app = (0, express_1.default)();
 exports.app.set('trust proxy', 1);
-exports.app.use(express_1.default.json());
-exports.app.use((0, cookie_parser_1.default)());
+exports.app.use(express_1.default.json({ limit: "10mb" }));
+exports.app.use(express_1.default.urlencoded({ extended: true, limit: "10mb" }));
+exports.app.use((0, cookie_parser_1.default)(process.env.COOKIE_SECRET));
+exports.app.use(logging_1.Logging);
 const allowedOrigins = [
     'http://localhost:5173', // frontend dev
+    'http://192.168.1.39:5173',
     'https://exam-management-uyce.onrender.com', // frontend prod
 ];
 exports.app.use((0, cors_1.default)({
@@ -62,20 +78,72 @@ exports.app.use((0, cors_1.default)({
     },
     credentials: true
 }));
+const MySQLStore = (0, express_mysql_session_1.default)(express_session_1.default);
+const sessionStore = new MySQLStore({
+    host: process.env.host,
+    user: process.env.user,
+    password: process.env.password,
+    database: process.env.database,
+    schema: {
+        tableName: "auth_sessions",
+        columnNames: {
+            session_id: "sid",
+            expires: "expires",
+            data: "data",
+        },
+    },
+});
+//dev
+// app.use(
+//   session({
+//     name: "sid",
+//     secret: process.env.SESSION_SECRET || "dev-secret",
+//     resave: false,
+//     saveUninitialized: false,
+//     store: sessionStore,
+//     cookie: {
+//       httpOnly: true,
+//       secure: process.env.NODE_ENV === "production",
+//       maxAge: 1000 * 60 * 60, // 1 ชม.
+//     },
+//   })
+// );
+//prod
 exports.app.use((0, express_session_1.default)({
-    secret: "your-secret-key",
+    name: "sid",
+    secret: process.env.SESSION_SECRET || "dev-secret",
     resave: false,
     saveUninitialized: false,
+    store: sessionStore,
     cookie: {
-        maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
         httpOnly: true,
-        secure: false
-        //  เพิ่มลองดูก่อนว่าได้ไหม
-        // secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
-        // sameSite: 'none'          // ต้อง none 
-    }
+        secure: true, // ต้อง true
+        //    sameSite: "none",    // ใช้ได้เมื่อ secure=true
+        maxAge: 1000 * 60 * 60,
+    },
 }));
+// app.use(session({
+//   secret: "your-secret-key",
+//   resave: false,
+//   saveUninitialized: false,
+//   cookie: {
+//     maxAge: 1000 * 60 * 30, // 30 นาที (หน่วยเป็นมิลลิวินาที)
+//     httpOnly: true,
+//     secure: false
+// //  เพิ่มลองดูก่อนว่าได้ไหม
+//     // secure: true,           // dev ไม่มี HTTPS //true  //ต้องเปิด true
+//     // sameSite: 'none'          // ต้อง none 
+//   }
+// }));
+// const CSRF_SECRET =
+//   process.env.CSRF_SECRET || "12345678901234567890123456789012"; // 32 ตัวขึ้นไป
+// app.use(csrf(CSRF_SECRET, ["POST", "PUT", "PATCH", "DELETE"]));
+// app.get("/api/csrf-token", (req: Request, res: Response) => {
+//   const token = (req as any).csrfToken();
+//   res.json({ csrfToken: token });
+// });
 exports.app.use("/api/auth/", routes_auth_1.default);
+exports.app.use(authentication_1.isAuthenticated);
 exports.app.use("/api/", router_user_1.default);
 exports.app.use("/api/", router_bag_1.default);
 exports.app.use("/api/", router_exam_1.default);
@@ -86,6 +154,7 @@ exports.app.use("/api/", router_importuser_1.default);
 exports.app.use("/api/", router_key_1.default);
 exports.app.use("/api/", router_user_session_1.default);
 exports.app.use("/api/", router_account_1.accountRouter);
+exports.app.use("/api", router_subject_1.default);
 exports.app.use("/api/", router_roles_1.roleRouter);
 exports.app.use("/api", router_examroom_1.default);
 exports.app.use("/api", router_verify_1.default);
@@ -93,6 +162,16 @@ exports.app.use("/api", router_baghandover_1.default);
 exports.app.use("/api/", router_grader_1.default);
 exports.app.use("/api/", router_gradingslot_1.default);
 exports.app.use("/api/", router_gradingscore_1.default);
+exports.app.use("/api", router_grader_assignment_1.default);
+exports.app.use("/api", router_gradingsummary_1.default);
+exports.app.use("/api", router_gradingreport_1.default);
+exports.app.use("/api", router_seat_1.default);
+exports.app.use("/api", router_dashboard_1.default);
+exports.app.use("/api", router_signsheet_1.default);
+exports.app.use("/api", router_seatplan_1.default);
+exports.app.use("/api", router_decrypt_1.default);
+exports.app.use("/api", router_graderrecheck_1.default);
+exports.app.use("/api/", router_settings_1.default);
 exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const conn = DB_1.DB.getInstance();
@@ -103,9 +182,6 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
         res.status(500).send({ message: error.message });
     }
 }));
-exports.app.get("/api/ping", (req, res) => {
-    res.send("pong");
-});
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     yield DB_1.DB.testConnection();
     console.log("เซิร์ฟเวอร์เริ่มทำงานที่พอร์ต 8000");

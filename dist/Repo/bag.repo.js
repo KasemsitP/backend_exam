@@ -9,25 +9,72 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const DB_1 = require("../model/DB");
 const promise_1 = require("mysql2/promise");
 class BagRepo {
+    constructor() {
+        this.pool = DB_1.DB.getInstance();
+    }
     // ⭐️ (FIX 3: REPO GET ต้อง JOIN sessions เพื่อหา campaign_id)
     findAllByCampaignId(campaignId, connection) {
         return __awaiter(this, void 0, void 0, function* () {
             // (แปลง "camp-1" เป็น 1)
             const campaignIdNumeric = parseInt(campaignId.replace("camp-", ""));
             // ⭐️ (FIX 7: ลบการขึ้นบรรทัดใหม่ (Newline) หน้า SELECT)
+            //     const sql = `
+            // SELECT
+            //   b.id,
+            //   s.campaign_id,
+            //   b.session_id,
+            //   s.title AS session_label,
+            //   b.bag_no,
+            //   b.count_items,
+            //   b.status,
+            //   CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) AS bag_no_str,
+            //   MIN(sj.code) AS subject_code,
+            //   MIN(sj.name) AS subject_name,
+            //   COALESCE(bs.scanned_count, 0) AS scanned_count   -- 👈 เพิ่มตรงนี้
+            // FROM bags b
+            // JOIN sessions s 
+            //   ON b.session_id = s.id
+            // LEFT JOIN session_subjects ss 
+            //   ON s.id = ss.session_id 
+            // LEFT JOIN subjects sj 
+            //   ON ss.subject_id = sj.id
+            // LEFT JOIN (                                      -- 👈 นับจำนวนเล่มในแต่ละถุง
+            //   SELECT
+            //     session_id,
+            //     bag_no,
+            //     COUNT(*) AS scanned_count
+            //   FROM booklets
+            //   GROUP BY session_id, bag_no
+            // ) bs
+            //   ON bs.session_id = b.session_id
+            //  AND bs.bag_no     = b.bag_no
+            // WHERE s.campaign_id = ?
+            // GROUP BY
+            //   b.id,
+            //   s.campaign_id,
+            //   b.session_id,
+            //   s.title,
+            //   b.bag_no,
+            //   b.count_items,
+            //   b.status,
+            //   bs.scanned_count
+            // ORDER BY
+            //   b.bag_no ASC;
+            // `;
             const sql = `SELECT
-    b.id,
-    s.campaign_id,
-    b.session_id,
-    s.title AS session_label,
-    b.bag_no,
-    b.count_items,
-    b.status,
-    CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) AS bag_no_str,
-    MIN(sj.code) AS subject_code,    -- ถ้ามีหลายวิชา เลือกตัวแรกๆมา
-    MIN(sj.name) AS subject_name
+  b.id,
+  s.campaign_id,
+  b.session_id,
+  b.bag_no,
+  b.count_items,
+  b.status,
+  CONCAT('BAG-', LPAD(b.bag_no, 3, '0')) AS bag_no_str,
+  MIN(sj.code) AS subject_code,
+  MIN(sj.name) AS session_label,
+  MAX(COALESCE(bs.scanned_count, 0)) AS scanned_count
 FROM bags b
 JOIN sessions s 
   ON b.session_id = s.id
@@ -35,18 +82,26 @@ LEFT JOIN session_subjects ss
   ON s.id = ss.session_id 
 LEFT JOIN subjects sj 
   ON ss.subject_id = sj.id
+LEFT JOIN (
+  SELECT
+    bag_id,
+    COUNT(*) AS scanned_count
+  FROM booklets
+  WHERE bag_id IS NOT NULL
+  GROUP BY bag_id
+) bs
+  ON bs.bag_id = b.id
 WHERE s.campaign_id = ?
 GROUP BY
-    b.id,
-    s.campaign_id,
-    b.session_id,
-    s.title,
-    b.bag_no,
-    b.count_items,
-    b.status
+  b.id,
+  s.campaign_id,
+  b.session_id,
+  s.title,
+  b.bag_no,
+  b.count_items,
+  b.status
 ORDER BY
-    b.bag_no ASC;
-
+  b.bag_no ASC;
 `;
             try {
                 const [rows] = yield connection.execute(sql, [campaignIdNumeric]);
@@ -88,15 +143,11 @@ ORDER BY
             }
         });
     }
-    /**
-     * (Update Bag Status)
-     */
-    updateStatus(bagId, status, connection) {
+    updateStatus(bag_no, status, session_id, connection) {
         return __awaiter(this, void 0, void 0, function* () {
-            // ⭐️ (FIX 4) อัปเดตโดยใช้ bag_no (ที่เป็น String ID)
-            const sql = `UPDATE bags SET status = ? WHERE bag_no = ?;`;
+            const sql = `UPDATE bags SET status = ? WHERE bags.id = ? AND bags.session_id = ?`;
             try {
-                const [result] = yield connection.execute(sql, [status, bagId]);
+                const [result] = yield connection.execute(sql, [status, bag_no, session_id]);
                 return result;
             }
             catch (error) {
@@ -108,7 +159,7 @@ ORDER BY
     deleteById(bagNo, connection) {
         return __awaiter(this, void 0, void 0, function* () {
             // (ลบโดยใช้ bag_no ที่เป็น VARCHAR)
-            const sql = `DELETE FROM bags WHERE bag_no = ?;`;
+            const sql = `DELETE FROM bags WHERE id = ?;`;
             try {
                 const [result] = yield connection.execute(sql, [bagNo]);
                 return result;
@@ -121,17 +172,133 @@ ORDER BY
     }
     findByCampaignAndBagNo(conn, campaignId, bagNo) {
         return __awaiter(this, void 0, void 0, function* () {
+            //     const sql = `
+            //   SELECT b.id, b.session_id, b.bag_no
+            //   FROM bags b
+            //   JOIN sessions s
+            //     ON b.session_id = s.id
+            //   WHERE s.campaign_id = ?
+            //     AND b.bag_no = ?
+            //   LIMIT 1;
+            // `;
             const sql = `
       SELECT b.id, b.session_id, b.bag_no
       FROM bags b
       JOIN sessions s
         ON b.session_id = s.id
       WHERE s.campaign_id = ?
-        AND b.bag_no = ?
+        AND b.id = ?
       LIMIT 1;
     `;
             const [rows] = yield conn.execute(sql, [campaignId, bagNo]);
             return rows[0] || null;
+        });
+    }
+    findScannCountByCampaign(conn, campaignId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+SELECT
+  b.id,
+  s.campaign_id,
+  b.session_id,
+  s.title              AS session_label,
+  b.bag_no,
+  b.count_items,             -- จำนวนเล่มตาม capacity
+  b.status,
+  LPAD(b.bag_no, 3, '0')     AS bag_no_str,
+  COALESCE(bs.scanned_count,0) AS scanned_count
+FROM bags b
+JOIN sessions s
+  ON b.session_id = s.id
+LEFT JOIN (
+  SELECT
+    session_id,
+    bag_no,
+    COUNT(*) AS scanned_count
+  FROM booklets
+  GROUP BY session_id, bag_no
+) bs
+  ON bs.session_id = b.session_id
+ AND bs.bag_no     = b.bag_no
+WHERE s.campaign_id = ?
+ORDER BY b.bag_no ASC;
+
+    `;
+            const [rows] = yield conn.execute(sql, [campaignId]);
+            return rows || null;
+        });
+    }
+    findById(connection, id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            const sql = `
+      SELECT b.*, s.campaign_id
+      FROM bags b
+      JOIN sessions s ON b.session_id = s.id
+      WHERE b.id = ?
+      LIMIT 1;
+    `;
+            const [rows] = yield connection.execute(sql, [id]);
+            const arr = rows;
+            return (_a = arr[0]) !== null && _a !== void 0 ? _a : null;
+        });
+    }
+    findByIdNoConn(id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            const sql = `
+      SELECT b.*, s.campaign_id
+      FROM bags b
+      JOIN sessions s ON b.session_id = s.id
+      WHERE b.id = ?
+      LIMIT 1;
+    `;
+            const [rows] = yield this.pool.execute(sql, [id]);
+            const arr = rows;
+            return (_a = arr[0]) !== null && _a !== void 0 ? _a : null;
+        });
+    }
+    CheckSubjectBooks(session_id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+SELECT s.name from subjects s JOIN session_subjects ss ON   ss.subject_id = s.id WHERE  ss.session_id = ?;
+    `;
+            const [rows] = yield this.pool.execute(sql, [session_id]);
+            const arr = rows;
+            return arr[0];
+        });
+    }
+    findBySessionAndNo(connection, sessionId, bagNo) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // แก้ไข SQL: เพิ่ม JOIN sessions เพื่อเอา campaign_id
+            const sql = `
+    SELECT
+      b.*,
+      s.campaign_id
+    FROM bags b
+    JOIN sessions s ON b.session_id = s.id
+    WHERE b.session_id = ? AND b.bag_no = ?
+    LIMIT 1;
+  `;
+            const [rows] = yield connection.execute(sql, [sessionId, bagNo]);
+            const arr = rows;
+            return arr.length > 0 ? arr[0] : null;
+        });
+    }
+    CreateBagByConnection(session_id, max_no, connection) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `INSERT INTO bags (session_id, bag_no, count_items, status) VALUES (?, ?, ?, ?);`;
+            try {
+                const [result] = yield connection.query(sql, [session_id, max_no, 30, 'SEALED']);
+                return {
+                    insertId: result.insertId,
+                    affectedRows: result.affectedRows,
+                };
+            }
+            catch (error) {
+                console.error("Repo Error (Bag Bulk Create):", error);
+                throw error;
+            }
         });
     }
 }

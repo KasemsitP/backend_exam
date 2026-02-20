@@ -332,7 +332,7 @@ ORDER BY s.exam_date, s.session_code;`
   // dashboard.repo.ts
 
 
-async getScoreDistribution(campaign_id: number) {
+  async getScoreDistribution(campaign_id: number) {
     // แก้ไข SQL: คำนวณ Avg รายข้อก่อน แล้วค่อย Sum ทีหลัง
     const sql = `
     WITH question_scores AS (
@@ -381,9 +381,9 @@ async getScoreDistribution(campaign_id: number) {
     const [rows] = await this.pool.execute<ScoreTotalRow[]>(sql, [campaign_id]);
 
     // ---------- ส่วน Config Bucket (Logic เดิม ใช้ต่อได้เลย) ----------
-    const bucketSize = 5;     
+    const bucketSize = 5;
     const minScore = 1;
-    const maxScore = 150;     
+    const maxScore = 150;
 
     let totalUsers = 0;
     let noScore = 0;
@@ -414,9 +414,9 @@ async getScoreDistribution(campaign_id: number) {
     const maxBucketIndex = Math.floor((maxScore - minScore) / bucketSize);
 
     for (let idx = 0; idx <= maxBucketIndex; idx++) {
-      const from = minScore + idx * bucketSize; 
-      let to = from + bucketSize - 1;           
-      if (to > maxScore) to = maxScore;         
+      const from = minScore + idx * bucketSize;
+      let to = from + bucketSize - 1;
+      if (to > maxScore) to = maxScore;
 
       const label = `${from}-${to}`;
       const count = bucketMap.get(idx) ?? 0;
@@ -429,7 +429,7 @@ async getScoreDistribution(campaign_id: number) {
       no_score: noScore,
       buckets,
     };
-}
+  }
   async getSubjectQuestionsByCampaign(
     campaign_id: number
   ): Promise<SubjectQuestionRow[]> {
@@ -439,8 +439,8 @@ SELECT
   se.id           AS session_id,
   se.session_code,
   se.exam_date,
-  sesssub.start_at,
-  sesssub.end_at,
+  ss.start_at,
+  ss.end_at,
 
   sub.id          AS subject_id,
   sub.code        AS subject_code,
@@ -451,8 +451,6 @@ SELECT
   sq.label        AS question_label,
   sq.max_score
 FROM sessions se
-JOIN session_subjects sesssub
-ON sesssub.session_id = se.id
 JOIN session_subjects ss
   ON ss.session_id = se.id
 JOIN subjects sub
@@ -467,9 +465,160 @@ ORDER BY se.exam_date, se.session_code, sub.code, sq.question_no;
     const [rows] = await this.pool.execute<SubjectQuestionRow[]>(sql, [campaign_id]);
     return rows;
   }
+
+  async getStatus(
+    campaignId: number,
+    conn: Pool | PoolConnection = this.pool
+  ): Promise<any[]> {
+    const slotCoverageSql = `
+WITH booklets_in_campaign AS (
+  SELECT b.id AS booklet_id, b.session_id
+  FROM booklets b
+  JOIN user_sessions us ON us.id = b.user_session_id
+  WHERE us.campaign_id = ?
+),
+
+booklet_counts AS (
+  SELECT session_id, COUNT(*) AS booklet_count
+  FROM booklets_in_campaign
+  GROUP BY session_id
+),
+
+question_counts AS (
+  SELECT
+    ss.session_id,
+    ss.subject_id,
+
+    -- ✅ ยึด subject_questions ก่อน ถ้ามี, ถ้าไม่มีค่อยใช้ ss.question_count
+    COALESCE(
+      NULLIF(COUNT(DISTINCT sq.question_no), 0),
+      ss.question_count
+    ) AS question_count_effective,
+
+    -- เอาไว้ตรวจ mismatch เฉย ๆ
+    COUNT(DISTINCT sq.question_no) AS question_count_sq,
+    ss.question_count AS question_count_ss,
+
+    (COUNT(DISTINCT sq.question_no) <> ss.question_count) AS mismatch_question_count
+  FROM session_subjects ss
+  JOIN sessions se ON se.id = ss.session_id
+  LEFT JOIN subject_questions sq
+    ON sq.subject_id = ss.subject_id
+  WHERE se.campaign_id = ?
+  GROUP BY ss.session_id, ss.subject_id, ss.question_count
+),
+
+expected AS (
+  SELECT
+    qc.session_id,
+    qc.subject_id,
+    bc.booklet_count,
+    qc.question_count_effective AS question_count,
+    (bc.booklet_count * qc.question_count_effective * 2) AS expected_slots,
+
+    qc.question_count_sq,
+    qc.question_count_ss,
+    qc.mismatch_question_count
+  FROM question_counts qc
+  JOIN booklet_counts bc ON bc.session_id = qc.session_id
+),
+
+actual AS (
+  SELECT
+    bic.session_id,
+    gs.subject_id,
+    COUNT(*) AS actual_slots,
+    SUM(gs.grader_id IS NOT NULL) AS assigned_slots,
+    SUM(gs.status = 'COMPLETED') AS completed_slots,
+    SUM(gs.status = 'DISPUTED') AS disputed_slots,
+    SUM(gs.status IN ('OPEN','ASSIGNED','DISPUTED')) AS pending_slots
+  FROM grading_slots gs
+  JOIN booklets_in_campaign bic ON bic.booklet_id = gs.booklet_id
+  WHERE gs.grader_order IN (1,2)
+  GROUP BY bic.session_id, gs.subject_id
+)
+
+SELECT
+  e.session_id,
+  e.subject_id,
+  e.booklet_count,
+  e.question_count,
+  e.expected_slots,
+
+  COALESCE(a.actual_slots,0)     AS actual_slots,
+  COALESCE(a.assigned_slots,0)   AS assigned_slots,
+  COALESCE(a.completed_slots,0)  AS completed_slots,
+  COALESCE(a.disputed_slots,0)   AS disputed_slots,
+  COALESCE(a.pending_slots,0)    AS pending_slots,
+
+  -- ✅ สรุป “ขาด slot” ชัด ๆ
+  GREATEST(e.expected_slots - COALESCE(a.actual_slots,0), 0) AS missing_slots,
+
+  -- ✅ เอาไว้ debug mismatch
+  e.question_count_sq,
+  e.question_count_ss,
+  e.mismatch_question_count
+
+FROM expected e
+LEFT JOIN actual a
+  ON a.session_id = e.session_id
+ AND a.subject_id = e.subject_id
+ORDER BY e.session_id, e.subject_id;
+
+    `;
+
+    const [slotCoverage] = await conn.query<any[]>(slotCoverageSql, [campaignId, campaignId]);
+    console.log(slotCoverage)
+    return slotCoverage;
+  }
+  async getCountBookets(campaign_id: number): Promise<number> {
+    const sql = `SELECT COUNT(b.id) AS count FROM booklets b JOIN sessions s ON s.id = b.session_id WHERE s.campaign_id = ?`
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows[0]?.count ?? 0;
+  }
+  async getCountBookletsBySession(campaign_id: number): Promise<{ session_id: number, session_code: string, subject_name: string, count: number }[]> {
+    const sql = `SELECT 
+    s.id,
+    s.session_code,
+    sub.name,
+    COUNT(DISTINCT b.id) AS total_booklets
+FROM sessions s
+JOIN booklets b ON s.id = b.session_id
+JOIN session_subjects ss ON ss.session_id = s.id
+JOIN subjects sub ON sub.id = ss.subject_id
+WHERE s.campaign_id = ?
+GROUP BY s.id, s.session_code, sub.name`
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    // console.log(rows)
+    return rows.map(row => ({ session_id: row.id, session_code: row.session_code, subject_name: row.name, count: row.total_booklets }));
+  }
+
+  async getSeatAssignedStatus(campaign_id: number): Promise<number> {
+    const sql = `SELECT COUNT(b.id) AS count FROM booklets b JOIN sessions s ON s.id = b.session_id WHERE s.campaign_id = ?`
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows[0]?.count ?? 0;
+  }
+  async isAssigned(campaign_id: number): Promise<any> {
+    const sql = `
+SELECT 
+  r.room_code,
+  COUNT(DISTINCT uc.user_id) AS count_user,
+  r.capacity
+FROM exam_rooms r
+LEFT JOIN user_campaigns uc
+  ON uc.room_code = r.room_code
+ AND uc.campaign_id = ?
+GROUP BY r.room_code, r.capacity;
+
+
+  `
+
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
+    return rows
+  }
+
+
 }
-
-
 
 
 const dashboardRepo = new DashboardRepo()

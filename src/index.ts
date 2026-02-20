@@ -85,6 +85,26 @@ const sessionStore = new MySQLStore({
   },
 });
 
+//dev
+
+// app.use(
+//   session({
+//     name: "sid",
+//     secret: process.env.SESSION_SECRET || "dev-secret",
+//     resave: false,
+//     saveUninitialized: false,
+//     store: sessionStore,
+//     cookie: {
+//       httpOnly: true,
+//       secure: process.env.NODE_ENV === "production",
+//       maxAge: 1000 * 60 * 60, // 1 ชม.
+//     },
+//   })
+// );
+
+//prod
+
+
 app.use(
   session({
     name: "sid",
@@ -94,11 +114,14 @@ app.use(
     store: sessionStore,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 1000 * 60 * 60, // 1 ชม.
+      secure: true,        // ต้อง true
+  //    sameSite: "none",    // ใช้ได้เมื่อ secure=true
+      maxAge: 1000 * 60 * 60,
     },
   })
 );
+
+
 // app.use(session({
 //   secret: "your-secret-key",
 //   resave: false,

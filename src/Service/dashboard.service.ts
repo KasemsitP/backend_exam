@@ -1,5 +1,7 @@
 // services/dashboard.service.ts
+import { raw } from "mysql2";
 import dashboardRepo from "../Repo/dashboard.repo";
+import gradingscoreRepo from "../Repo/gradingscore.repo";
 
 export class DashboardService {
   static async getCampaignDashboard(campaignId: number) {
@@ -13,6 +15,11 @@ export class DashboardService {
       rawAvgScorePerQuestion,
       rawScoreDistribution,
       rawSubjectQuestions,          // ✨ เพิ่มบรรทัดนี้
+      rawStatus,
+      rawDisputedQuestions,       // ✨ เพิ่มบรรทัดนี้
+      rawBookletsCount,
+      rawBookletsBySession,
+      rawSeatAssignmentStatus
     ] = await Promise.all([
       dashboardRepo.getCampaignBasicCounts(campaignId),
       dashboardRepo.getBagCountsPerSession(campaignId),
@@ -23,7 +30,13 @@ export class DashboardService {
       dashboardRepo.getAverageScorePerQuestion(campaignId),
       dashboardRepo.getScoreDistribution(campaignId),
       dashboardRepo.getSubjectQuestionsByCampaign(campaignId), // ✨
+      dashboardRepo.getStatus(campaignId),
+      gradingscoreRepo.findDisputedQuestionsForDashboard(campaignId, 4),
+      dashboardRepo.getCountBookets(campaignId),
+      dashboardRepo.getCountBookletsBySession(campaignId),
+      dashboardRepo.isAssigned(campaignId)
     ]);
+    console.log("rawStatus:", rawStatus);
 
     const basicCounts = rawBasicCounts ?? {
       campaign_id: campaignId,
@@ -148,6 +161,11 @@ export class DashboardService {
       sessions,
       avgScorePerQuestion,
       subjectQuestions: subjectQuestionsBySubject,
+      rawStatus,
+      rawDisputedQuestions,
+      rawBookletsCount,
+      rawBookletsBySession,
+      seatAssignmentStatus: rawSeatAssignmentStatus
     };
   }
 }

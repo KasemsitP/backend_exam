@@ -10,4 +10,6 @@ router.post("/register", auth_controller_1.authcontroller.register);
 router.post("/login", auth_controller_1.authcontroller.login);
 router.delete("/logout", auth_controller_1.authcontroller.logout);
 router.get("/me", auth_controller_1.authcontroller.getMe);
+router.patch("/accounts/:id/revoke", auth_controller_1.authcontroller.revokeAccount);
+router.patch("/accounts/:id/unrevoke", auth_controller_1.authcontroller.unrevokeAccount);
 exports.default = router;

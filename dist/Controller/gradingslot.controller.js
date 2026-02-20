@@ -18,8 +18,8 @@ exports.gradingslotController = gradingslotController;
 _a = gradingslotController;
 gradingslotController.CreateSlot = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { qrPayload, campaignId, sessionId, subjectId, questionNo, graderId } = req.body;
-        if (!qrPayload || !campaignId || !sessionId || !subjectId || !questionNo || !graderId) {
+        const { qrPayload, campaignId, graderId, questionNo } = req.body;
+        if (!qrPayload || !campaignId || !graderId || !questionNo) {
             return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
         }
         // 1) ถอด QR + หา booklet_subject_id ให้ตรงกับคนที่สอบใบนี้จริง ๆ
@@ -31,10 +31,8 @@ gradingslotController.CreateSlot = (req, res) => __awaiter(void 0, void 0, void 
         const result = yield gradingslot_service_1.gradingService.createSlotFromQr({
             qrPayload,
             campaignId: Number(campaignId),
-            sessionId: Number(sessionId),
-            subjectId: Number(subjectId),
-            questionNo: Number(questionNo),
             graderId: Number(graderId),
+            questionNo: Number(questionNo)
         });
         res.status(201).json(result);
         //   // 3) ส่งผลลัพธ์กลับไปให้ frontend

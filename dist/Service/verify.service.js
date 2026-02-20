@@ -50,6 +50,7 @@ exports.verifyService = void 0;
 const DB_1 = require("../model/DB");
 const keyService = __importStar(require("./key.service"));
 const user_session_repo_1 = __importDefault(require("../Repo/user-session.repo")); // (Import Repo จาก Canvas)
+const booklets_repo_1 = __importDefault(require("../Repo/booklets.repo"));
 function parseId(id) {
     if (typeof id === "number") {
         return id;
@@ -72,9 +73,9 @@ verifyService.verifyQrPayload = (payload) => __awaiter(void 0, void 0, void 0, f
         }
         console.log(decryptedPayload);
         // 3. ดึงข้อมูลผู้สอบ (ใช้ฟังก์ชันใน Canvas)
-        const userSession = yield user_session_repo_1.default.findByUserCodeAndSessionId(decryptedPayload.uid, decryptedPayload.sid, connection);
+        const userSession = yield user_session_repo_1.default.findByUserCodeAndSessionIdForQRcode(decryptedPayload.uid, decryptedPayload.sid, connection);
         if (!userSession) {
-            throw new Error(`ไม่พบข้อมูลผู้สอบ (UserCode: ${decryptedPayload.ucode})`);
+            throw new Error(`ไม่พบข้อมูลผู้สอบ (UserCode: ${decryptedPayload.uid})`);
         }
         const userSessionWithExtra = Object.assign(Object.assign({}, userSession), { session_id: decryptedPayload.sid });
         console.log(userSessionWithExtra);
@@ -82,6 +83,50 @@ verifyService.verifyQrPayload = (payload) => __awaiter(void 0, void 0, void 0, f
     }
     catch (error) {
         // (ไม่ต้อง Rollback เพราะนี่คือ Read-only)
+        console.error("Service Error (Verify QR):", error);
+        throw error;
+    }
+    finally {
+        connection.release();
+    }
+});
+verifyService.checkBookletsOrders = (campaign_id, qr_payload, booklets_id) => __awaiter(void 0, void 0, void 0, function* () {
+    const connection = yield DB_1.DB.getInstance().getConnection();
+    try {
+        const campaignIdNumeric = parseId(campaign_id);
+        console.log(qr_payload, campaignIdNumeric);
+        const decryptedPayload = yield keyService.keyService.decryptQrPayload(qr_payload, campaignIdNumeric);
+        console.log(decryptedPayload);
+        if (!decryptedPayload || !decryptedPayload.uid || !decryptedPayload.sid) {
+            throw new Error(`QR Code ไม่ถูกต้อง หรือถอดรหัสล้มเหลว`);
+        }
+        if (decryptedPayload.cid !== campaignIdNumeric) {
+            throw new Error(`เกิดข้อผิดพลาดรอบสอบนี้ไม่ตรงกับรอบสอบใน QR Code`);
+        }
+        console.log(decryptedPayload);
+        // 3. ดึงข้อมูลผู้สอบ (ใช้ฟังก์ชันใน Canvas)
+        const userSession = yield user_session_repo_1.default.findByUserCodeAndSessionIdForQRcode(decryptedPayload.uid, decryptedPayload.sid, connection);
+        console.log(userSession);
+        if (!userSession) {
+            throw new Error(`ไม่พบข้อมูลผู้สอบ (UserCode: ${decryptedPayload.uid})`);
+        }
+        const booklets = yield booklets_repo_1.default.findBookletsbyQRpayload(connection, decryptedPayload.cid, decryptedPayload.sid, decryptedPayload.uid);
+        if (!booklets || booklets.length === 0) {
+            throw new Error(`ไม่พบสมุดคำตอบที่ตรงกับคิวอาร์โค้ดนี้`);
+        }
+        const bookletsQR_id = booklets.booklet_id;
+        if (bookletsQR_id !== booklets_id) {
+            throw new Error(`สมุดคำตอบนี้ไม่ตรงกับคิวอาร์โค้ดนี้`);
+        }
+        const userSessionWithExtra = {
+            booklets_id: bookletsQR_id,
+            subject_name: userSession.subjectName,
+            bag_no: booklets.bag_no,
+        };
+        console.log(userSessionWithExtra);
+        return { success: true, data: Object.assign({}, userSessionWithExtra) };
+    }
+    catch (error) {
         console.error("Service Error (Verify QR):", error);
         throw error;
     }

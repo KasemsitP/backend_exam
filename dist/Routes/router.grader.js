@@ -4,4 +4,5 @@ const express_1 = require("express");
 const grader_controller_1 = require("../Controller/grader.controller");
 const graderRouter = (0, express_1.Router)();
 graderRouter.get("/graders/campaign/:campaignId", grader_controller_1.graderController.getByCampaignId);
+graderRouter.get("/graders/assignment/:campaign_id/:account_id", grader_controller_1.graderController.getAssignmentByAccountId);
 exports.default = graderRouter;

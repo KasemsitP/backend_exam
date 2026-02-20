@@ -18,20 +18,18 @@ class SessionRepo {
         return __awaiter(this, arguments, void 0, function* (payload, dbClient = this.pool) {
             const sql = `
       INSERT INTO sessions 
-        (campaign_id, session_code, title, exam_date, site_id, day_no) 
-      VALUES (?, ?, ?, ?, ?, ?)
+        (campaign_id, session_code, title, exam_date, day_no) 
+      VALUES (?, ?, ?, ?, ?)
     `;
             const params = [
                 payload.campaign_id,
                 payload.session_code,
                 payload.title,
                 payload.exam_date,
-                payload.site_id,
                 payload.day_no,
             ];
             const [result] = yield dbClient.execute(sql, params);
             const newId = result.insertId;
-            // คืนค่า Session ที่สร้างใหม่ (รวม ID)
             return this.findById(newId, dbClient);
         });
     }
@@ -67,14 +65,13 @@ class SessionRepo {
     }
     findAllLiteByCampaignId(campaignId_1) {
         return __awaiter(this, arguments, void 0, function* (campaignId, dbClient = this.pool) {
-            const sql = "SELECT id, site_id FROM sessions WHERE campaign_id = ?";
+            const sql = "SELECT id FROM sessions WHERE campaign_id = ?";
             const [rows] = yield dbClient.execute(sql, [
                 campaignId,
             ]);
             // (แปลงผลลัพธ์ให้ถูกต้อง)
             return rows.map(row => ({
                 id: row.id,
-                site_id: row.site_id
             }));
         });
     }

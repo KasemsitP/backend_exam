@@ -8,6 +8,7 @@ export interface ExamCampaign {
   end_date: string;
   is_active: boolean;
   note?: string;
+  qr_active: number;
 }
 
 export interface CampaignSession {
@@ -120,7 +121,8 @@ class ExamDataRepo {
   ec.is_active,
   ec.year_be,
   ec.site,
-  ec.campaign_size
+  ec.campaign_size,
+  ec.qr_active
       FROM exam_campaigns ec
       WHERE ${where}
       ORDER BY ec.id

@@ -85,6 +85,27 @@ class SessionSubjectRepo {
             return rows[0].count;
         });
     }
+    findNumberofQuestion(subjectId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `SELECT 
+    s.id AS subject_id,
+    s.code AS subject_code,
+    COUNT(q.id) AS total_questions
+FROM subjects s
+LEFT JOIN subject_questions q ON s.id = q.subject_id
+WHERE s.id = ?
+GROUP BY s.id, s.code, s.name`;
+            const [rows] = yield this.pool.execute(sql, [subjectId]);
+            return rows[0];
+        });
+    }
+    CheckHasSubjects(session_id_1) {
+        return __awaiter(this, arguments, void 0, function* (session_id, dbClient = this.pool) {
+            const sql = `SELECT * FROM session_subjects where session_id = ?;`;
+            const [rows] = yield dbClient.execute(sql, [session_id]);
+            return rows.length > 0;
+        });
+    }
 }
 const sessionSubjectRepo = new SessionSubjectRepo();
 exports.default = sessionSubjectRepo;

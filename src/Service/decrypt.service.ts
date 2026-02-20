@@ -7,206 +7,107 @@ import { emailTemplate } from "../utills/emailtheme";
 import crypto from "crypto";
 import campaignRepo from "../Repo/campaign.repo";
 
+import decryptRepo from "../Repo/decrypt.repo";
+function formatUnlockError(pr: { issues: { code: string; message: string; meta?: any }[] }) {
+    // ถ้าอยาก “สั้น” เอาแค่บรรทัดเดียว:
+    // return pr.issues.map(i => `- ${i.message}`).join("\n");
+
+return pr.issues
+  .map((i) => {
+    switch (i.code) {
+      case "NO_KEYS":
+        return [
+          "❌ ยังไม่มีคีย์เข้ารหัส",
+          "กรุณาสร้าง/เพิ่มคีย์อย่างน้อย 2 ดอกก่อนปลดล็อก",
+        ].join("\n");
+
+      case "NOT_ENOUGH_KEYS":
+        return [
+          "❌ คีย์เข้ารหัสยังไม่ครบ",
+          `ตอนนี้มี ${i.meta?.keyCount ?? "ไม่ทราบ"} ดอก`,
+          "ต้องมีอย่างน้อย 2 ดอกถึงจะปลดล็อกได้",
+        ].join("\n");
+
+      case "NO_IMPORT":
+        return [
+          "❌ ยังไม่ได้นำเข้าข้อมูลผู้เข้าสอบ",
+          "กรุณา Import รายชื่อผู้เข้าสอบก่อน",
+        ].join("\n");
+
+      case "MISSING_SEAT":
+        return [
+          "❌ ยังจัดที่นั่งสอบไม่ครบ",
+          `ยังเหลืออีก ${i.meta?.missingSeat ?? "ไม่ทราบ"} คน ที่ยังไม่มีห้อง/แถว/คอลัมน์`,
+          "กรุณาจัดที่นั่งให้ครบก่อนปลดล็อก",
+        ].join("\n");
+
+      case "UNBAGGED":
+        return [
+          "❌ ยังมีเล่มข้อสอบที่ยังไม่ถูกใส่ถุง",
+          `ยังเหลือ ${i.meta?.unbagged ?? "ไม่ทราบ"} เล่ม`,
+          "กรุณาจัดถุงให้ครบก่อนปลดล็อก",
+        ].join("\n");
+
+      case "QUESTION_COUNT_MISMATCH":
+        return [
+          "❌ จำนวนข้อสอบไม่ตรงกัน",
+          `พบ ${i.meta?.mismatchCountTotal ?? "ไม่ทราบ"} วิชา/รอบ ที่จำนวนข้อในระบบไม่สอดคล้องกัน`,
+          "กรุณาตรวจให้จำนวนข้อใน Session กับ Subject Questions ตรงกันก่อน",
+        ].join("\n");
+
+      case "SLOT_MISSING":
+        return [
+          "❌ ยังสร้าง Slot การตรวจไม่ครบ",
+          `ยังขาด ${i.meta?.missingSlotsTotal ?? "ไม่ทราบ"} slot`,
+          "ต้องสร้าง slot ให้ครบทุกเล่ม/ทุกข้อ/ผู้ตรวจ 2 คนก่อนปลดล็อก",
+        ].join("\n");
+
+      case "SLOT_NOT_COMPLETED":
+        return [
+          "❌ ยังตรวจข้อสอบไม่ครบ",
+          `ยังเหลือ ${i.meta?.pendingSlots ?? i.meta?.notCompletedTotal ?? "ไม่ทราบ"} slot ที่สถานะยังไม่เสร็จ`,
+          "ต้องให้สถานะเป็น COMPLETED ครบก่อนปลดล็อก",
+        ].join("\n");
+
+      default:
+        return `❌ ${i.message ?? "มีเงื่อนไขบางอย่างยังไม่ผ่าน"}`;
+    }
+  })
+  .join("\n\n"); // ✅ เว้นบรรทัดระหว่างหัวข้อ
+}
+
 export class CampaignDecryptService {
     static async decryptedUnlock(campaignId: number, FirstKey: string, SecondKey: string) {
         const conn = await DB.getInstance().getConnection();
         try {
-            const { decryptedKey1, decryptedKey2 } = await keyService.decrypteKeyForUnlock(campaignId, conn);
+            await conn.beginTransaction();
 
-            if (!decryptedKey1 || !decryptedKey2) {
-                throw new Error("ไม่พบคีย์สำหรับแคมเปญนี้");
+            const camp = await decryptRepo.getCampaignIdUnlock(campaignId, conn);
+
+            if (!camp) throw new Error("ไม่พบแคมเปญ");
+            if (camp.is_unlock === 1) {
+                await conn.commit();
+                return { success: true, message: "รอบสอบถูกปลดล็อกอยู่แล้ว" };
             }
-            if (decryptedKey1 !== FirstKey || decryptedKey2 !== SecondKey) {
-                throw new Error("คีย์ที่กรอกไม่ถูกต้อง");
+
+            const prereq = await decryptRepo.checkUnlockPrerequisites(campaignId, conn);
+            if (!prereq.ok) {
+                throw new Error("ยังปลดล็อกไม่ได้:\n" + formatUnlockError(prereq));
             }
+
+            const { decryptedKey1, decryptedKey2 } = await keyService.decrypteKeyForUnlock(campaignId, conn);
+            if (!decryptedKey1 || !decryptedKey2) throw new Error("ไม่พบคีย์สำหรับแคมเปญนี้");
+            if (decryptedKey1 !== FirstKey || decryptedKey2 !== SecondKey) throw new Error("คีย์ที่กรอกไม่ถูกต้อง");
 
             await campaignRepo.unlockCampaign(campaignId, conn);
 
-            return {
-                success: true, 
-                message: "ถอดรหัสปลดล็อครอบสอบสำเร็จ" };
-
-        }
-        catch (error: any) {
-            console.error("ไม่สามารถปลดล็อกแคมเปญได้:", error);
+            await conn.commit();
+            return { success: true, message: "ถอดรหัสปลดล็อครอบสอบสำเร็จ" };
+        } catch (error: any) {
+            await conn.rollback();
             throw new Error(error.message || "ไม่สามารถถอดรหัสปลดล็อครอบสอบได้");
-        }
-        finally {
+        } finally {
             conn.release();
         }
     }
-    //     static async requestOtp(opts: {
-    //         campaignId: number;
-    //         accountId: number;
-    //         firstKey: string;
-    //         secondKey: string;
-    //     }) {
-    //         const { campaignId, accountId, firstKey, secondKey } = opts;
-    //         const conn = await DB.getInstance().getConnection();
-    //         try {
-    //             // 1) ดึง key 1/2 ของ campaign นี้
-    //             const [rows] = await conn.query<any[]>(
-    //                 `
-    //         SELECT id, \`key\`, order_num
-    //         FROM campaign_keys
-    //         WHERE campaign_id = ? AND active = 1
-    //         ORDER BY order_num ASC
-    //         `,
-    //                 [campaignId]
-    //             );
-
-    //             if (rows.length < 2) {
-    //                 throw new Error("แคมเปญนี้ยังไม่ได้สร้างคีย์ครบ 2 ดอก");
-    //             }
-
-    //             const key1 = rows.find((r) => r.order_num === 1);
-    //             const key2 = rows.find((r) => r.order_num === 2);
-
-    //             if (!key1 || !key2) {
-    //                 throw new Error("โครงสร้างคีย์ของแคมเปญนี้ไม่ถูกต้อง");
-    //             }
-
-    //             // 2) ตรวจว่า key ตรงไหม
-    //             if (key1.key !== firstKey || key2.key !== secondKey) {
-    //                 throw new Error("คีย์เข้ารหัสไม่ถูกต้อง");
-    //             }
-
-    //             // 3) เอา email ของ account ไปส่ง OTP
-    //             const [accRows] = await conn.query<any[]>(
-    //                 `SELECT email, full_name FROM accounts WHERE id = ?`,
-    //                 [accountId]
-    //             );
-    //             if (!accRows.length || !accRows[0].email) {
-    //                 throw new Error("ไม่พบอีเมลของผู้ใช้งาน");
-    //             }
-
-    //             const email = accRows[0].email as string;
-
-    //             // 4) สร้าง OTP 6 หลัก + hash
-    //             const otp = (Math.floor(Math.random() * 900000) + 100000).toString();
-    //             const otpHash = await bcrypt.hash(otp, 10);
-    //             const otpToken = crypto.randomUUID();
-
-    //             const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 นาที
-
-    //             // 5) insert twofactor_sessions
-    //             await conn.query(
-    //                 `
-    //   INSERT INTO twofactor_sessions
-    //     (account_id, campaign_id, purpose, otp_token, otp_hash, expires_at, attempts)
-    //   VALUES (?, ?, 'DECRYPT_CAMPAIGN', ?, ?, ?, 0)
-    //   `,
-    //                 [accountId, campaignId, otpToken, otpHash, expiresAt]
-    //             );
-
-    //             // 6) ส่ง email
-    //             await sendMail({
-    //                 to: email,
-    //                 subject: `รหัสยืนยันการถอดรหัสแคมเปญ #${campaignId}`,
-    //                 text: `รหัสยืนยันของคุณคือ ${otp} (หมดอายุใน 10 นาที)`,
-    //                 html: emailTemplate(otp),
-    //             });
-
-    //             const maskEmail = email.replace(/(.{2}).+(@.*)/, "$1***$2");
-
-    //             return {
-    //                 sentToMasked: maskEmail,
-    //                 expiresAt: expiresAt.toISOString(),
-    //                 otpToken, // ✅ ส่ง token ไม่ใช่ hash
-    //             };
-    //         } finally {
-    //             conn.release();
-    //         }
-    //     }
-    //     static async verifyOtpAndUnlock(opts: {
-    //         campaignId: number;
-    //         accountId: number;
-    //         otpToken: string;
-    //         otpCode: string;
-    //     }) {
-    //         const { campaignId, accountId, otpCode, otpToken } = opts;
-    //         const conn = await DB.getInstance().getConnection();
-
-    //         try {
-    //             // ===== 0) เปิด Transaction กัน race condition =====
-    //             await conn.beginTransaction();
-
-    //             // ===== 1) ดึง OTP ล่าสุดของ user + campaign นี้ ที่ยังไม่ใช้ (ล็อคแถวไว้) =====
-    //             const [rows] = await conn.query<any[]>(
-    //                 `
-    //   SELECT id, otp_hash, expires_at, used_at, attempts
-    //   FROM twofactor_sessions
-    //   WHERE account_id = ?
-    //     AND campaign_id = ?
-    //     AND otp_token = ?
-    //     AND purpose = 'DECRYPT_CAMPAIGN'
-    //   LIMIT 1
-    //   FOR UPDATE
-    //   `,
-    //                 [accountId, campaignId, otpToken]
-    //             );
-
-
-    //             if (!rows.length) {
-    //                 throw new Error("OTP session ไม่ถูกต้อง");
-    //             }
-
-    //             const rec = rows[0];
-
-    //             if (rec.used_at) throw new Error("รหัสนี้ถูกใช้ไปแล้ว");
-    //             if (new Date(rec.expires_at).getTime() < Date.now())
-    //                 throw new Error("รหัสยืนยันหมดอายุแล้ว");
-    //             if (rec.attempts >= 5)
-    //                 throw new Error("กรอกรหัสผิดเกินจำนวนครั้งที่กำหนด");
-
-    //             // ===== 2) เช็ค OTP =====
-    //             const ok = await bcrypt.compare(otpCode, rec.otp_hash);
-
-    //             if (!ok) {
-    //                 await conn.query(
-    //                     `UPDATE twofactor_sessions SET attempts = attempts + 1 WHERE id = ?`,
-    //                     [rec.id]
-    //                 );
-
-    //                 await conn.commit();
-    //                 throw new Error("รหัสยืนยันไม่ถูกต้อง");
-    //             }
-
-    //             // ===== 3) OTP ถูก → mark ใช้แล้ว + ปลดล็อคแคมเปญ =====
-    //             await conn.query(
-    //                 `
-    //         UPDATE twofactor_sessions
-    //         SET used_at = NOW(),
-    //             attempts = attempts + 1
-    //         WHERE id = ?
-    //   AND used_at IS NULL
-    //         `,
-    //                 [rec.id]
-    //             );
-
-    //             await conn.query(
-    //                 `
-    //         UPDATE exam_campaigns
-    //         SET is_unlock = 1
-    //         WHERE id = ?
-    //         `,
-    //                 [campaignId]
-    //             );
-
-    //             // ถ้าต้องการล็อคเฉพาะ campaign นี้ (ไม่เกี่ยวกับ campaign อื่น) แบบนี้โอเคแล้ว
-
-    //             await conn.commit();
-    //         } catch (err) {
-    //             // ถ้า error ใด ๆ ให้ rollback ก่อน
-    //             try {
-    //                 await conn.rollback();
-    //             } catch {
-    //                 // ถ้า rollback fail ก็ข้ามได้
-    //             }
-    //             throw err;
-    //         } finally {
-    //             conn.release();
-    //         }
-    //     }
-
 }

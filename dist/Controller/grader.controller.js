@@ -42,3 +42,21 @@ graderController.getByCampaignId = (req, res) => __awaiter(void 0, void 0, void 
             .send({ message: (_b = error.message) !== null && _b !== void 0 ? _b : "Server error" });
     }
 });
+graderController.getAssignmentByAccountId = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _b;
+    try {
+        const { campaign_id, account_id } = req.params;
+        console.log(campaign_id, account_id);
+        if (!campaign_id || !account_id) {
+            return res
+                .status(400).send({ message: "Missing campaignId parameter" });
+        }
+        const result = yield grader_service_1.graderService.getAssignmentByAccountId(Number(campaign_id), Number(account_id));
+        return res.status(200).json(result);
+    }
+    catch (error) {
+        return res
+            .status(500)
+            .send({ message: (_b = error.message) !== null && _b !== void 0 ? _b : "Server error" });
+    }
+});

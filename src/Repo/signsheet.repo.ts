@@ -29,7 +29,6 @@ class SignSheetRepo {
                 u.full_name    AS firstName,
                 ''             AS lastName,
                 uc.room_code   AS roomName,
-                uc.seat_code,
                 uc.row_no,
                 uc.col_no,
                 us.qr_payload
@@ -90,7 +89,6 @@ class SignSheetRepo {
                 u.full_name    AS firstName,
                 ''             AS lastName,
                 uc.room_code   AS roomName,
-                uc.seat_code,
                 us.qr_payload,
                 uc.row_no
             ${baseJoins}

@@ -20,7 +20,7 @@ verifyController.verify = (req, res) => __awaiter(void 0, void 0, void 0, functi
     try {
         const payload = req.body;
         if (!payload.qrPayload) {
-            return res.status(400).send({ message: "Missing required fields" });
+            return res.status(400).send({ success: false, message: "Missing required fields" });
         }
         const userSessionData = yield verify_service_1.verifyService.verifyQrPayload(payload);
         console.log(userSessionData);
@@ -29,6 +29,22 @@ verifyController.verify = (req, res) => __awaiter(void 0, void 0, void 0, functi
     catch (error) {
         console.error("Controller Error (Verify):", error);
         // (ส่ง Error Message ที่ Service (เช่น "QR Code นี้สำหรับ Session อื่น") กลับไป)
-        res.status(400).send({ message: error.message });
+        res.status(400).send({ success: false, message: error.message });
+    }
+});
+verifyController.CheckBookletsOrders = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaignId, qrPayload, innitialCode } = req.body;
+        const bookletsId = parseInt(innitialCode);
+        if (!qrPayload || !campaignId || !bookletsId) {
+            return res.status(400).send({ success: false, message: "ข้อมูลไม่ครบถ้วน" });
+        }
+        const userSessionData = yield verify_service_1.verifyService.checkBookletsOrders(campaignId, qrPayload, bookletsId);
+        res.status(200).json(userSessionData);
+    }
+    catch (error) {
+        console.error("Controller Error (Verify):", error);
+        // (ส่ง Error Message ที่ Service (เช่น "QR Code นี้สำหรับ Session อื่น") กลับไป)
+        res.status(400).send({ success: false, message: error.message });
     }
 });

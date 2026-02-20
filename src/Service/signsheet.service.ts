@@ -235,6 +235,7 @@ export class SignSheetService {
     search: string;
   }) {
     const { session_id, campaign_id, page, limit, search } = options;
+    console.log("Fetching paginated user sessions with options:", options);
     return signSheetRepo.findUserSessionsWithPagination(
       session_id,
       campaign_id,

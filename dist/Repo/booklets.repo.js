@@ -27,22 +27,25 @@ class BookletsRepo {
     }
     insertOne(conn, params) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { sessionId, userSessionId, bagNo, seqInBag, status } = params;
+            const { sessionId, userSessionId, bagNo, seqInBag, status, created_at } = params;
             const sql = `
       INSERT INTO booklets (
         session_id,
         user_session_id,
-        bag_no,
+        bag_id,
         seq_in_bag,
-        status
-      ) VALUES (?, ?, ?, ?, ?)
+        status,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?,?)
     `;
+            console.log(bagNo);
             const [result] = yield conn.execute(sql, [
                 sessionId,
                 userSessionId,
                 bagNo,
                 seqInBag,
                 status,
+                created_at
             ]);
             return result.insertId;
         });
@@ -62,16 +65,18 @@ class BookletsRepo {
     findByCampaignSessionAndBag(conn, campaignId, sessionId, bagNo) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-      SELECT
+SELECT
         bk.id          AS booklet_id,
         bk.session_id,
-        bk.bag_no,
+        bk.bag_id,
         bk.seq_in_bag,
         bk.status,
         us.qr_payload  AS qr_payload,
         u.user_code,
-        u.full_name
+        u.full_name,
+        bk.created_at
       FROM booklets bk
+      join bags b on b.id = bk.bag_id
       JOIN user_sessions us
         ON bk.user_session_id = us.id
       JOIN user_campaigns uc
@@ -80,7 +85,7 @@ class BookletsRepo {
         ON uc.user_id = u.id
       WHERE us.campaign_id = ?
         AND bk.session_id = ?
-        AND bk.bag_no    = ?
+        AND b.bag_no   = ?
       ORDER BY bk.seq_in_bag ASC, bk.id ASC;
     `;
             const [rows] = yield conn.execute(sql, [
@@ -89,6 +94,41 @@ class BookletsRepo {
                 bagNo,
             ]);
             return rows;
+        });
+    }
+    findBookletsbyQRpayload(conn, campaignId, sessionId, user_code) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+SELECT
+        bk.id          AS booklet_id,
+        bk.session_id,
+        bk.bag_id,
+        bk.seq_in_bag,
+        bk.status,
+        us.qr_payload  AS qr_payload,
+        u.user_code,
+        u.full_name,
+        b.bag_no,
+        bk.created_at
+      FROM booklets bk
+      join bags b on b.id = bk.bag_id
+      JOIN user_sessions us
+        ON bk.user_session_id = us.id
+      JOIN user_campaigns uc
+        ON us.user_campaign_id = uc.id
+      JOIN users u
+        ON uc.user_id = u.id
+      WHERE us.campaign_id = ?
+        AND bk.session_id = ?
+        AND u.user_code = ?
+      ORDER BY bk.seq_in_bag ASC, bk.id ASC;
+    `;
+            const [rows] = yield conn.execute(sql, [
+                campaignId,
+                sessionId,
+                user_code,
+            ]);
+            return rows[0] || null;
         });
     }
 }

@@ -22,6 +22,10 @@ class campaignService {
 exports.campaignService = campaignService;
 _a = campaignService;
 campaignService.create = (payload) => __awaiter(void 0, void 0, void 0, function* () {
+    const checkCampActive = yield campaign_repo_1.default.CheckActiveCamp();
+    if (checkCampActive) {
+        throw new Error("มีรอบสอบที่เปิดใช้งานอยู่แล้ว ไม่สามารถสร้างรอบสอบใหม่ได้");
+    }
     const newCampaign = yield campaign_repo_1.default.create(payload);
     return newCampaign;
 });
@@ -49,4 +53,7 @@ campaignService.delete = (id) => __awaiter(void 0, void 0, void 0, function* () 
     finally {
         connection.release();
     }
+});
+campaignService.getIsUnlock = (campaign_id) => __awaiter(void 0, void 0, void 0, function* () {
+    return yield campaign_repo_1.default.getIsDecrypted(campaign_id);
 });

@@ -39,79 +39,91 @@ class UserImportRepo {
             return rows[0] || null;
         });
     }
-    // (findOrCreateUser - เหมือนเดิม)
     findOrCreateUser(payload, dbClient) {
         return __awaiter(this, void 0, void 0, function* () {
-            const findSql = "SELECT * FROM users WHERE user_code = ?";
-            const [rows] = yield dbClient.execute(findSql, [
-                payload.user_code,
-            ]);
-            if (rows.length > 0) {
-                return { user: rows[0], created: false };
-            }
-            const insertSql = "INSERT INTO users (user_code, full_name) VALUES (?, ?)";
-            const [result] = yield dbClient.execute(insertSql, [
+            var _a, _b;
+            const sql = `
+    INSERT INTO users (
+      user_code,
+      full_name,
+      first_name,
+      last_name,
+      title,
+      national_id,
+      birth_date
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      -- sync ชื่อ ตามไฟล์ล่าสุด
+      full_name   = VALUES(full_name),
+      first_name  = VALUES(first_name),
+      last_name   = VALUES(last_name),
+      title       = VALUES(title),
+      -- ถ้ามีค่าใหม่ให้อัปเดต แต่ถ้า null ก็ใช้ค่าเดิม
+      national_id = IFNULL(VALUES(national_id), national_id),
+      birth_date  = IFNULL(VALUES(birth_date),  birth_date),
+      -- trick สำคัญ: ทำให้ insertId กลายเป็น id เดิมตอน duplicate
+      id = LAST_INSERT_ID(id)
+  `;
+            const [result] = yield dbClient.execute(sql, [
                 payload.user_code,
                 payload.full_name,
+                payload.first_name,
+                payload.last_name,
+                payload.title,
+                (_a = payload.national_id) !== null && _a !== void 0 ? _a : null,
+                (_b = payload.birth_date) !== null && _b !== void 0 ? _b : null,
             ]);
-            const newUser = yield this.findById(result.insertId, dbClient);
-            if (!newUser) {
-                throw new Error("Failed to retrieve newly created user.");
+            const created = result.affectedRows === 1; // 1 = insert ใหม่, 2 = update
+            const newId = result.insertId;
+            const user = yield this.findById(newId, dbClient);
+            if (!user) {
+                throw new Error("Failed to retrieve user after upsert.");
             }
-            return { user: newUser, created: true };
+            return { user, created };
         });
     }
-    // (findOrCreateUserCampaign - เหมือนเดิม)
     findOrCreateUserCampaign(payload, dbClient) {
         return __awaiter(this, void 0, void 0, function* () {
-            const findSql = "SELECT * FROM user_campaigns WHERE user_id = ? AND campaign_id = ?";
-            const [rows] = yield dbClient.execute(findSql, [
+            const sql = `
+    INSERT INTO user_campaigns (user_id, campaign_id)
+    VALUES (?, ?)
+    ON DUPLICATE KEY UPDATE
+      id = LAST_INSERT_ID(id)
+  `;
+            const [result] = yield dbClient.execute(sql, [
                 payload.user_id,
                 payload.campaign_id,
             ]);
-            if (rows.length > 0) {
-                return { userCampaign: rows[0], created: false };
+            const created = result.affectedRows === 1;
+            const newId = result.insertId;
+            const userCampaign = yield this.findUserCampaignById(newId, dbClient);
+            if (!userCampaign) {
+                throw new Error("Failed to retrieve user_campaign after upsert.");
             }
-            const insertSql = "INSERT INTO user_campaigns (user_id, campaign_id) VALUES (?, ?)";
-            const [result] = yield dbClient.execute(insertSql, [
-                payload.user_id,
-                payload.campaign_id,
-            ]);
-            const newUserCampaign = yield this.findUserCampaignById(result.insertId, dbClient);
-            if (!newUserCampaign) {
-                throw new Error("Failed to retrieve newly created user_campaign.");
-            }
-            return { userCampaign: newUserCampaign, created: true };
+            return { userCampaign, created };
         });
     }
-    // [ ⭐️ นี่คือจุดที่แก้ไข ⭐️ ]
-    // (แก้ปัญหา Error: ts(2353))
-    findOrCreateUserSession(
-    // (1. เพิ่ม 'site_id' เข้าไปใน Type)
-    payload, dbClient) {
+    findOrCreateUserSession(payload, dbClient) {
         return __awaiter(this, void 0, void 0, function* () {
-            const findSql = "SELECT * FROM user_sessions WHERE user_campaign_id = ? AND session_id = ?";
-            const [rows] = yield dbClient.execute(findSql, [
-                payload.user_campaign_id,
-                payload.session_id,
-            ]);
-            if (rows.length > 0) {
-                return { userSession: rows[0], created: false };
-            }
-            // (2. เพิ่ม site_id ใน SQL)
-            const insertSql = "INSERT INTO user_sessions (user_campaign_id, session_id, campaign_id, site_id) VALUES (?, ?, ?, ?)"; // 👈 (4 ?)
-            // (3. เพิ่ม site_id ใน Params)
-            const [result] = yield dbClient.execute(insertSql, [
+            const sql = `
+    INSERT INTO user_sessions (user_campaign_id, session_id, campaign_id)
+    VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      id = LAST_INSERT_ID(id)
+  `;
+            const [result] = yield dbClient.execute(sql, [
                 payload.user_campaign_id,
                 payload.session_id,
                 payload.campaign_id,
-                payload.site_id, // 👈 (เพิ่ม)
             ]);
-            const newUserSession = yield this.findUserSessionById(result.insertId, dbClient);
-            if (!newUserSession) {
-                throw new Error("Failed to retrieve newly created user_session.");
+            const created = result.affectedRows === 1;
+            const newId = result.insertId;
+            const userSession = yield this.findUserSessionById(newId, dbClient);
+            if (!userSession) {
+                throw new Error("Failed to retrieve user_session after upsert.");
             }
-            return { userSession: newUserSession, created: true };
+            return { userSession, created };
         });
     }
     countByCampaignId(campaignId_1) {
@@ -156,6 +168,21 @@ class UserImportRepo {
                 throw new Error(`Failed to update qr_payload: user_session_id ${userSessionId} not found.`);
             }
             return true;
+        });
+    }
+    findMaxUserCodeByCampaign(campaignId_1) {
+        return __awaiter(this, arguments, void 0, function* (campaignId, dbClient = this.pool) {
+            var _a, _b;
+            const sql = `
+    SELECT 
+      COALESCE(MAX(CAST(u.user_code AS UNSIGNED)), 0) AS max_user_code
+    FROM users u
+    JOIN user_campaigns uc ON u.id = uc.user_id
+    WHERE uc.campaign_id = ?
+  `;
+            const [rows] = yield dbClient.execute(sql, [campaignId]);
+            const max = Number((_b = (_a = rows[0]) === null || _a === void 0 ? void 0 : _a.max_user_code) !== null && _b !== void 0 ? _b : 0);
+            return max;
         });
     }
 }

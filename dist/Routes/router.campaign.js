@@ -6,4 +6,5 @@ const campaignRouter = (0, express_1.Router)();
 campaignRouter.post("/campaigns", campaign_controller_1.campaignController.create);
 campaignRouter.delete("/campaigns/:id", campaign_controller_1.campaignController.delete);
 campaignRouter.put("/campaigns", campaign_controller_1.campaignController.update);
+campaignRouter.get("/campaigns/:campaign_id/is-unlock", campaign_controller_1.campaignController.getIsUnlock);
 exports.default = campaignRouter;

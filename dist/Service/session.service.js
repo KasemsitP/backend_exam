@@ -25,6 +25,7 @@ sessionService.create = (payload) => __awaiter(void 0, void 0, void 0, function*
 });
 sessionService.delete = (id) => __awaiter(void 0, void 0, void 0, function* () {
     const result = yield session_repo_1.default.delete(id);
+    console.log("lnwwwadawdwad");
     if (!result) {
         throw new Error(`Failed to delete Session ID ${id} or not found.`);
     }

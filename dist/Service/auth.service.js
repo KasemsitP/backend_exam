@@ -8,17 +8,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -38,24 +27,33 @@ authservice.IsDuplicate = (username) => __awaiter(void 0, void 0, void 0, functi
     }
 });
 authservice.CheckUsername = (username, password) => __awaiter(void 0, void 0, void 0, function* () {
+    var _b;
     const row = yield auth_repo_1.default.findByUsername(username);
     if (!row)
         throw new Error("ไม่พบผู้ใช้");
+    if (Number(row.active) !== 1)
+        throw new Error("บัญชีถูกระงับการใช้งาน");
     const match = yield utills_1.utills.bcryptCompare(password, row.password_hash);
     if (!match)
         throw new Error("รหัสผ่านไม่ถูกต้อง");
-    const { password_hash } = row, secureUserData = __rest(row, ["password_hash"]);
-    const roleCode = (row.role_code || "staff").toLowerCase(); // "admin"
+    //const { password_hash, ...secureUserData } = row;
+    const roleCode = (row.role_code || "staff").toLowerCase();
     return {
-        id: secureUserData.id.toString(),
-        name: secureUserData.full_name,
-        username: secureUserData.username,
-        roles: [roleCode]
+        id: row.id,
+        name: row.full_name,
+        username: row.username,
+        roles: [roleCode],
+        active: Number(row.active),
+        sessionVersion: Number((_b = row.session_version) !== null && _b !== void 0 ? _b : 1),
     };
 });
 authservice.getAllAccounts = () => __awaiter(void 0, void 0, void 0, function* () {
     const rows = yield auth_repo_1.default.findAllAccountsWithRoles();
     // (แปลง active (0/1) เป็น boolean)
+    return rows.map(row => (Object.assign(Object.assign({}, row), { active: !!row.active })));
+});
+authservice.getAllGradersAccounts = (campaign) => __awaiter(void 0, void 0, void 0, function* () {
+    const rows = yield auth_repo_1.default.findAllAccountsGraderByCampaign(Number(campaign));
     return rows.map(row => (Object.assign(Object.assign({}, row), { active: !!row.active })));
 });
 authservice.getAllRoles = () => __awaiter(void 0, void 0, void 0, function* () {
@@ -81,8 +79,41 @@ authservice.updateAccount = (id, data) => __awaiter(void 0, void 0, void 0, func
     }
     return Object.assign(Object.assign({}, updatedAccount), { active: !!updatedAccount.active });
 });
+authservice.revokeAccount = (targetAccountId, actorAccountId) => __awaiter(void 0, void 0, void 0, function* () {
+    // กัน revoke ตัวเอง (optional แต่แนะนำ)
+    if (actorAccountId && targetAccountId === actorAccountId) {
+        throw new Error("ไม่สามารถระงับบัญชีตัวเองได้");
+    }
+    const target = yield auth_repo_1.default.findAccountBasicById(targetAccountId);
+    if (!target)
+        throw new Error("ไม่พบผู้ใช้");
+    // console.log(target)
+    if (Number(target.active) !== 1) {
+        // ถูก revoke อยู่แล้ว
+        return { id: target.id, active: false, alreadyRevoked: true };
+    }
+    yield auth_repo_1.default.revokeAccountById(targetAccountId);
+    return { id: targetAccountId, active: false };
+});
+authservice.unrevokeAccount = (targetAccountId) => __awaiter(void 0, void 0, void 0, function* () {
+    const target = yield auth_repo_1.default.findAccountBasicById(targetAccountId);
+    if (!target)
+        throw new Error("ไม่พบผู้ใช้");
+    yield auth_repo_1.default.unrevokeAccountById(targetAccountId);
+    return { id: targetAccountId, active: true };
+});
 authservice.deleteAccount = (id) => __awaiter(void 0, void 0, void 0, function* () {
-    // (TODO: ควรเช็คว่า Account นี้ถูกใช้งานใน Graders หรือไม่ก่อนลบ)
-    yield auth_repo_1.default.deleteAccount(id);
+    const checkRole = yield auth_repo_1.default.checkRoleByID(id);
+    console.log(checkRole);
+    console.log(id);
+    console.log("comes");
+    if (checkRole.code === "GRADER") {
+        console.log(id);
+        yield auth_repo_1.default.deleteAccountWithRelations(id);
+    }
+    else {
+        yield auth_repo_1.default.deleteAccount(id);
+    }
+    //    await authrepo.deleteAccount(id);
     return { id };
 });

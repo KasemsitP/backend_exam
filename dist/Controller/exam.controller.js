@@ -25,3 +25,22 @@ examDataController.getInitialData = (req, res) => __awaiter(void 0, void 0, void
         res.status(500).send({ message: error.message });
     }
 });
+examDataController.getCampaignNoactive = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const data = yield exam_service_1.examDataService.getCampaignNoactive();
+        res.status(200).json(data);
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+    }
+});
+examDataController.ActiveInActiveCampaign = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { campaign_id } = req.params;
+    try {
+        const data = yield exam_service_1.examDataService.ActiveInActiveCampaign(Number(campaign_id));
+        res.status(200).json({ message: "sucess" });
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+    }
+});

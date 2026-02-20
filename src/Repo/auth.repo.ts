@@ -106,7 +106,7 @@ FROM
 JOIN 
     graders g ON a.id = g.account_id AND g.campaign_id = ?
 LEFT JOIN 
-    roles r ON a.role_id = r.id AND r.code = 'GRADER'
+    roles r ON a.role_id = r.id AND r.code = 'GRADER' 
 ORDER BY a.id ASC;
 `;
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign]);

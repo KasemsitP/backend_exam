@@ -1,8 +1,14 @@
 "use strict";
-// import express from "express";
-// import { isAuthenticated } from "../Middleware/authentication";
-// import { subjectcontroller } from "../Controller/subject.controller";
-// const router = express.Router();
-// router.get("/subjectByCampaign",subjectcontroller.getSubject)
-// router.post("/insertBySessionSubject",subjectcontroller.insertBySession)
-// export default router;
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const subject_controller_1 = require("../Controller/subject.controller");
+const subjectRouter = (0, express_1.Router)();
+subjectRouter.get("/subjects", subject_controller_1.SubjectController.getAll);
+subjectRouter.get("/subjects/questioncamp/:campaign_id", subject_controller_1.SubjectController.getSubjectQuestionByCamp);
+subjectRouter.get("/subjects/:sessionId/:campaign_id", subject_controller_1.SubjectController.getSubjectandQuestion);
+subjectRouter.post("/subjects", subject_controller_1.SubjectController.create);
+subjectRouter.put("/subjects/:id", subject_controller_1.SubjectController.update);
+subjectRouter.delete("/subjects/:id", subject_controller_1.SubjectController.remove);
+subjectRouter.post("/subjects/:id/questions", subject_controller_1.SubjectController.addQuestion);
+subjectRouter.delete("/subjects/:id/questions/:questionId", subject_controller_1.SubjectController.deleteQuestion);
+exports.default = subjectRouter;

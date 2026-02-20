@@ -22,19 +22,17 @@ exports.gradingscoreController = gradingscoreController;
 _a = gradingscoreController;
 gradingscoreController.SubmitScore = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { qrPayload, campaignId, sessionId, slotId, subjectId, questionNo, graderId, score } = req.body;
-        if (!qrPayload || !campaignId || !sessionId || !subjectId || !questionNo || !graderId || !slotId || score === undefined) {
+        const { qrPayload, campaignId, slotId, graderId, score, question_no } = req.body;
+        if (!qrPayload || !campaignId || !graderId || !slotId || score === undefined || question_no === undefined) {
             return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
         }
         const payload = {
             qrPayload,
             campaignId: Number(campaignId),
-            sessionId: Number(sessionId),
-            subjectId: Number(subjectId),
-            questionNo: Number(questionNo),
             graderId: Number(graderId),
             slotId: Number(slotId),
             score: Number(score),
+            question_no: Number(question_no),
         };
         const result = yield gradingscore_service_1.gradingScoreService.submitScore(payload);
         res.status(201).json({ slotId: result.slotId, score: result.score });

@@ -16,22 +16,33 @@ class examRoomController {
 }
 exports.examRoomController = examRoomController;
 _a = examRoomController;
-examRoomController.getAllBySession = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+// GET /api/exam-rooms/campaign/:campaignId
+examRoomController.getAllByCampaign = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { sessionId } = req.params; // (Frontend ID: "sess-10")
-        const rooms = yield examRoom_service_1.examRoomService.getAllBySession(sessionId);
+        const { campaignId } = req.params;
+        const rooms = yield examRoom_service_1.examRoomService.getAllByCampaign(campaignId);
         res.status(200).json(rooms);
     }
     catch (error) {
         res.status(500).send({ message: error.message });
     }
 });
+// POST /api/exam-rooms
 examRoomController.save = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const payload = req.body;
-        if (!payload.sessionId || !payload.roomCode || !payload.capacity) {
-            return res.status(400).send({ message: "Missing required fields" });
+        const { campaign_id, roomCode, capacity } = req.body;
+        const payload = {
+            campaignId: Number(campaign_id),
+            roomCode,
+            capacity,
+        };
+        console.log(payload);
+        if (!payload.campaignId || !payload.roomCode || !payload.capacity) {
+            return res
+                .status(400)
+                .send({ message: "Missing required fields (campaignId, roomCode, capacity)" });
         }
+        console.log("asdasd");
         const result = yield examRoom_service_1.examRoomService.saveRoom(payload);
         res.status(201).json(result);
     }
@@ -39,13 +50,16 @@ examRoomController.save = (req, res) => __awaiter(void 0, void 0, void 0, functi
         res.status(500).send({ message: error.message });
     }
 });
+// DELETE /api/exam-rooms/:campaignId/:roomCode
 examRoomController.delete = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { sessionId, roomCode } = req.params;
-        if (!sessionId || !roomCode) {
-            return res.status(400).send({ message: "Missing sessionId or roomCode" });
+        const { campaignId, roomCode } = req.params;
+        if (!campaignId || !roomCode) {
+            return res
+                .status(400)
+                .send({ message: "Missing campaignId or roomCode" });
         }
-        const result = yield examRoom_service_1.examRoomService.deleteRoom(sessionId, roomCode);
+        const result = yield examRoom_service_1.examRoomService.deleteRoom(campaignId, roomCode);
         res.status(200).json(result);
     }
     catch (error) {

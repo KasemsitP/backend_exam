@@ -30,21 +30,50 @@ bagController.bulkCreate = (req, res) => __awaiter(void 0, void 0, void 0, funct
         res.status(500).send({ message: error.message });
     }
 });
-bagController.InsertBooklets = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+bagController.CreateBagAndBooklets = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const payload = req.body;
-        // console.log(payload)
-        if (!payload.campaignId || !payload.bagId || !payload.scannedCodes) {
+        const { campaignId, payload, datetime } = req.body;
+        if (!campaignId || !payload || !datetime) {
             return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
         }
-        const result = yield bag_service_1.bagService.InsertBooklets(payload);
-        res.status(200).json(payload);
+        const dateTimes = datetime.map((d) => new Date(d));
+        const result = yield bag_service_1.bagService.CreateBagAndInsertBooklets(campaignId, payload, dateTimes);
+        return res.status(200).json(result);
     }
     catch (error) {
-        console.error("Controller Error (Finalize & Link):", error);
-        res.status(400).send({ message: error.message });
+        res.status(500).send({ message: error.message });
     }
 });
+bagController.CheckSubjectBooklets = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaignId, payload, datetime } = req.body;
+        if (!campaignId || !payload || !datetime) {
+            return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
+        }
+        const dateTimes = datetime.map((d) => new Date(d));
+        const result = yield bag_service_1.bagService.CheckbookletsSubjects(campaignId, payload, dateTimes);
+        return res.status(200).json(result);
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+    }
+});
+// static InsertBooklets = async (req: Request, res: Response) => {
+//   try {
+//     const payload = req.body;
+//     console.log(payload)
+//     if (!payload.campaignId || !payload.bag_no || !payload.scannedCodes) {
+//       //console.log(payload)
+//       return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
+//     }
+//     // console.log(payload, "lnw")
+//     const result = await bagService.InsertBooklets(payload)
+//     res.status(200).json(result);
+//   } catch (error: any) {
+//     console.error("Controller Error (Finalize & Link):", error);
+//     res.status(400).send({ message: error.message });
+//   }
+// };
 bagController.getAllForCampaign = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const campaignId = req.params.campaignId;
@@ -73,8 +102,9 @@ bagController.deleteById = (req, res) => __awaiter(void 0, void 0, void 0, funct
     }
 });
 bagController.getBookletsInBag = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    console.log("HIT /api/bags/:bagNo/booklets", req.params, req.query);
+    //console.log("HIT /api/bags/:bagNo/booklets", req.params, req.query);
     try {
+        console.log("HIT /api/bags/:bagNo/booklets", req.params, req.query);
         const bagNo = Number(req.params.bagNo);
         const campaignId = Number(req.query.campaignId);
         const sessionId = Number(req.query.sessionId);
@@ -86,10 +116,27 @@ bagController.getBookletsInBag = (req, res) => __awaiter(void 0, void 0, void 0,
             sessionId,
             bagNo,
         });
+        console.log(list);
         res.json(list);
     }
     catch (err) {
         console.error("Controller Error (getBookletsInBag):", err);
         res.status(500).send({ message: err.message || "ไม่สามารถดึงข้อมูลถุงได้" });
+    }
+});
+bagController.getBookScannedCount = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const campaignId = Number(req.params.campaignId);
+        if (!campaignId) {
+            return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
+        }
+        const list = yield bag_service_1.bagService.getBookScannedCount({
+            campaignId,
+        });
+        res.json(list);
+    }
+    catch (err) {
+        //  console.error("Controller Error (getBookletsInBag):", err);
+        res.status(500).send({ message: err.message || "เกิดข้อผิดพลาด" });
     }
 });

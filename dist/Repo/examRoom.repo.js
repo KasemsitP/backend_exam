@@ -1,4 +1,5 @@
 "use strict";
+// src/Repo/examRoom.repo.ts
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -9,30 +10,55 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const DB_1 = require("../model/DB");
 class ExamRoomRepo {
-    findBySessionId(sessionId, connection) {
+    constructor() {
+        this.pool = DB_1.DB.getInstance();
+    }
+    findByCampaignId(campaignId, connection) {
         return __awaiter(this, void 0, void 0, function* () {
-            const sql = "SELECT * FROM exam_rooms WHERE session_id = ? ORDER BY room_code ASC;";
+            const sql = "SELECT campaign_id, room_code, capacity FROM exam_rooms WHERE campaign_id = ? ORDER BY room_code ASC;";
             try {
-                const [rows] = yield connection.execute(sql, [sessionId]);
+                const [rows] = yield connection.execute(sql, [
+                    campaignId,
+                ]);
                 return rows;
             }
             catch (error) {
-                console.error("Repo Error (Room FindAll):", error);
+                console.error("Repo Error (Room FindByCampaign):", error);
                 throw error;
             }
         });
     }
-    // Insert หรือ Update ห้องสอบ
+    findByCampaignIdCon(campaignId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = "SELECT campaign_id, room_code, capacity FROM exam_rooms WHERE campaign_id = ? ORDER BY room_code ASC;";
+            try {
+                const [rows] = yield this.pool.execute(sql, [
+                    campaignId,
+                ]);
+                return rows;
+            }
+            catch (error) {
+                console.error("Repo Error (Room FindByCampaign):", error);
+                throw error;
+            }
+        });
+    }
+    // Insert หรือ Update ห้องสอบ (ต่อ campaign)
     upsert(data, connection) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-      INSERT INTO exam_rooms (session_id, room_code, capacity)
+      INSERT INTO exam_rooms (campaign_id, room_code, capacity)
       VALUES (?, ?, ?)
       ON DUPLICATE KEY UPDATE capacity = VALUES(capacity);
     `;
             try {
-                const [result] = yield connection.execute(sql, [data.session_id, data.room_code, data.capacity]);
+                const [result] = yield connection.execute(sql, [
+                    data.campaign_id,
+                    data.room_code,
+                    data.capacity,
+                ]);
                 return result;
             }
             catch (error) {
@@ -41,12 +67,12 @@ class ExamRoomRepo {
             }
         });
     }
-    // ลบห้องสอบ
-    delete(sessionId, roomCode, connection) {
+    // ลบห้องสอบของ campaign นั้น ๆ
+    delete(campaignId, roomCode, connection) {
         return __awaiter(this, void 0, void 0, function* () {
-            const sql = "DELETE FROM exam_rooms WHERE session_id = ? AND room_code = ?;";
+            const sql = "DELETE FROM exam_rooms WHERE campaign_id = ? AND room_code = ?;";
             try {
-                const [result] = yield connection.execute(sql, [sessionId, roomCode]);
+                const [result] = yield connection.execute(sql, [campaignId, roomCode]);
                 return result;
             }
             catch (error) {

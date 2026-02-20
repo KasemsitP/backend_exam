@@ -14,15 +14,33 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DB = void 0;
 const promise_1 = __importDefault(require("mysql2/promise"));
+require("dotenv/config");
 class DB {
     constructor() { } // ป้องกันไม่ให้ new ตรงๆ
     static getInstance() {
         if (!DB.instance) {
+            // DB.instance = mysql.createPool({
+            //   host: "localhost", 
+            //   user: "root",
+            //   password: "root",
+            //   database: "Exam",
+            // });
+            // DB.instance = mysql.createPool({
+            //   host: process.env.host, 
+            //   user: process.env.user,
+            //   password: process.env.password,
+            //   database: process.env.database,
+            // });
+            console.log(process.env.DB_HOST, process.env.DB_USER, process.env.DB_PASS, process.env.DB_NAME, process.env.DB_PORT);
             DB.instance = promise_1.default.createPool({
-                host: "localhost",
-                user: "root",
-                password: "root",
-                database: "Exam",
+                host: process.env.DB_HOST, // จะดึงค่า 35.240.222.183 มาอัตโนมัติ
+                user: process.env.DB_USER,
+                password: process.env.DB_PASS,
+                database: process.env.DB_NAME,
+                port: Number(process.env.DB_PORT) || 3306,
+                waitForConnections: true,
+                connectionLimit: 10,
+                queueLimit: 0
             });
             // DB.instance = mysql.createPool({
             //   host: "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",

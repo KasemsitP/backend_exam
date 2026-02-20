@@ -373,7 +373,7 @@ LIMIT 25 OFFSET 0;
     return rows;
   }
   async findDisputedQuestions(
-    conn: PoolConnection,
+    conn: Pool | PoolConnection = this.pool,
     campaign_id: number,
     thresholdDiff: number
   ): Promise<DisputedQuestionRow[]> {
@@ -490,6 +490,126 @@ ORDER BY diff DESC;
 
     const [rows] = await conn.query<DisputedQuestionRow[]>(sql, [campaign_id, thresholdDiff]);
     return rows;
+  }
+
+
+  async findDisputedQuestionsForDashboard(
+    campaign_id: number,
+    thresholdDiff: number
+  ): Promise<number> {
+    const sql = `
+SELECT
+  t.booklet_id       AS bookletId,
+  t.bag_no           AS bagNo,
+  t.subject_id       AS subjectId,
+  t.subjectCode,
+  t.subjectName,
+  t.question_no      AS questionNo,
+  t.questionLabel,
+
+  MIN(t.minScore) AS minScore,
+  MAX(t.maxScore) AS maxScore,
+  MAX(t.maxScore - t.minScore) AS diff,
+
+  MAX(CASE WHEN t.rnAsc = 1 THEN t.slot_id    END) AS slotId1,
+  MAX(CASE WHEN t.rnAsc = 1 THEN t.score      END) AS score1,
+  MAX(CASE WHEN t.rnAsc = 1 THEN t.grader_id  END) AS graderId1,
+  MAX(CASE WHEN t.rnAsc = 1 THEN t.graderName END) AS graderName1,
+
+  MAX(CASE WHEN t.rnDesc = 1 THEN t.slot_id    END) AS slotId2,
+  MAX(CASE WHEN t.rnDesc = 1 THEN t.score      END) AS score2,
+  MAX(CASE WHEN t.rnDesc = 1 THEN t.grader_id  END) AS graderId2,
+  MAX(CASE WHEN t.rnDesc = 1 THEN t.graderName END) AS graderName2
+
+FROM (
+  SELECT
+    sl.booklet_id,
+    bg.bag_no,
+    sl.subject_id,
+    subj.code AS subjectCode,
+    subj.name AS subjectName,
+    sl.question_no,
+    sq.label  AS questionLabel,
+
+    sl.id     AS slot_id,
+    gs.score,
+    gs.entered_by AS grader_id,
+    COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) AS graderName,
+
+    ROW_NUMBER() OVER (
+      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+      ORDER BY gs.score ASC
+    ) AS rnAsc,
+
+    ROW_NUMBER() OVER (
+      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+      ORDER BY gs.score DESC
+    ) AS rnDesc,
+
+    MIN(gs.score) OVER (
+      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+    ) AS minScore,
+
+    MAX(gs.score) OVER (
+      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+    ) AS maxScore
+
+  FROM grading_slots sl
+  JOIN grading_scores gs
+    ON gs.slot_id = sl.id
+  JOIN booklets bk
+    ON bk.id = sl.booklet_id
+  JOIN user_sessions us
+    ON bk.user_session_id = us.id
+  LEFT JOIN bags bg
+    ON bk.bag_id = bg.id
+  JOIN subjects subj
+    ON subj.id = sl.subject_id
+  LEFT JOIN subject_questions sq
+    ON sq.subject_id = sl.subject_id
+   AND sq.question_no = sl.question_no
+  JOIN graders gr
+    ON gs.entered_by = gr.id
+  LEFT JOIN accounts acc
+    ON gr.account_id = acc.id
+  WHERE us.campaign_id = ?
+) t
+JOIN (
+  SELECT
+    sl.booklet_id,
+    sl.subject_id,
+    sl.question_no,
+    COUNT(DISTINCT gs.entered_by) AS gradersCount
+  FROM grading_slots sl
+  JOIN grading_scores gs
+    ON gs.slot_id = sl.id
+  GROUP BY
+    sl.booklet_id,
+    sl.subject_id,
+    sl.question_no
+) gc
+  ON gc.booklet_id = t.booklet_id
+ AND gc.subject_id = t.subject_id
+ AND gc.question_no = t.question_no
+
+WHERE
+  gc.gradersCount >= 2
+  AND (t.maxScore - t.minScore) >= ?
+
+GROUP BY
+  t.booklet_id,
+  t.bag_no,
+  t.subject_id,
+  t.subjectCode,
+  t.subjectName,
+  t.question_no,
+  t.questionLabel
+
+ORDER BY diff DESC;
+    `;
+
+    const [rows] = await this.pool.query<DisputedQuestionRow[]>(sql, [campaign_id, thresholdDiff]);
+    return rows ? rows.length : 0;
   }
 }
 

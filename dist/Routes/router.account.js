@@ -6,5 +6,6 @@ const auth_controller_1 = require("../Controller/auth.controller");
 const accountRouter = (0, express_1.Router)();
 exports.accountRouter = accountRouter;
 accountRouter.get("/accounts/", auth_controller_1.authcontroller.getAll);
+accountRouter.get("/accounts/graders/:id", auth_controller_1.authcontroller.getAllGraders);
 accountRouter.put("/accounts/:id", auth_controller_1.authcontroller.update);
 accountRouter.delete("/accounts/:id", auth_controller_1.authcontroller.delete);

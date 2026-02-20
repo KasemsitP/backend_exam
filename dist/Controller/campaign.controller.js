@@ -49,3 +49,22 @@ campaignController.delete = (req, res) => __awaiter(void 0, void 0, void 0, func
         res.status(400).send({ message: error.message });
     }
 });
+campaignController.getIsUnlock = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaign_id } = req.params;
+        if (!campaign_id) {
+            return res.status(400).json({ message: "no campaign_id" });
+        }
+        const isUnlock = yield campaign_service_1.campaignService.getIsUnlock(Number(campaign_id));
+        return res.status(200).json({
+            success: true,
+            isUnlock,
+        });
+    }
+    catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: err.message || "Internal server error",
+        });
+    }
+});

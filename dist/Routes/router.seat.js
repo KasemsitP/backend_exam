@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const seat_controller_1 = require("../Controller/seat.controller");
+const router = (0, express_1.Router)();
+router.get("/seat/campaign/:campaign_id/room/:roomCode", seat_controller_1.seatController.getSeat);
+router.get("/seat/campaign/:campaign_id/room/:roomCode/preview", seat_controller_1.seatController.ArrangeMent);
+router.post("/seat/campaign/:campaign_id/room/:roomCode/confirm", seat_controller_1.seatController.CreateSeat);
+router.get("/seat/isassigned/:campaign_id", seat_controller_1.seatController.IsAssigned);
+router.get("/seat/countusers/:campaign_id", seat_controller_1.seatController.getUserCount);
+router.delete("/seat/reset/:campaign_id", seat_controller_1.seatController.ResetSeat);
+exports.default = router;
