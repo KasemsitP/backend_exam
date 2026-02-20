@@ -13,6 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.app = void 0;
+const path_1 = __importDefault(require("path"));
 const express_1 = __importDefault(require("express"));
 require("dotenv/config");
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
@@ -68,14 +69,13 @@ const allowedOrigins = [
 ];
 exports.app.use((0, cors_1.default)({
     origin: function (origin, callback) {
-        // ถ้าไม่มี origin (เช่น request จาก Postman) ให้อนุญาต
         if (!origin)
             return callback(null, true);
         if (allowedOrigins.includes(origin)) {
-            callback(null, true); // อนุญาต origin นี้
+            callback(null, true);
         }
         else {
-            callback(new Error('Not allowed by CORS')); // ไม่อนุญาต
+            callback(new Error('Not allowed by CORS'));
         }
     },
     credentials: true
@@ -128,6 +128,7 @@ const sessionStore = new MySQLStore({
 //   })
 // );
 //prod
+const isProduction = process.env.NODE_ENV === "production";
 exports.app.use((0, express_session_1.default)({
     name: "sid",
     secret: process.env.SESSION_SECRET || "dev-secret",
@@ -136,8 +137,10 @@ exports.app.use((0, express_session_1.default)({
     store: sessionStore,
     cookie: {
         httpOnly: true,
-        secure: true, // ต้อง true
-        sameSite: "none", // ใช้ได้เมื่อ secure=true
+        // ถ้าอยู่บน Render (HTTPS) จะเป็น true, ถ้าเทสต์เครื่องตัวเอง (HTTP) จะเป็น false
+        secure: isProduction,
+        // อยู่โดเมนเดียวกันแล้ว ใช้ lax ได้เลย (แถมปลอดภัยกว่าด้วย)
+        sameSite: "lax",
         maxAge: 1000 * 60 * 60,
     },
 }));
@@ -194,6 +197,7 @@ exports.app.use("/api/", router_settings_1.default);
 exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const conn = DB_1.DB.getInstance();
+        // จุดที่ 3: เติม as any ให้ conn ถ้าระบบหา Type ของ execute ไม่เจอ
         const [rows] = yield conn.execute('SELECT * from accounts');
         res.json(rows);
     }
@@ -201,6 +205,15 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
         res.status(500).send({ message: error.message });
     }
 }));
+;
+// ใช้ process.cwd() เพื่อให้อ้างอิงจาก root ของโปรเจกต์เสมอ จะได้ไม่หลงโฟลเดอร์
+exports.app.use(express_1.default.static(path_1.default.join(process.cwd(), 'public')));
+// 2. Catch-all Route: ถ้าเปิด URL อื่นๆ ที่ไม่ใช่ /api ให้ส่งหน้า index.html ไปให้
+// (ป้องกันปัญหาเวลากด Refresh หน้าเว็บแล้วขึ้น Cannot GET)
+exports.app.get('*', (req, res) => {
+    res.sendFile(path_1.default.join(process.cwd(), 'public', 'index.html'));
+});
+// ---------------------------------------------------------
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     yield DB_1.DB.testConnection();
     console.log("เซิร์ฟเวอร์เริ่มทำงานที่พอร์ต 8000");

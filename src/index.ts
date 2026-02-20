@@ -57,14 +57,13 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // ถ้าไม่มี origin (เช่น request จาก Postman) ให้อนุญาต
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
-      callback(null, true); // อนุญาต origin นี้
+      callback(null, true); 
     } else {
-      callback(new Error('Not allowed by CORS')); // ไม่อนุญาต
+      callback(new Error('Not allowed by CORS')); 
     }
   },
   credentials: true
@@ -201,16 +200,16 @@ app.use("/api",decryptRouter)
 app.use("/api",gradingrecheck)
 app.use("/api/", settingsRouter);
 
-app.get("/test",isAuthenticated, async (req, res) => {
+app.get("/test", isAuthenticated, async (req: Request, res: Response) => {
   try {
-
     const conn = DB.getInstance();
-    const [rows] = await conn.execute('SELECT * from accounts');
+    // จุดที่ 3: เติม as any ให้ conn ถ้าระบบหา Type ของ execute ไม่เจอ
+    const [rows] = await (conn as any).execute('SELECT * from accounts');
     res.json(rows);
   } catch (error : any) {
     res.status(500).send({message: error.message});
   }
-});
+});;
 
 // ใช้ process.cwd() เพื่อให้อ้างอิงจาก root ของโปรเจกต์เสมอ จะได้ไม่หลงโฟลเดอร์
 app.use(express.static(path.join(process.cwd(), 'public')));
