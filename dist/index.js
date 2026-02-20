@@ -206,12 +206,11 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
         res.status(500).send({ message: error.message });
     }
 }));
-// ใช้ process.cwd() เพื่อให้อ้างอิงจาก root ของโปรเจกต์เสมอ จะได้ไม่หลงโฟลเดอร์
-exports.app.use(express_1.default.static(path_1.default.join(process.cwd(), 'client-dist')));
-// 2. Catch-all Route: ถ้าเปิด URL อื่นๆ ที่ไม่ใช่ /api ให้ส่งหน้า index.html ไปให้
-// (ป้องกันปัญหาเวลากด Refresh หน้าเว็บแล้วขึ้น Cannot GET)
+// 🚨 แก้จุดที่ 1: เปลี่ยนมาใช้ __dirname และ '../client-dist'
+exports.app.use(express_1.default.static(path_1.default.join(__dirname, '../client-dist')));
+// 🚨 แก้จุดที่ 2: เปลี่ยนมาใช้ __dirname และ '../client-dist'
 exports.app.get(/.*/, (req, res) => {
-    res.sendFile(path_1.default.join(process.cwd(), 'client-dist', 'index.html'));
+    res.sendFile(path_1.default.join(__dirname, '../client-dist', 'index.html'));
 });
 exports.app.listen(process.env.PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     yield DB_1.DB.testConnection();

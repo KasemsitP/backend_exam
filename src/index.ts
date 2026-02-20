@@ -212,13 +212,12 @@ app.get("/test", isAuthenticated, async (req: Request, res: Response) => {
   }
 });
 
-// ใช้ process.cwd() เพื่อให้อ้างอิงจาก root ของโปรเจกต์เสมอ จะได้ไม่หลงโฟลเดอร์
-app.use(express.static(path.join(process.cwd(), 'client-dist')));
+// 🚨 แก้จุดที่ 1: เปลี่ยนมาใช้ __dirname และ '../client-dist'
+app.use(express.static(path.join(__dirname, '../client-dist')));
 
-// 2. Catch-all Route: ถ้าเปิด URL อื่นๆ ที่ไม่ใช่ /api ให้ส่งหน้า index.html ไปให้
-// (ป้องกันปัญหาเวลากด Refresh หน้าเว็บแล้วขึ้น Cannot GET)
+// 🚨 แก้จุดที่ 2: เปลี่ยนมาใช้ __dirname และ '../client-dist'
 app.get(/.*/, (req: Request, res: Response) => {
-  res.sendFile(path.join(process.cwd(), 'client-dist', 'index.html'));
+  res.sendFile(path.join(__dirname, '../client-dist', 'index.html'));
 });
 
 app.listen(process.env.PORT, async () => {
