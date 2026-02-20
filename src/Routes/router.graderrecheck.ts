@@ -1,6 +1,6 @@
 // src/router/gradingslot.router.ts หรือ router แยก recheck โดยเฉพาะ
 import { Router } from "express";
-import { GradingRecheckController } from "../Controller/gradingRecheck.controller";
+import { GradingRecheckController } from "../Controller/gradingrecheck.controller";
 
 const gradingRecheckRouter = Router();
 

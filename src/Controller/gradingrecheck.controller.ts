@@ -1,6 +1,6 @@
 // src/controller/gradingRecheck.controller.ts
 import { Request, Response } from "express";
-import { gradingRecheckService } from "../Service/gradingRecheck.service";
+import { gradingRecheckService } from "../Service/gradingrecheck.service";
 
 export class GradingRecheckController {
   // สแกน QR เพื่อหา slot สำหรับ recheck (reuse logic เดิม)

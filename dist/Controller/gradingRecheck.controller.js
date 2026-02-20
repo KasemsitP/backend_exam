@@ -10,7 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GradingRecheckController = void 0;
-const gradingRecheck_service_1 = require("../Service/gradingRecheck.service");
+const gradingrecheck_service_1 = require("../Service/gradingrecheck.service");
 class GradingRecheckController {
     // สแกน QR เพื่อหา slot สำหรับ recheck (reuse logic เดิม)
     static createRecheckSlot(req, res) {
@@ -21,7 +21,7 @@ class GradingRecheckController {
                 if (!qrPayload || !campaignId || !graderId || !questionNo) {
                     return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
                 }
-                const result = yield gradingRecheck_service_1.gradingRecheckService.createRecheckSlotFromQr({
+                const result = yield gradingrecheck_service_1.gradingRecheckService.createRecheckSlotFromQr({
                     qrPayload,
                     campaignId: Number(campaignId),
                     graderId: Number(graderId),
@@ -43,7 +43,7 @@ class GradingRecheckController {
                 if (!slotId) {
                     return res.status(400).json({ message: "slotId ไม่ถูกต้อง" });
                 }
-                yield gradingRecheck_service_1.gradingRecheckService.resetQuestionForRecheck({ slotId });
+                yield gradingrecheck_service_1.gradingRecheckService.resetQuestionForRecheck({ slotId });
                 return res.json({ message: "รีเซ็ตคะแนนเพื่อ recheck เรียบร้อยแล้ว" });
             }
             catch (err) {
@@ -62,7 +62,7 @@ class GradingRecheckController {
                 if (!qrPayload || !campaignId) {
                     return res.status(400).json({ message: "ข้อมูลไม่ครบ" });
                 }
-                const result = yield gradingRecheck_service_1.gradingRecheckService.scanDisputedFromQr({
+                const result = yield gradingrecheck_service_1.gradingRecheckService.scanDisputedFromQr({
                     qrPayload,
                     campaignId: Number(campaignId),
                 });
@@ -84,7 +84,7 @@ class GradingRecheckController {
                     ? Number(req.query.threshold)
                     : 4;
                 console.log(campaign_id);
-                const rows = yield gradingRecheck_service_1.gradingRecheckService.listDisputedQuestions(threshold, Number(campaign_id));
+                const rows = yield gradingrecheck_service_1.gradingRecheckService.listDisputedQuestions(threshold, Number(campaign_id));
                 return res.json(rows);
             }
             catch (err) {
