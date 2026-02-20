@@ -159,7 +159,7 @@ exports.app.use((0, express_session_1.default)({
 //   res.json({ csrfToken: token });
 // });
 exports.app.use("/api/auth/", routes_auth_1.default);
-exports.app.use(authentication_1.isAuthenticated);
+exports.app.use("/api", authentication_1.isAuthenticated);
 exports.app.use("/api/", router_user_1.default);
 exports.app.use("/api/", router_bag_1.default);
 exports.app.use("/api/", router_exam_1.default);

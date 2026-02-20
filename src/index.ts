@@ -169,7 +169,7 @@ app.use(
 
 
 app.use("/api/auth/", authrouter)
-app.use(isAuthenticated)
+app.use("/api", isAuthenticated);
 app.use("/api/", userrouter)
 app.use("/api/", bagRouter)
 app.use("/api/", examDataRouter)
