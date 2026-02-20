@@ -8,9 +8,9 @@ import compression from "compression";
 import dotenv from "dotenv"
 import MySQLStoreFactory from "express-mysql-session";
 import session from 'express-session';
-import csrf from "tiny-csrf"; 
+import csrf from "tiny-csrf";
 import { Logging } from './Middleware/logging';
-import {DB} from './model/DB';
+import { DB } from './model/DB';
 import authrouter from "./Routes/routes.auth"
 import userrouter from "./Routes/router.user"
 import bagRouter from './Routes/router.bag';
@@ -24,7 +24,7 @@ import usersession from './Routes/router.user-session';
 import { accountRouter } from './Routes/router.account';
 import { isAuthenticated } from './Middleware/authentication';
 import { roleRouter } from './Routes/router.roles';
-import examroomRouter from'./Routes/router.examroom';
+import examroomRouter from './Routes/router.examroom';
 import verifyRouter from './Routes/router.verify'
 import bagHandover from './Routes/router.baghandover';
 import graderRouter from './Routes/router.grader';
@@ -36,8 +36,8 @@ import gradingSummaryRouter from './Routes/router.gradingsummary';
 import gradingReportRouter from './Routes/router.gradingreport'
 import seatRouter from './Routes/router.seat'
 import dashboardRouter from './Routes/router.dashboard'
-import  signsheetRouter from './Routes/router.signsheet'
-import  seatplanRouter from './Routes/router.seatplan'
+import signsheetRouter from './Routes/router.signsheet'
+import seatplanRouter from './Routes/router.seatplan'
 import decryptRouter from './Routes/router.decrypt'
 import gradingrecheck from './Routes/router.graderrecheck'
 import settingsRouter from './Routes/router.settings';
@@ -62,9 +62,9 @@ app.use(cors({
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
-      callback(null, true); 
+      callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS')); 
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true
@@ -140,9 +140,9 @@ app.use(
     cookie: {
       httpOnly: true,
       // ถ้าอยู่บน Render (HTTPS) จะเป็น true, ถ้าเทสต์เครื่องตัวเอง (HTTP) จะเป็น false
-      secure: isProduction, 
+      secure: isProduction,
       // อยู่โดเมนเดียวกันแล้ว ใช้ lax ได้เลย (แถมปลอดภัยกว่าด้วย)
-      sameSite: "lax", 
+      sameSite: "lax",
       maxAge: 1000 * 60 * 60,
     },
   })
@@ -170,36 +170,39 @@ app.use(
 //   res.json({ csrfToken: token });
 // });
 
-app.use("/api/auth/",authrouter)
+app.use('/assets', express.static(path.join(process.cwd(), 'client-dist', 'assets')));
+app.use(express.static(path.join(process.cwd(), 'client-dist')))
+
+app.use("/api/auth/", authrouter)
 // app.use(isAuthenticated)
-                       //app.use("/api/", isAuthenticated)  // <--- แก้ตรงนี้ครับ
-app.use("/api/",userrouter)
-app.use("/api/",bagRouter)
-app.use("/api/",examDataRouter)
-app.use("/api/",sessionRouter)
-app.use("/api/",campaignRouter)
-app.use("/api/",seesionsubject)
-app.use("/api/",importuser)
-app.use("/api/",key)
-app.use("/api/",usersession)
+//app.use("/api/", isAuthenticated)  // <--- แก้ตรงนี้ครับ
+app.use("/api/", userrouter)
+app.use("/api/", bagRouter)
+app.use("/api/", examDataRouter)
+app.use("/api/", sessionRouter)
+app.use("/api/", campaignRouter)
+app.use("/api/", seesionsubject)
+app.use("/api/", importuser)
+app.use("/api/", key)
+app.use("/api/", usersession)
 app.use("/api/", accountRouter);
-app.use("/api",subjectRouter)
+app.use("/api", subjectRouter)
 app.use("/api/", roleRouter);
 app.use("/api", examroomRouter)
-app.use("/api",verifyRouter)
+app.use("/api", verifyRouter)
 app.use("/api", bagHandover)
-app.use("/api/",graderRouter)
-app.use("/api/",gradingslotRouter)
-app.use("/api/",gradingscoreRouter)
-app.use("/api",graderAssignmentRouter)
-app.use("/api",gradingSummaryRouter)
+app.use("/api/", graderRouter)
+app.use("/api/", gradingslotRouter)
+app.use("/api/", gradingscoreRouter)
+app.use("/api", graderAssignmentRouter)
+app.use("/api", gradingSummaryRouter)
 app.use("/api", gradingReportRouter)
-app.use("/api",seatRouter)
-app.use("/api",dashboardRouter)
-app.use("/api",signsheetRouter)
-app.use("/api",seatplanRouter)
-app.use("/api",decryptRouter)
-app.use("/api",gradingrecheck)
+app.use("/api", seatRouter)
+app.use("/api", dashboardRouter)
+app.use("/api", signsheetRouter)
+app.use("/api", seatplanRouter)
+app.use("/api", decryptRouter)
+app.use("/api", gradingrecheck)
 app.use("/api/", settingsRouter);
 
 app.get("/test", isAuthenticated, async (req: Request, res: Response) => {
@@ -208,8 +211,8 @@ app.get("/test", isAuthenticated, async (req: Request, res: Response) => {
     // จุดที่ 3: เติม as any ให้ conn ถ้าระบบหา Type ของ execute ไม่เจอ
     const [rows] = await (conn as any).execute('SELECT * from accounts');
     res.json(rows);
-  } catch (error : any) {
-    res.status(500).send({message: error.message});
+  } catch (error: any) {
+    res.status(500).send({ message: error.message });
   }
 });
 
@@ -217,28 +220,24 @@ app.get("/api/debug-folder", (req: Request, res: Response) => {
   try {
     const rootPath = process.cwd();
     // อ่านรายชื่อไฟล์และโฟลเดอร์ทั้งหมดในโปรเจกต์
-    const files = fs.readdirSync(rootPath); 
-    res.json({ 
-      currentPath: rootPath, 
-      filesFound: files 
+    const files = fs.readdirSync(rootPath);
+    res.json({
+      currentPath: rootPath,
+      filesFound: files
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-const frontendPath = path.join(process.cwd(), 'client-dist');
-
-// แอบปริ้นต์ออกมาดูใน Log ของ Render เพื่อความสบายใจว่าหาเจอชัวร์
-console.log("👉 โฟลเดอร์หน้าเว็บตั้งอยู่ที่: ", frontendPath); 
-
-app.use(express.static(frontendPath));
 
 app.get(/.*/, (req: Request, res: Response) => {
-  res.sendFile(path.join(frontendPath, 'index.html'));
+  // ใช้ path.resolve เพื่อให้ได้พาธแบบ Absolute ที่แน่นอนที่สุด
+  const indexPath = path.resolve(process.cwd(), 'client-dist', 'index.html');
+  res.sendFile(indexPath);
 });
 
 app.listen(process.env.PORT, async () => {
   await DB.testConnection();
-  console.log("เซิร์ฟเวอร์เริ่มทำงานที่พอร์ต 8000");
+  console.log(`เซิร์ฟเวอร์รันที่พอร์ต ${process.env.PORT}`);
 });
