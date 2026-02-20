@@ -1,6 +1,7 @@
 import path from 'path';
 import express, { Express, Request, Response } from 'express';
 import "dotenv/config";
+import fs from 'fs';
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import compression from "compression";
@@ -209,6 +210,20 @@ app.get("/test", isAuthenticated, async (req: Request, res: Response) => {
     res.json(rows);
   } catch (error : any) {
     res.status(500).send({message: error.message});
+  }
+});
+
+app.get("/api/debug-folder", (req: Request, res: Response) => {
+  try {
+    const rootPath = process.cwd();
+    // อ่านรายชื่อไฟล์และโฟลเดอร์ทั้งหมดในโปรเจกต์
+    const files = fs.readdirSync(rootPath); 
+    res.json({ 
+      currentPath: rootPath, 
+      filesFound: files 
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 

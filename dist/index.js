@@ -16,6 +16,7 @@ exports.app = void 0;
 const path_1 = __importDefault(require("path"));
 const express_1 = __importDefault(require("express"));
 require("dotenv/config");
+const fs_1 = __importDefault(require("fs"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
 const compression_1 = __importDefault(require("compression"));
@@ -206,6 +207,20 @@ exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __await
         res.status(500).send({ message: error.message });
     }
 }));
+exports.app.get("/api/debug-folder", (req, res) => {
+    try {
+        const rootPath = process.cwd();
+        // อ่านรายชื่อไฟล์และโฟลเดอร์ทั้งหมดในโปรเจกต์
+        const files = fs_1.default.readdirSync(rootPath);
+        res.json({
+            currentPath: rootPath,
+            filesFound: files
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 // 🚨 แก้จุดที่ 1: เปลี่ยนมาใช้ __dirname และ '../client-dist'
 exports.app.use(express_1.default.static(path_1.default.join(__dirname, '../client-dist')));
 // 🚨 แก้จุดที่ 2: เปลี่ยนมาใช้ __dirname และ '../client-dist'
