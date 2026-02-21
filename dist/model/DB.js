@@ -31,6 +31,7 @@ class DB {
             //   password: process.env.password,
             //   database: process.env.database,
             // });
+            // สำหรับ production (Render.com)
             console.log(process.env.DB_HOST, process.env.DB_USER, process.env.DB_PASS, process.env.DB_NAME, process.env.DB_PORT);
             DB.instance = promise_1.default.createPool({
                 host: process.env.DB_HOST, // จะดึงค่า 35.240.222.183 มาอัตโนมัติ

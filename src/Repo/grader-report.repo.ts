@@ -35,6 +35,7 @@ export interface BagGradersReport {
     campaign_name: string | null;
     subject_name: string;
   };
+  unlock: number;
 }
 
 // ==========================================
@@ -65,6 +66,7 @@ export type QuestionLabelRow = { question_no: number; label: string };
 
 export type BookletGraderRawRow = {
   booklet_id: number;
+  random_num: string;
   exam_code: string;
   user_code: string;
   subject_id: number;
@@ -184,6 +186,7 @@ export class GraderReportRepo {
     const sql = `
         SELECT
           b.id AS booklet_id,
+          b.random_num,
           u.user_code,
           u.user_code AS exam_code,
           gs1.subject_id,
@@ -226,6 +229,7 @@ export class GraderReportRepo {
       booklet_id: Number(r.booklet_id),
       user_code: String(r.user_code ?? ""),
       exam_code: String(r.exam_code ?? ""),
+      random_num: String(r.random_num ?? ""),
       subject_id: Number(r.subject_id),
       question_no: Number(r.question_no),
       grader1_score: r.grader1_score != null ? Number(r.grader1_score) : null,

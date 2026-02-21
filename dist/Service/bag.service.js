@@ -29,6 +29,7 @@ class bagService {
                 return rows.map((r) => ({
                     id: r.booklet_id,
                     sessionId: r.session_id,
+                    random_num: r.random_num,
                     bagNo: r.bag_no,
                     seqInBag: r.seq_in_bag,
                     status: r.status,
@@ -251,11 +252,23 @@ bagService.CreateBagAndInsertBooklets = (campaign_id, payload, datetime) => __aw
         const bagResult = yield bag_repo_1.default.CreateBagByConnection(sessionId, maxNo + 1, connection);
         const bagId = bagResult.insertId;
         console.log("Created Bag ID:", bagId);
+        const day_no_payload = yield booklets_repo_1.default.getDayno(connection, sessionId);
+        const dataNo = (day_no_payload === null || day_no_payload === void 0 ? void 0 : day_no_payload.day_no) || 0;
+        if (dataNo === 0) {
+            throw new Error("ไม่พบวันที่สอบ");
+        }
+        let currentRunningNumber = 0;
+        const latestRecord = yield booklets_repo_1.default.getLatestRandomNumForUpdate(connection, sessionId);
+        if (latestRecord === null || latestRecord === void 0 ? void 0 : latestRecord.random_num) {
+            // เอา 4 ตัวท้ายเสมอ
+            const runningString = latestRecord.random_num.slice(-4);
+            currentRunningNumber = parseInt(runningString, 10) || 0;
+        }
         // 3️⃣ insert booklets
         let seq = 1;
         for (let i = 0; i < decodedList.length; i++) {
             const decoded = decodedList[i];
-            const scannedAt = datetime[i]; // 👈 ตัวนี้แหละ
+            const scannedAt = datetime[i]; //  ตัวนี้แหละ
             const userSession = yield user_session_repo_1.default.findUserSessionByCampaignSessionAndUserCode(connection, {
                 campaignId: campaign_id,
                 sessionId,
@@ -264,6 +277,11 @@ bagService.CreateBagAndInsertBooklets = (campaign_id, payload, datetime) => __aw
             if (!userSession) {
                 throw new Error(`ไม่พบ user_session ${decoded.uid}`);
             }
+            currentRunningNumber++; // บวก 1 ในแต่ละรอบของลูป
+            // ทำให้เป็น 4 หลักเสมอ
+            const paddedRunning = String(currentRunningNumber).padStart(4, '0');
+            // เอา dataNo มาต่อหน้า
+            const nextRandomNum = `${dataNo}${paddedRunning}`;
             const bookletId = yield booklets_repo_1.default.insertOne(connection, {
                 sessionId,
                 userSessionId: userSession.id,
@@ -271,6 +289,7 @@ bagService.CreateBagAndInsertBooklets = (campaign_id, payload, datetime) => __aw
                 seqInBag: seq,
                 status: "CREATED",
                 created_at: scannedAt,
+                random_num: nextRandomNum
             });
             results.push({
                 id: bookletId,
@@ -279,6 +298,7 @@ bagService.CreateBagAndInsertBooklets = (campaign_id, payload, datetime) => __aw
                 userSessionId: userSession.id,
                 seqInBag: seq,
                 userCode: userSession.user_code,
+                random_num: nextRandomNum
             });
             seq++;
         }

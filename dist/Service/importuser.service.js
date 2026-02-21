@@ -18,6 +18,7 @@ const DB_1 = require("../model/DB");
 const importuser_repo_1 = __importDefault(require("../Repo/importuser.repo"));
 const session_repo_1 = __importDefault(require("../Repo/session.repo")); // (Repo ที่มีอยู่)
 const lodash_shuffle_1 = __importDefault(require("lodash.shuffle"));
+const lodash_1 = require("lodash");
 function normalizeDate(input) {
     if (!input)
         return null;
@@ -52,7 +53,7 @@ class userImportService {
 exports.userImportService = userImportService;
 _a = userImportService;
 userImportService.importUsersToCampaign = (campaignId, rows) => __awaiter(void 0, void 0, void 0, function* () {
-    var _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0;
+    var _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
     const connection = yield DB_1.DB.getInstance().getConnection();
     let stats = {
         totalUsersCreated: 0,
@@ -66,29 +67,20 @@ userImportService.importUsersToCampaign = (campaignId, rows) => __awaiter(void 0
         if (sessions.length === 0) {
             console.warn(`Campaign ID ${campaignId} has no sessions to link.`);
         }
+        const previsNumber = yield importuser_repo_1.default.findPreviousNumber(campaignId, connection);
         const currentMax = yield importuser_repo_1.default.findMaxUserCodeByCampaign(campaignId, connection);
+        console.log(`Current max user_code for campaign ${campaignId}:`, currentMax);
         let generatedRunning = currentMax + 1;
         let skipped = 0;
         const shuffledRows = (0, lodash_shuffle_1.default)(rows);
-        console.log("Shuffled Rows:", shuffledRows);
+        // ------------------------------------------------------------------
+        // Phase 1: เตรียมข้อมูลทั้งหมดไว้ใน Memory ก่อน
+        // ------------------------------------------------------------------
+        const processedData = [];
         for (const row of shuffledRows) {
-            // 0) no (ลำดับในไฟล์) - เอาไว้อ้างอิง log เฉย ๆ ถ้าอยากใช้
-            const rowNo = (_d = (_c = (_b = row.no) !== null && _b !== void 0 ? _b : row["no"]) !== null && _c !== void 0 ? _c : row["ลำดับ"]) !== null && _d !== void 0 ? _d : null;
-            // 1) หา userCode (ถ้าไม่มีจากไฟล์ก็ gen)
-            let userCode = undefined;
-            // ถ้าอนาคตอยากอ่านจากไฟล์ก็เพิ่มเงื่อนไขตรงนี้ได้
-            // userCode =
-            //   (row.user_code as string) ??
-            //   (row["user_code"] as string) ??
-            //   (row["รหัสผู้เข้าสอบ"] as string);
-            if (!userCode) {
-                userCode = String(generatedRunning);
-                generatedRunning++;
-            }
-            // 2) ชื่อ / นามสกุล / คำนำหน้า ตามที่คุณมีอยู่แล้ว
-            const title = (_f = (_e = row.title) !== null && _e !== void 0 ? _e : row["คำนำหน้า"]) !== null && _f !== void 0 ? _f : row["prefix"];
-            const firstName = (_k = (_j = (_h = (_g = row.firstname) !== null && _g !== void 0 ? _g : row.first_name) !== null && _h !== void 0 ? _h : row.firstName) !== null && _j !== void 0 ? _j : row["ชื่อ"]) !== null && _k !== void 0 ? _k : row["first name"];
-            const lastName = (_p = (_o = (_m = (_l = row.lastname) !== null && _l !== void 0 ? _l : row.last_name) !== null && _m !== void 0 ? _m : row.lastName) !== null && _o !== void 0 ? _o : row["นามสกุล"]) !== null && _p !== void 0 ? _p : row["last name"];
+            const firstName = (_e = (_d = (_c = (_b = row.firstname) !== null && _b !== void 0 ? _b : row.first_name) !== null && _c !== void 0 ? _c : row.firstName) !== null && _d !== void 0 ? _d : row["ชื่อ"]) !== null && _e !== void 0 ? _e : row["first name"];
+            const lastName = (_j = (_h = (_g = (_f = row.lastname) !== null && _f !== void 0 ? _f : row.last_name) !== null && _g !== void 0 ? _g : row.lastName) !== null && _h !== void 0 ? _h : row["นามสกุล"]) !== null && _j !== void 0 ? _j : row["last name"];
+            const title = (_l = (_k = row.title) !== null && _k !== void 0 ? _k : row["คำนำหน้า"]) !== null && _l !== void 0 ? _l : row["prefix"];
             const fullName = [firstName, lastName]
                 .filter((v) => v && String(v).trim() !== "")
                 .join(" ")
@@ -97,49 +89,76 @@ userImportService.importUsersToCampaign = (campaignId, rows) => __awaiter(void 0
                 skipped++;
                 continue;
             }
-            // 3) national_id
-            const nationalId = (_v = (_u = (_t = (_s = (_r = (_q = row.national_id) !== null && _q !== void 0 ? _q : row["national_id"]) !== null && _r !== void 0 ? _r : row["citizen_id"]) !== null && _s !== void 0 ? _s : row["เลขบัตรประชาชน"]) !== null && _t !== void 0 ? _t : row["เลขประจำตัวประชาชน"]) !== null && _u !== void 0 ? _u : row["id_card"]) !== null && _v !== void 0 ? _v : null;
-            // 4) birth_date (พยายาม normalize เป็น YYYY-MM-DD ถ้า parse ได้)
-            const birthDateRaw = (_0 = (_z = (_y = (_x = (_w = row.dateofbirth) !== null && _w !== void 0 ? _w : row.birth_date) !== null && _x !== void 0 ? _x : row["birth date"]) !== null && _y !== void 0 ? _y : row["วันเกิด"]) !== null && _z !== void 0 ? _z : row["วัน/เดือน/ปีเกิด"]) !== null && _0 !== void 0 ? _0 : null;
+            // จัดการ userCode แบบ Sync ล่วงหน้า ป้องกันปัญหา Race Condition เวลาทำ Promise.all
+            let userCode = String(generatedRunning);
+            generatedRunning++;
+            const nationalId = (_s = (_r = (_q = (_p = (_o = (_m = row.national_id) !== null && _m !== void 0 ? _m : row["national_id"]) !== null && _o !== void 0 ? _o : row["citizen_id"]) !== null && _p !== void 0 ? _p : row["เลขบัตรประชาชน"]) !== null && _q !== void 0 ? _q : row["เลขประจำตัวประชาชน"]) !== null && _r !== void 0 ? _r : row["id_card"]) !== null && _s !== void 0 ? _s : null;
+            const birthDateRaw = (_x = (_w = (_v = (_u = (_t = row.dateofbirth) !== null && _t !== void 0 ? _t : row.birth_date) !== null && _u !== void 0 ? _u : row["birth date"]) !== null && _v !== void 0 ? _v : row["วันเกิด"]) !== null && _w !== void 0 ? _w : row["วัน/เดือน/ปีเกิด"]) !== null && _x !== void 0 ? _x : null;
             const birthDate = normalizeDate(birthDateRaw);
-            const { user, created: userCreated } = yield importuser_repo_1.default.findOrCreateUser({
-                user_code: userCode,
-                full_name: fullName,
-                first_name: firstName,
-                last_name: lastName,
-                title: title,
-                national_id: nationalId,
-                birth_date: birthDate,
-            }, connection);
-            if (userCreated)
-                stats.totalUsersCreated++;
-            else
-                stats.totalUsersFound++;
-            const { userCampaign, created: campaignLinkCreated } = yield importuser_repo_1.default.findOrCreateUserCampaign({ user_id: user.id, campaign_id: campaignId }, connection);
-            if (campaignLinkCreated)
-                stats.totalCampaignLinks++;
-            for (const session of sessions) {
-                const { created: sessionLinkCreated } = yield importuser_repo_1.default.findOrCreateUserSession({
-                    user_campaign_id: userCampaign.id,
-                    session_id: session.id,
-                    campaign_id: campaignId,
+            processedData.push({
+                userCode,
+                fullName,
+                firstName,
+                lastName,
+                title,
+                nationalId,
+                birthDate
+            });
+        }
+        // ------------------------------------------------------------------
+        // Phase 2: ยิง Database แบบ Concurrency (แบ่ง Chunk เพื่อไม่ให้ DB ค้าง)
+        // ------------------------------------------------------------------
+        const CHUNK_SIZE = 50; // ปรับขนาด Chunk ได้ตามความเหมาะสมของ Database (เช่น 50-100)
+        const rowChunks = (0, lodash_1.chunk)(processedData, CHUNK_SIZE);
+        for (const batch of rowChunks) {
+            // ประมวลผลแต่ละ Chunk ขนานกัน
+            yield Promise.all(batch.map((data) => __awaiter(void 0, void 0, void 0, function* () {
+                // 1. จัดการ User
+                const { user, created: userCreated } = yield importuser_repo_1.default.findOrCreateUser({
+                    user_code: data.userCode,
+                    full_name: data.fullName,
+                    first_name: data.firstName,
+                    last_name: data.lastName,
+                    title: data.title,
+                    national_id: data.nationalId,
+                    birth_date: data.birthDate,
                 }, connection);
-                if (sessionLinkCreated)
-                    stats.totalSessionLinks++;
-            }
+                if (userCreated)
+                    stats.totalUsersCreated++;
+                else
+                    stats.totalUsersFound++;
+                // 2. จัดการ Campaign Link
+                const { userCampaign, created: campaignLinkCreated } = yield importuser_repo_1.default.findOrCreateUserCampaign({
+                    user_id: user.id,
+                    campaign_id: campaignId
+                }, connection);
+                if (campaignLinkCreated)
+                    stats.totalCampaignLinks++;
+                // 3. จัดการ Session Links แบบขนาน
+                if (sessions.length > 0) {
+                    yield Promise.all(sessions.map((session) => __awaiter(void 0, void 0, void 0, function* () {
+                        const { created: sessionLinkCreated } = yield importuser_repo_1.default.findOrCreateUserSession({
+                            user_campaign_id: userCampaign.id,
+                            session_id: session.id,
+                            campaign_id: campaignId,
+                        }, connection);
+                        if (sessionLinkCreated)
+                            stats.totalSessionLinks++;
+                    })));
+                }
+            })));
         }
         if (skipped > 0) {
             console.warn(`Skipped ${skipped} rows (missing full_name)`);
         }
         yield connection.commit();
+        stats.totalUsersFound = previsNumber;
+        stats.totalUsersCreated = previsNumber + stats.totalCampaignLinks;
         return stats;
     }
     catch (error) {
         yield connection.rollback();
-        console.error("Import Error (Service):", error);
+        console.error("Import failed, transaction rolled back:", error);
         throw error;
-    }
-    finally {
-        connection.release();
     }
 });

@@ -118,6 +118,7 @@ class GraderReportRepo {
             const sql = `
         SELECT
           b.id AS booklet_id,
+          b.random_num,
           u.user_code,
           u.user_code AS exam_code,
           gs1.subject_id,
@@ -155,11 +156,12 @@ class GraderReportRepo {
     `;
             const [rows] = yield conn.query(sql, [subjectId, subjectId, bagId]);
             return (rows !== null && rows !== void 0 ? rows : []).map((r) => {
-                var _a, _b;
+                var _a, _b, _c;
                 return ({
                     booklet_id: Number(r.booklet_id),
                     user_code: String((_a = r.user_code) !== null && _a !== void 0 ? _a : ""),
                     exam_code: String((_b = r.exam_code) !== null && _b !== void 0 ? _b : ""),
+                    random_num: String((_c = r.random_num) !== null && _c !== void 0 ? _c : ""),
                     subject_id: Number(r.subject_id),
                     question_no: Number(r.question_no),
                     grader1_score: r.grader1_score != null ? Number(r.grader1_score) : null,

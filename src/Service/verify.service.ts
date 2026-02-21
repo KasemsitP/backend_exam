@@ -2,6 +2,7 @@ import { DB } from "../model/DB";
 import * as keyService from "./key.service";
 import userSessionsRepo from "../Repo/user-session.repo"; // (Import Repo จาก Canvas)
 import bookletsRepo from "../Repo/booklets.repo";
+import campaignRepo from "../Repo/campaign.repo";
 
 interface VerifyQrPayload {
         qrPayload: string;
@@ -23,6 +24,11 @@ export class verifyService {
                 try {
                         const campaignIdNumeric = parseId(payload.campaignId);
                         console.log(payload.qrPayload, campaignIdNumeric)
+
+                        const isActiveCamp = await campaignRepo.IscampaignActive(campaignIdNumeric, connection);
+                        if (!isActiveCamp) {
+                                throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
+                        }
 
 
                         const decryptedPayload = await keyService.keyService.decryptQrPayload(
@@ -67,6 +73,10 @@ export class verifyService {
                         const campaignIdNumeric = parseId(campaign_id);
                         console.log(qr_payload, campaignIdNumeric)
 
+                        const isActiveCamp = await campaignRepo.IscampaignActive(campaignIdNumeric, connection);
+                        if (!isActiveCamp) {
+                                throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
+                        }
 
                         const decryptedPayload = await keyService.keyService.decryptQrPayload(
                                 qr_payload,

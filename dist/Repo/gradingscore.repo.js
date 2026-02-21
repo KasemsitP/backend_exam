@@ -88,17 +88,19 @@ SELECT sq.question_no , sq.label , sq.max_score from subject_questions sq JOIN s
     findScoreById(conn, gradingScoreId) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-      SELECT
+SELECT
         gs.id         AS gradingscoreId,
         gs.slot_id    AS slotId,
         gs.score      AS score,
         s.status      AS status,
         gs.entered_at AS enteredAt,
         g.id          AS graderId,
+        bk.random_num,
         COALESCE(a.full_name, CONCAT('Grader #', g.id)) AS graderName
       FROM grading_scores gs
       JOIN grading_slots s
         ON gs.slot_id = s.id
+      JOIN booklets bk ON bk.id = s.booklet_id
       JOIN graders g
         ON gs.entered_by = g.id
       LEFT JOIN accounts a
@@ -114,6 +116,7 @@ SELECT sq.question_no , sq.label , sq.max_score from subject_questions sq JOIN s
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
 SELECT 
+  b.random_num ,
   g.slot_id,
   g.score,
   g.entered_at AS enteredAT,
@@ -267,6 +270,7 @@ SELECT
   t.subjectName,
   t.question_no      AS questionNo,
   t.questionLabel,
+  t.random_num,
 
   MIN(t.minScore) AS minScore,
   MAX(t.maxScore) AS maxScore,
@@ -291,6 +295,7 @@ FROM (
     subj.name AS subjectName,
     sl.question_no,
     sq.label  AS questionLabel,
+    bk.random_num,
 
     sl.id     AS slot_id,
     gs.score,
@@ -358,6 +363,7 @@ WHERE
   AND (t.maxScore - t.minScore) >= ?
 
 GROUP BY
+  t.random_num,
   t.booklet_id,
   t.bag_no,
   t.subject_id,

@@ -49,7 +49,7 @@ VALUES
     return this.findById(newId, dbClient);
   }
 
-  async CheckActiveCamp (): Promise<boolean>  {
+  async CheckActiveCamp(): Promise<boolean> {
     const sql = `SELECT * FROM exam_campaigns WHERE is_active = 1;`
     const [rows] = await this.pool.execute<any[]>(sql);
     return rows.length > 0;
@@ -149,6 +149,17 @@ VALUES
              SET is_unlock = 1
              WHERE id = ?`
     await dbClient.execute(sql, [campaign_id]);
+  }
+
+  async IscampaignActive(campaign_id: number , dbClient : DbClient = this.pool): Promise<boolean> {
+    const sql = `
+SELECT is_active
+    FROM exam_campaigns
+    WHERE id = ?
+    LIMIT 1;
+  `;
+    const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows[0].is_active === 1;
   }
 }
 

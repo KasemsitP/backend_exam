@@ -23,7 +23,7 @@ export class gradingscoreController {
       const result = await gradingScoreService.submitScore(payload);
 
 
-      res.status(201).json({ slotId: result.slotId, score: result.score });
+      res.status(201).json({ slotId: result.slotId, score: result.score, random_num: result.random_num });
 
     } catch (error: any) {
       res.status(400).send({ message: error.message });

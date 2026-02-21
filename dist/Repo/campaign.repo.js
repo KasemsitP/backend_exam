@@ -126,6 +126,18 @@ VALUES
             yield dbClient.execute(sql, [campaign_id]);
         });
     }
+    IscampaignActive(campaign_id_1) {
+        return __awaiter(this, arguments, void 0, function* (campaign_id, dbClient = this.pool) {
+            const sql = `
+SELECT is_active
+    FROM exam_campaigns
+    WHERE id = ?
+    LIMIT 1;
+  `;
+            const [rows] = yield dbClient.execute(sql, [campaign_id]);
+            return rows[0].is_active === 1;
+        });
+    }
 }
 const campaignRepo = new CampaignRepo();
 exports.default = campaignRepo;

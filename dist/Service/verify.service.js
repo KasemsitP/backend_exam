@@ -51,6 +51,7 @@ const DB_1 = require("../model/DB");
 const keyService = __importStar(require("./key.service"));
 const user_session_repo_1 = __importDefault(require("../Repo/user-session.repo")); // (Import Repo จาก Canvas)
 const booklets_repo_1 = __importDefault(require("../Repo/booklets.repo"));
+const campaign_repo_1 = __importDefault(require("../Repo/campaign.repo"));
 function parseId(id) {
     if (typeof id === "number") {
         return id;
@@ -66,6 +67,10 @@ verifyService.verifyQrPayload = (payload) => __awaiter(void 0, void 0, void 0, f
     try {
         const campaignIdNumeric = parseId(payload.campaignId);
         console.log(payload.qrPayload, campaignIdNumeric);
+        const isActiveCamp = yield campaign_repo_1.default.IscampaignActive(campaignIdNumeric, connection);
+        if (!isActiveCamp) {
+            throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
+        }
         const decryptedPayload = yield keyService.keyService.decryptQrPayload(payload.qrPayload, campaignIdNumeric);
         console.log(decryptedPayload);
         if (!decryptedPayload || !decryptedPayload.uid || !decryptedPayload.sid) {
@@ -95,6 +100,10 @@ verifyService.checkBookletsOrders = (campaign_id, qr_payload, booklets_id) => __
     try {
         const campaignIdNumeric = parseId(campaign_id);
         console.log(qr_payload, campaignIdNumeric);
+        const isActiveCamp = yield campaign_repo_1.default.IscampaignActive(campaignIdNumeric, connection);
+        if (!isActiveCamp) {
+            throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
+        }
         const decryptedPayload = yield keyService.keyService.decryptQrPayload(qr_payload, campaignIdNumeric);
         console.log(decryptedPayload);
         if (!decryptedPayload || !decryptedPayload.uid || !decryptedPayload.sid) {

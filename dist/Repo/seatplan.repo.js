@@ -19,16 +19,24 @@ class SeatPlanRepo {
     findSeatPlanByCampaignAndSession(sessionId, campaignId) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-      SELECT
-        CONCAT(MIN(u.user_code), ' - ', MAX(u.user_code)) AS rangeLabel,
-        uc.room_code AS roomName,
-        uc.row_no    AS rowNo
-      FROM user_sessions us
-      JOIN user_campaigns uc ON us.user_campaign_id = uc.id
-      JOIN users u ON uc.user_id = u.id
-      WHERE us.session_id = ? AND us.campaign_id = ?
-      GROUP BY uc.room_code, uc.row_no
-      ORDER BY uc.room_code, uc.row_no;
+SELECT
+  CONCAT(
+    MIN(CAST(u.user_code AS UNSIGNED)),
+    ' - ',
+    MAX(CAST(u.user_code AS UNSIGNED))
+  ) AS rangeLabel,
+  uc.room_code AS roomName,
+  uc.row_no AS rowNo
+FROM user_sessions us
+JOIN user_campaigns uc ON us.user_campaign_id = uc.id
+JOIN users u ON uc.user_id = u.id
+WHERE us.session_id = ?
+  AND us.campaign_id = ?
+GROUP BY uc.room_code, uc.row_no
+ORDER BY 
+  uc.room_code IS NULL,   -- ดัน NULL ไปล่างสุด
+  uc.room_code,
+  uc.row_no;
     `;
             const [rows] = yield this.pool.execute(sql, [sessionId, campaignId]);
             return rows;

@@ -63,19 +63,19 @@ class UserImportRepo {
     return rows[0] || null;
   }
 
-async findOrCreateUser(
-  payload: {
-    user_code: string;
-    full_name: string;
-    first_name: string;
-    last_name: string;
-    title: string;
-    national_id?: string | null;
-    birth_date?: string | null; // ควรเป็น 'YYYY-MM-DD'
-  },
-  dbClient: DbClient
-): Promise<{ user: User; created: boolean }> {
-  const sql = `
+  async findOrCreateUser(
+    payload: {
+      user_code: string;
+      full_name: string;
+      first_name: string;
+      last_name: string;
+      title: string;
+      national_id?: string | null;
+      birth_date?: string | null; // ควรเป็น 'YYYY-MM-DD'
+    },
+    dbClient: DbClient
+  ): Promise<{ user: User; created: boolean }> {
+    const sql = `
     INSERT INTO users (
       user_code,
       full_name,
@@ -99,25 +99,25 @@ async findOrCreateUser(
       id = LAST_INSERT_ID(id)
   `;
 
-  const [result] = await dbClient.execute<ResultSetHeader>(sql, [
-    payload.user_code,
-    payload.full_name,
-    payload.first_name,
-    payload.last_name,
-    payload.title,
-    payload.national_id ?? null,
-    payload.birth_date ?? null,
-  ]);
+    const [result] = await dbClient.execute<ResultSetHeader>(sql, [
+      payload.user_code,
+      payload.full_name,
+      payload.first_name,
+      payload.last_name,
+      payload.title,
+      payload.national_id ?? null,
+      payload.birth_date ?? null,
+    ]);
 
-  const created = result.affectedRows === 1; // 1 = insert ใหม่, 2 = update
-  const newId = result.insertId;
+    const created = result.affectedRows === 1; // 1 = insert ใหม่, 2 = update
+    const newId = result.insertId;
 
-  const user = await this.findById(newId, dbClient);
-  if (!user) {
-    throw new Error("Failed to retrieve user after upsert.");
+    const user = await this.findById(newId, dbClient);
+    if (!user) {
+      throw new Error("Failed to retrieve user after upsert.");
+    }
+    return { user, created };
   }
-  return { user, created };
-}
   async findOrCreateUserCampaign(
     payload: { user_id: number; campaign_id: number },
     dbClient: DbClient
@@ -241,6 +241,18 @@ async findOrCreateUser(
   `;
     const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [campaignId]);
     const max = Number(rows[0]?.max_user_code ?? 0);
+    return max;
+  }
+
+  async findPreviousNumber(
+    campaignId: number,
+    dbClient: DbClient = this.pool
+  ): Promise<number> {
+    const sql = `
+SELECT count(uc.id) as count from user_campaigns uc WHERE uc.campaign_id = ?;
+  `;
+    const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [campaignId]);
+    const max = Number(rows[0]?.count ?? 0);
     return max;
   }
 }

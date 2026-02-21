@@ -27,7 +27,7 @@ class BookletsRepo {
     }
     insertOne(conn, params) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { sessionId, userSessionId, bagNo, seqInBag, status, created_at } = params;
+            const { sessionId, userSessionId, bagNo, seqInBag, status, created_at, random_num } = params;
             const sql = `
       INSERT INTO booklets (
         session_id,
@@ -35,8 +35,9 @@ class BookletsRepo {
         bag_id,
         seq_in_bag,
         status,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?,?)
+        created_at,
+        random_num
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
             console.log(bagNo);
             const [result] = yield conn.execute(sql, [
@@ -45,7 +46,8 @@ class BookletsRepo {
                 bagNo,
                 seqInBag,
                 status,
-                created_at
+                created_at,
+                random_num,
             ]);
             return result.insertId;
         });
@@ -71,6 +73,7 @@ SELECT
         bk.bag_id,
         bk.seq_in_bag,
         bk.status,
+        bk.random_num,
         us.qr_payload  AS qr_payload,
         u.user_code,
         u.full_name,
@@ -129,6 +132,31 @@ SELECT
                 user_code,
             ]);
             return rows[0] || null;
+        });
+    }
+    getDayno(conn, sessionId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+      SELECT id as session_id, day_no from sessions WHERE id = ? limit 1;
+    `;
+            const [rows] = yield conn.execute(sql, [
+                sessionId,
+            ]);
+            return rows[0] || null;
+        });
+    }
+    getLatestRandomNumForUpdate(connection, sessionId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const query = `
+        SELECT random_num 
+        FROM booklets 
+        WHERE session_id = ? AND random_num IS NOT NULL
+        ORDER BY id DESC 
+        LIMIT 1 
+        FOR UPDATE
+    `;
+            const [rows] = yield connection.query(query, [sessionId]);
+            return rows.length > 0 ? rows[0] : null;
         });
     }
 }

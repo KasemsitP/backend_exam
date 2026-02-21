@@ -185,6 +185,17 @@ class UserImportRepo {
             return max;
         });
     }
+    findPreviousNumber(campaignId_1) {
+        return __awaiter(this, arguments, void 0, function* (campaignId, dbClient = this.pool) {
+            var _a, _b;
+            const sql = `
+SELECT count(uc.id) as count from user_campaigns uc WHERE uc.campaign_id = ?;
+  `;
+            const [rows] = yield dbClient.execute(sql, [campaignId]);
+            const max = Number((_b = (_a = rows[0]) === null || _a === void 0 ? void 0 : _a.count) !== null && _b !== void 0 ? _b : 0);
+            return max;
+        });
+    }
 }
 const userImportRepo = new UserImportRepo();
 exports.default = userImportRepo;

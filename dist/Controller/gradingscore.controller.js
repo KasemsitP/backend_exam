@@ -35,7 +35,7 @@ gradingscoreController.SubmitScore = (req, res) => __awaiter(void 0, void 0, voi
             question_no: Number(question_no),
         };
         const result = yield gradingscore_service_1.gradingScoreService.submitScore(payload);
-        res.status(201).json({ slotId: result.slotId, score: result.score });
+        res.status(201).json({ slotId: result.slotId, score: result.score, random_num: result.random_num });
     }
     catch (error) {
         res.status(400).send({ message: error.message });

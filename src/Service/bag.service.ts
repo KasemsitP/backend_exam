@@ -28,6 +28,7 @@ export interface ApiBookletLinked {
     userSessionId: number;
     seqInBag: number;
     userCode: string;
+    random_num: string;
 }
 
 export interface ApiBagBooklet {
@@ -39,6 +40,7 @@ export interface ApiBagBooklet {
     userCode: string;
     fullName: string;
     qrPayload: string | null;
+    random_num: string;
 }
 
 export class bagService {
@@ -279,11 +281,25 @@ export class bagService {
 
             console.log("Created Bag ID:", bagId);
 
+            const day_no_payload = await bookletsRepo.getDayno(connection, sessionId)
+            const dataNo = day_no_payload?.day_no || 0
+            if (dataNo === 0) {
+                throw new Error("ไม่พบวันที่สอบ");
+            }
+            let currentRunningNumber = 0;
+            const latestRecord = await bookletsRepo.getLatestRandomNumForUpdate(connection, sessionId);
+
+            if (latestRecord?.random_num) {
+                // เอา 4 ตัวท้ายเสมอ
+                const runningString = latestRecord.random_num.slice(-4);
+                currentRunningNumber = parseInt(runningString, 10) || 0;
+            }
+
             // 3️⃣ insert booklets
             let seq = 1;
             for (let i = 0; i < decodedList.length; i++) {
                 const decoded = decodedList[i];
-                const scannedAt = datetime[i]; // 👈 ตัวนี้แหละ
+                const scannedAt = datetime[i]; //  ตัวนี้แหละ
 
                 const userSession =
                     await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
@@ -299,6 +315,14 @@ export class bagService {
                     throw new Error(`ไม่พบ user_session ${decoded.uid}`);
                 }
 
+                currentRunningNumber++; // บวก 1 ในแต่ละรอบของลูป
+
+                // ทำให้เป็น 4 หลักเสมอ
+                const paddedRunning = String(currentRunningNumber).padStart(4, '0');
+
+                // เอา dataNo มาต่อหน้า
+                const nextRandomNum = `${dataNo}${paddedRunning}`;
+
                 const bookletId = await bookletsRepo.insertOne(connection, {
                     sessionId,
                     userSessionId: userSession.id,
@@ -306,6 +330,7 @@ export class bagService {
                     seqInBag: seq,
                     status: "CREATED",
                     created_at: scannedAt,
+                    random_num: nextRandomNum
                 });
 
                 results.push({
@@ -315,6 +340,7 @@ export class bagService {
                     userSessionId: userSession.id,
                     seqInBag: seq,
                     userCode: userSession.user_code,
+                    random_num: nextRandomNum
                 });
 
                 seq++;
@@ -377,6 +403,7 @@ export class bagService {
             return rows.map((r) => ({
                 id: r.booklet_id,
                 sessionId: r.session_id,
+                random_num: r.random_num,
                 bagNo: r.bag_no,
                 seqInBag: r.seq_in_bag,
                 status: r.status,
@@ -508,7 +535,7 @@ export class bagService {
             await connection.commit();
 
             return {
-                success : true,
+                success: true,
                 subject_name: subjectResult,
                 bagNo: maxNo + 1,
             };

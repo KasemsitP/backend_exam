@@ -9,7 +9,7 @@ export type RankingRawRow = {
   full_name: string;
   title: string | null;
   room_code: string | null;
-  seat_code: string | null;
+  seat_code?: string | null;
   subject_id: number;
   question_no: number;
   avg_score: number | null; // (s1+s2)/2

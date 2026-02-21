@@ -16,8 +16,10 @@ exports.findQuestionAveragesForBagSubject = findQuestionAveragesForBagSubject;
 exports.findQuestionStatsForBag = findQuestionStatsForBag;
 exports.findBookletQuestionStatsForBag = findBookletQuestionStatsForBag;
 exports.getUnlockCampaignByBagId = getUnlockCampaignByBagId;
+exports.getUnlockCampaignNoconn = getUnlockCampaignNoconn;
 exports.getInfomation = getInfomation;
 exports.getAllBags = getAllBags;
+exports.getCampaignUnlock = getCampaignUnlock;
 exports.getGraderBagSummary = getGraderBagSummary;
 exports.getGraderInfo = getGraderInfo;
 const DB_1 = require("../model/DB");
@@ -249,6 +251,7 @@ function findBookletQuestionStatsForBag(conn, bagId, subjectId // ยังไ�
       s.question_no,
       sq.label,
       sq.note AS category,
+      b.random_num,
 
       -- ค่าเฉลี่ยคะแนนของผู้ตรวจลำดับ 1 "เฉพาะเล่มนี้ + ข้อนี้"
       AVG(CASE WHEN s.grader_order = 1 THEN gs.score END) AS grader1_score,
@@ -321,6 +324,14 @@ function getUnlockCampaignByBagId(conn, bagId) {
         return rows;
     });
 }
+function getUnlockCampaignNoconn(bagId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const pool = DB_1.DB.getInstance();
+        const sql = `SELECT s.campaign_id , ec.is_unlock from bags b JOIN sessions s ON s.id = b.session_id join exam_campaigns ec ON ec.id = s.campaign_id WHERE b.id = ?;`;
+        const [rows] = yield pool.query(sql, [bagId]);
+        return rows;
+    });
+}
 function getInfomation(bagId) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a;
@@ -345,9 +356,8 @@ function getInfomation(bagId) {
         return (_a = rows[0]) !== null && _a !== void 0 ? _a : null;
     });
 }
-function getAllBags(campaign_id) {
+function getAllBags(conn, campaign_id) {
     return __awaiter(this, void 0, void 0, function* () {
-        const pool = DB_1.DB.getInstance();
         const sql = `
 SELECT b.id as bag_id, b.bag_no
         FROM bags b
@@ -355,8 +365,20 @@ SELECT b.id as bag_id, b.bag_no
         WHERE s.campaign_id = ?
         ORDER BY s.day_no,b.bag_no;
   `;
-        const [rows] = yield pool.query(sql, [campaign_id]);
+        const [rows] = yield conn.query(sql, [campaign_id]);
         return rows;
+    });
+}
+function getCampaignUnlock(conn, campaign_id) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
+        const sql = `
+    SELECT is_unlock 
+    FROM exam_campaigns 
+    WHERE id = ?
+  `;
+        const [rows] = yield conn.query(sql, [campaign_id]);
+        return (_b = (_a = rows[0]) === null || _a === void 0 ? void 0 : _a.is_unlock) !== null && _b !== void 0 ? _b : 0;
     });
 }
 function getGraderBagSummary(conn, bagId, graderId) {

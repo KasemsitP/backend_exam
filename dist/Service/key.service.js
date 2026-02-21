@@ -20,6 +20,7 @@ const crypto_1 = __importDefault(require("crypto"));
 const importuser_repo_1 = __importDefault(require("../Repo/importuser.repo"));
 const dashboard_repo_1 = __importDefault(require("../Repo/dashboard.repo"));
 const settings_repo_1 = __importDefault(require("../Repo/settings.repo"));
+const campaign_repo_1 = __importDefault(require("../Repo/campaign.repo"));
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 const ALGORITHM = "aes-128-cbc";
 const PAYLOAD_ENCODING = "utf8";
@@ -173,6 +174,10 @@ keyService.getPrerequisites = (campaignId) => __awaiter(void 0, void 0, void 0, 
     };
 });
 keyService.runBulkEncryptionForSession = (campaignId) => __awaiter(void 0, void 0, void 0, function* () {
+    const activeCamp = yield campaign_repo_1.default.IscampaignActive(campaignId);
+    if (!activeCamp) {
+        throw new Error(`ไม่สามารถเข้ารหัสคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน`);
+    }
     const countkeys = yield key_repo_1.default.countByCampaignId(campaignId);
     if (countkeys < 1) {
         throw new Error("ไม่สามารถทำการเข้ารหัสได้เนื่องจากรอบสอบนี้มีคีย์ไม่ครบ 2 คีย์");
@@ -244,10 +249,15 @@ keyService.runBulkEncryptionForSession = (campaignId) => __awaiter(void 0, void 
 keyService.decryptQrPayload = (ciphertext, campaignId) => __awaiter(void 0, void 0, void 0, function* () {
     let flag_qr_inactive = false;
     try {
+        const isActiveCamp = yield campaign_repo_1.default.IscampaignActive(campaignId);
+        if (!isActiveCamp) {
+            flag_qr_inactive = true;
+            throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน");
+        }
         const isQrActive = yield settings_repo_1.default.QRStatus(campaignId);
         if (!isQrActive) {
             flag_qr_inactive = true;
-            throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
         }
         console.log("QR Status:", isQrActive);
         // 1. ดึงคีย์ (เหมือนเดิม)
@@ -283,13 +293,17 @@ keyService.decryptQrPayload = (ciphertext, campaignId) => __awaiter(void 0, void
     catch (error) {
         console.error("Service Error (Decryption):", error);
         if (flag_qr_inactive) {
-            throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
         }
         throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
     }
 });
 keyService.decrypteKeyForUnlock = (campaignId, connection) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const activeCamp = yield campaign_repo_1.default.IscampaignActive(campaignId, connection);
+        if (!activeCamp) {
+            throw new Error(`ไม่สามารถปลดล็อคข้อมูลรอบสอบนี้ได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน`);
+        }
         const keys = yield key_repo_1.default.findAllByCampaignId(campaignId, connection);
         if (keys.length < 2) {
             throw new Error("รอบสอบนี้ยังไม่ได้สร้างคีย์ครับ 2 คีย์");
@@ -315,10 +329,14 @@ keyService.decrypteKeyForUnlock = (campaignId, connection) => __awaiter(void 0, 
 keyService.decryptQrPayloadConnection = (ciphertext, campaignId, connection) => __awaiter(void 0, void 0, void 0, function* () {
     let flag_qr_inactive = false;
     try {
+        const activeCamp = yield campaign_repo_1.default.IscampaignActive(campaignId, connection);
+        if (!activeCamp) {
+            throw new Error(`ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน`);
+        }
         const isQrActive = yield settings_repo_1.default.QRStatus(campaignId, connection);
         if (!isQrActive) {
             flag_qr_inactive = true;
-            throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
         }
         console.log("QR Status:", isQrActive);
         // 1. ดึงคีย์ (เหมือนเดิม)
@@ -354,7 +372,7 @@ keyService.decryptQrPayloadConnection = (ciphertext, campaignId, connection) => 
     catch (error) {
         console.error("Service Error (Decryption):", error);
         if (flag_qr_inactive) {
-            throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
         }
         throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
     }

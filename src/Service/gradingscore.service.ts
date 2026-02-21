@@ -23,6 +23,7 @@ export interface GradingScoreResult {
   enteredAt: Date;
   graderId: number;
   graderName: string;
+  random_num: string;
 }
 
 export class gradingScoreService {
@@ -105,6 +106,7 @@ export class gradingScoreService {
         enteredAt: row.enteredAt,
         graderId: row.graderId,
         graderName: row.graderName,
+        random_num: row.random_num,
       };
 
       return result;

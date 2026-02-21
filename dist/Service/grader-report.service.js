@@ -18,6 +18,7 @@ const DB_1 = require("../model/DB");
 const path_1 = __importDefault(require("path"));
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const grader_report_repo_1 = __importDefault(require("../Repo/grader-report.repo"));
+const grading_report_repo_1 = require("../Repo/grading-report.repo");
 // --- Helper Functions ---
 function safeText(s) {
     return typeof s === "string" ? s : s == null ? "" : String(s);
@@ -39,6 +40,10 @@ class GraderReportService {
             const questionCountD = yield grader_report_repo_1.default.getQuestionCountForBagSubject(conn, bagId, subjectId);
             const questionLabels = yield grader_report_repo_1.default.getQuestionLabels(conn, subjectId);
             const raw = yield grader_report_repo_1.default.getBookletGraderRows(conn, { bagId, subjectId });
+            const result_is_unlock = yield (0, grading_report_repo_1.getUnlockCampaignByBagId)(conn, bagId);
+            //  console.log(result_is_unlock)
+            console.log(result_is_unlock[0].campaign_id);
+            const unlock = result_is_unlock[0].is_unlock;
             const questionCount = questionCountD !== null && questionCountD !== void 0 ? questionCountD : 0;
             // 2. Map Label เก็บไว้ใช้ง่ายๆ
             // (จริงๆ ตัวแปรนี้ไม่ได้ใช้ในการคำนวณข้างล่าง แต่เตรียมไว้ return)
@@ -46,7 +51,8 @@ class GraderReportService {
             const byBooklet = new Map();
             for (const r of raw) {
                 const bookletId = Number(r.booklet_id);
-                const examCode = safeText(r.exam_code); // หรือ user_code
+                const user_code = unlock ? r.exam_code : r.random_num;
+                const examCode = safeText(user_code); // หรือ user_code
                 const qNo = Number(r.question_no);
                 if (!byBooklet.has(bookletId)) {
                     // สร้าง Array ว่างๆ รอไว้ให้ครบจำนวนข้อ
@@ -81,6 +87,7 @@ class GraderReportService {
                 questionCount,
                 questionLabels, // ส่งต่อ structure เดิม
                 booklets,
+                unlock,
                 info: {
                     bag_no: Number(infoRow.bag_no),
                     year_be: safeText(infoRow.year_be),
@@ -178,111 +185,142 @@ class GraderReportService {
      * ฟังก์ชันวาดเนื้อหาลงในหน้า PDF (ใช้ร่วมกันทั้ง Single และ Campaign)
      */
     static drawBagGraderMatrixPage(doc, report, fontNormal, fontBold) {
-        var _a;
-        const { info, booklets, questionCount, questionLabels } = report;
+        var _a, _b, _c, _d, _e, _f, _g;
+        const { info, booklets, questionCount, questionLabels, unlock } = report;
         const pageWidth = doc.page.width;
-        const { left, right, bottom } = doc.page.margins;
-        const tableWidth = pageWidth - left - right;
-        const labelMap = new Map(questionLabels.map((q) => [q.question_no, q.label]));
-        // --- Header ---
-        doc
-            .font(fontNormal)
-            .fontSize(30)
-            .text(`ถุงที่ ${info.bag_no}`, left, 20, {
-            width: pageWidth - left - right,
-            align: "right",
+        const pageHeight = doc.page.height;
+        const { left, right, top, bottom } = doc.page.margins;
+        const contentWidth = pageWidth - left - right;
+        const labelMap = new Map(questionLabels.map(q => [q.question_no, q.label]));
+        const user_code_title = unlock === 1 ? "รหัสประจำตัวสอบ" : "เลขรหัส";
+        // =====================================================
+        // ====================== HEADER =======================
+        // =====================================================
+        let y = top;
+        const headerY = y;
+        // ✅ TITLE (กลาง)
+        doc.font(fontBold).fontSize(16).text("เอกสารรายชื่อผู้ตรวจรายข้อ", left, headerY, { width: contentWidth, align: "center" });
+        // ✅ BAG NO (ขวา) — ระนาบเดียวกัน
+        doc.font(fontNormal).fontSize(30).text(`ถุงที่ ${info.bag_no}`, left, headerY, { width: contentWidth, align: "right" });
+        y = headerY + 24;
+        doc.font(fontNormal).fontSize(12).text(`${(_a = info.campaign_name) !== null && _a !== void 0 ? _a : "-"}  พ.ศ.${info.year_be} (${info.campaign_size})`, left, y, { width: contentWidth, align: "center" });
+        y = doc.y + 2;
+        doc.text(`ณ ${info.site}`, left, y, {
+            width: contentWidth,
+            align: "center"
         });
-        doc.font(fontBold).fontSize(16).text(`เอกสารรายชื่อผู้ตรวจรายข้อ`, { align: "center" });
-        doc.moveDown(0.2);
-        doc.font(fontNormal).fontSize(13).text(`${(_a = info.campaign_name) !== null && _a !== void 0 ? _a : "-"}  พ.ศ.${info.year_be} (${info.campaign_size})`, { align: "center" });
-        doc.font(fontNormal).fontSize(13).text(`ณ ${info.site}`, { align: "center" });
-        doc.moveDown(0.2);
-        doc.font(fontNormal).fontSize(14).text(`วิชา ${info.subject_name}`, { align: "center" });
-        doc.moveDown(0.8);
-        // --- Table Config ---
+        y = doc.y + 6;
+        doc.font(fontNormal).fontSize(13).text(`วิชา ${info.subject_name}`, left, y, { width: contentWidth, align: "center" });
+        // ===== เริ่มพื้นที่ตาราง =====
+        y = doc.y + 10;
+        // =====================================================
+        // ================= TABLE CONFIG ======================
+        // =====================================================
+        const totalRows = 30;
         const colCodeWidth = 60;
-        const colsPerQuestion = 2; // ผู้ตรวจ1, ผู้ตรวจ2
-        const colPerCellWidth = 58; // ความกว้างช่องชื่อผู้ตรวจ
+        const colsPerQuestion = 2;
+        const colPerCellWidth = 58;
+        const baseRowH1 = 34;
+        const baseRowH2 = 14;
+        const baseRowH = 16;
         const totalQuestionCols = questionCount * colsPerQuestion;
         const usedWidth = colCodeWidth + totalQuestionCols * colPerCellWidth;
-        // ถ้าตารางล้นหน้า ให้ย่อส่วน (Scale down)
-        const scale = usedWidth > tableWidth ? tableWidth / usedWidth : 1;
+        const tableWidth = contentWidth;
+        const widthScale = usedWidth > tableWidth ? tableWidth / usedWidth : 1;
+        const availableHeight = pageHeight - bottom - y;
+        const headerHeight = baseRowH1 + baseRowH2;
+        const bodyHeight = totalRows * baseRowH;
+        const needHeight = headerHeight + bodyHeight;
+        const heightScale = needHeight > availableHeight
+            ? availableHeight / needHeight
+            : 1;
+        const scale = Math.min(widthScale, heightScale, 1);
+        // ===== scaled =====
         const cwCode = colCodeWidth * scale;
         const cwCell = colPerCellWidth * scale;
+        const rowH1 = baseRowH1 * scale;
+        const rowH2 = baseRowH2 * scale;
+        const rowH = baseRowH * scale;
+        const fontHeader = Math.max(7, 10 * scale);
+        const fontBody = Math.max(6, 9 * scale);
         const startX = left;
-        let y = doc.y;
-        const rowH1 = 38; // ความสูง Header แถวบน (ข้อ + Label)
-        const rowH2 = 16; // ความสูง Header แถวล่าง (ผู้ตรวจ 1/2)
-        const rowH = 16; // ความสูง Row ข้อมูล
-        // ฟังก์ชันเช็คหน้ากระดาษ
-        const ensurePage = () => {
-            if (y + rowH > doc.page.height - bottom) {
-                doc.addPage({ layout: "landscape" });
-                y = doc.page.margins.top;
-                drawHeader(); // วาดหัวตารางซ้ำในหน้าใหม่
-            }
-        };
-        // ฟังก์ชันวาดหัวตาราง
+        // =====================================================
+        // ================= TABLE HEADER ======================
+        // =====================================================
         const drawHeader = () => {
             var _a;
             let x = startX;
             doc.lineWidth(0.5).strokeColor("black");
-            doc.font(fontBold).fontSize(10);
-            // 1. ช่องรหัส (กินพื้นที่แนวตั้ง 2 แถว)
+            doc.font(fontBold).fontSize(fontHeader);
+            // ช่องรหัส
             doc.rect(x, y, cwCode, rowH1 + rowH2).stroke();
-            doc.text("รหัส", x, y + 8, { width: cwCode, align: "center" });
+            doc.text(user_code_title, x, y + 4 * scale, {
+                width: cwCode,
+                align: "center"
+            });
             x += cwCode;
-            // 2. Loop วาดหัวข้อ (แถวบน)
+            // ข้อสอบ
             for (let q = 1; q <= questionCount; q++) {
                 const groupW = colsPerQuestion * cwCell;
                 const label = (_a = labelMap.get(q)) !== null && _a !== void 0 ? _a : "";
                 doc.rect(x, y, groupW, rowH1).stroke();
-                doc.text(`ข้อ ${q}\n${label}`, x, y + 3, {
+                doc.text(`ข้อ ${q}\n${label}`, x, y + 2 * scale, {
                     width: groupW,
                     align: "center",
-                    ellipsis: true,
+                    ellipsis: true
                 });
                 x += groupW;
             }
-            // 3. Loop วาดหัวข้อย่อย (แถวล่าง: ผู้ตรวจ 1 / 2)
             y += rowH1;
             x = startX + cwCode;
             const sub = ["ผู้ตรวจ 1", "ผู้ตรวจ 2"];
             for (let q = 1; q <= questionCount; q++) {
                 for (let i = 0; i < 2; i++) {
                     doc.rect(x, y, cwCell, rowH2).stroke();
-                    doc.text(sub[i], x, y + 3, { width: cwCell, align: "center" });
+                    doc.text(sub[i], x, y + 2 * scale, {
+                        width: cwCell,
+                        align: "center"
+                    });
                     x += cwCell;
                 }
             }
-            // ปิดท้ายหัวตาราง
             y += rowH2;
-            doc.font(fontNormal).fontSize(9);
         };
-        // เริ่มวาดหัวตารางครั้งแรก
         drawHeader();
-        // --- Table Body (Loop Booklets) ---
-        doc.font(fontNormal).fontSize(9);
-        for (const bk of booklets) {
-            ensurePage();
+        // =====================================================
+        // ================= TABLE BODY ========================
+        // =====================================================
+        doc.font(fontNormal).fontSize(fontBody);
+        for (let i = 0; i < totalRows; i++) {
+            const bk = booklets[i];
             let x = startX;
-            // 1. รหัสสอบ
             doc.rect(x, y, cwCode, rowH).stroke();
-            doc.text(bk.examCode, x + 2, y + 3, { width: cwCode - 4, align: "left" });
+            if (bk) {
+                const textY = y + (rowH - fontBody) / 2;
+                doc.text((_b = bk.examCode) !== null && _b !== void 0 ? _b : "", x + 2 * scale, textY, {
+                    width: cwCode - 4 * scale,
+                    align: "left",
+                    ellipsis: true
+                });
+            }
             x += cwCode;
-            // 2. Loop แต่ละข้อ
             for (let q = 1; q <= questionCount; q++) {
-                const cell = bk.questions[q - 1];
-                // ตัดคำถ้ายาวเกินไป
-                const g1 = (cell === null || cell === void 0 ? void 0 : cell.grader1Name) ? cell.grader1Name.split(" ")[0] : "";
-                const g2 = (cell === null || cell === void 0 ? void 0 : cell.grader2Name) ? cell.grader2Name.split(" ")[0] : "";
-                // ช่องผู้ตรวจ 1
+                const cell = (_c = bk === null || bk === void 0 ? void 0 : bk.questions) === null || _c === void 0 ? void 0 : _c[q - 1];
+                const g1 = (_e = (_d = cell === null || cell === void 0 ? void 0 : cell.grader1Name) === null || _d === void 0 ? void 0 : _d.split(" ")[0]) !== null && _e !== void 0 ? _e : "";
+                const g2 = (_g = (_f = cell === null || cell === void 0 ? void 0 : cell.grader2Name) === null || _f === void 0 ? void 0 : _f.split(" ")[0]) !== null && _g !== void 0 ? _g : "";
                 doc.rect(x, y, cwCell, rowH).stroke();
-                doc.text(g1, x + 2, y + 3, { width: cwCell - 4, align: "center" });
+                doc.text(g1, x, y + 2 * scale, {
+                    width: cwCell,
+                    align: "center",
+                    ellipsis: true
+                });
                 x += cwCell;
-                // ช่องผู้ตรวจ 2
                 doc.rect(x, y, cwCell, rowH).stroke();
-                doc.text(g2, x + 2, y + 3, { width: cwCell - 4, align: "center" });
+                doc.text(g2, x, y + 2 * scale, {
+                    width: cwCell,
+                    align: "center",
+                    ellipsis: true
+                });
                 x += cwCell;
             }
             y += rowH;

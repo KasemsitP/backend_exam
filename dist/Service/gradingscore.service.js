@@ -76,6 +76,7 @@ class gradingScoreService {
                     enteredAt: row.enteredAt,
                     graderId: row.graderId,
                     graderName: row.graderName,
+                    random_num: row.random_num,
                 };
                 return result;
             }

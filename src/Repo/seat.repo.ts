@@ -195,8 +195,7 @@ GROUP BY r.room_code;
         const sql = `UPDATE user_campaigns
        SET room_code = NULL,
            row_no   = NULL,
-           col_no   = NULL,
-           seat_code = NULL
+           col_no   = NULL
        WHERE campaign_id = ?`
         const result = await this.pool.execute(sql, [campaign_id])
     }

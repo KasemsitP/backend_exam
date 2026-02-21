@@ -578,23 +578,27 @@ ORDER BY e.session_id, e.subject_id;
   }
   async getCountBookletsBySession(campaign_id: number): Promise<{ session_id: number, session_code: string, subject_name: string, count: number }[]> {
     const sql = `SELECT 
-    s.id,
-    s.session_code,
-    sub.name,
-    COUNT(DISTINCT b.id) AS total_booklets
-FROM sessions s
-JOIN booklets b ON s.id = b.session_id
-JOIN session_subjects ss ON ss.session_id = s.id
-JOIN subjects sub ON sub.id = ss.subject_id
-WHERE s.campaign_id = ?
-GROUP BY s.id, s.session_code, sub.name`
+	sess.id as session_id,
+    s.name as subject_name,
+    sess.session_code,
+    COUNT(DISTINCT b.id) AS count
+FROM subjects s
+JOIN session_subjects ss 
+    ON s.id = ss.subject_id
+JOIN sessions sess 
+    ON sess.id = ss.session_id 
+    AND sess.campaign_id = ?
+LEFT JOIN booklets b 
+    ON b.session_id = sess.id
+GROUP BY s.name, sess.day_no , sess.id
+ORDER BY sess.day_no;`
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
     // console.log(rows)
-    return rows.map(row => ({ session_id: row.id, session_code: row.session_code, subject_name: row.name, count: row.total_booklets }));
+    return rows.map(row => ({ session_id: row.session_id, session_code: row.session_code, subject_name: row.subject_name, count: row.count }));
   }
 
   async getSeatAssignedStatus(campaign_id: number): Promise<number> {
-    const sql = `SELECT COUNT(b.id) AS count FROM booklets b JOIN sessions s ON s.id = b.session_id WHERE s.campaign_id = ?`
+    const sql = `SELECT COUNT(b.id) AS count FROM booklets b  JOIN sessions s ON s.id = b.session_id WHERE s.campaign_id = ?`
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
     return rows[0]?.count ?? 0;
   }
@@ -602,15 +606,14 @@ GROUP BY s.id, s.session_code, sub.name`
     const sql = `
 SELECT 
   r.room_code,
-  COUNT(DISTINCT uc.user_id) AS count_user,
+  COUNT(uc.user_id) AS count_user,
   r.capacity
 FROM exam_rooms r
 LEFT JOIN user_campaigns uc
   ON uc.room_code = r.room_code
- AND uc.campaign_id = ?
+ AND uc.campaign_id = r.campaign_id
+WHERE r.campaign_id = ?
 GROUP BY r.room_code, r.capacity;
-
-
   `
 
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])

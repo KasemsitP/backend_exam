@@ -5,6 +5,7 @@ import userImportRepo from "../Repo/importuser.repo";
 import { PoolConnection } from "mysql2/promise";
 import dashboardRepo from "../Repo/dashboard.repo";
 import settingsRepo from "../Repo/settings.repo";
+import campaignRepo from "../Repo/campaign.repo";
 
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 
@@ -207,6 +208,12 @@ export class keyService {
     static runBulkEncryptionForSession = async (
         campaignId: number,
     ) => {
+
+        const activeCamp = await campaignRepo.IscampaignActive(campaignId);
+        if (!activeCamp) {
+            throw new Error(`ไม่สามารถเข้ารหัสคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน`);
+        }
+
         const countkeys = await keyRepo.countByCampaignId(campaignId);
         if (countkeys < 1) {
             throw new Error("ไม่สามารถทำการเข้ารหัสได้เนื่องจากรอบสอบนี้มีคีย์ไม่ครบ 2 คีย์");
@@ -314,14 +321,18 @@ export class keyService {
         ciphertext: string,
         campaignId: number
     ) => {
-         let flag_qr_inactive = false
+        let flag_qr_inactive = false
         try {
+            const isActiveCamp = await campaignRepo.IscampaignActive(campaignId);
+            if (!isActiveCamp) {
+                flag_qr_inactive = true;
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน");
+            }
 
-           
             const isQrActive = await settingsRepo.QRStatus(campaignId);
             if (!isQrActive) {
                 flag_qr_inactive = true;
-                throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
             }
             console.log("QR Status:", isQrActive);
             // 1. ดึงคีย์ (เหมือนเดิม)
@@ -367,8 +378,8 @@ export class keyService {
         } catch (error: any) {
             console.error("Service Error (Decryption):", error);
 
-            if(flag_qr_inactive){
-                throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            if (flag_qr_inactive) {
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
 
             }
 
@@ -378,6 +389,10 @@ export class keyService {
 
     static decrypteKeyForUnlock = async (campaignId: number, connection: PoolConnection) => {
         try {
+            const activeCamp = await campaignRepo.IscampaignActive(campaignId, connection);
+            if (!activeCamp) {
+                throw new Error(`ไม่สามารถปลดล็อคข้อมูลรอบสอบนี้ได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน`);
+            }
             const keys = await keyRepo.findAllByCampaignId(campaignId, connection);
             if (keys.length < 2) {
                 throw new Error("รอบสอบนี้ยังไม่ได้สร้างคีย์ครับ 2 คีย์");
@@ -407,12 +422,16 @@ export class keyService {
         campaignId: number,
         connection: PoolConnection
     ) => {
-         let flag_qr_inactive = false
+        let flag_qr_inactive = false
         try {
+            const activeCamp = await campaignRepo.IscampaignActive(campaignId, connection);
+            if (!activeCamp) {
+                throw new Error(`ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน`);
+            }
             const isQrActive = await settingsRepo.QRStatus(campaignId, connection);
             if (!isQrActive) {
                 flag_qr_inactive = true;
-                throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
             }
             console.log("QR Status:", isQrActive);
             // 1. ดึงคีย์ (เหมือนเดิม)
@@ -458,8 +477,8 @@ export class keyService {
         } catch (error: any) {
             console.error("Service Error (Decryption):", error);
 
-            if(flag_qr_inactive){
-                throw new Error("ไม่สามารถสแกนได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            if (flag_qr_inactive) {
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
 
             }
 

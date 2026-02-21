@@ -355,6 +355,7 @@ export async function findBookletQuestionStatsForBag(
       s.question_no,
       sq.label,
       sq.note AS category,
+      b.random_num,
 
       -- ค่าเฉลี่ยคะแนนของผู้ตรวจลำดับ 1 "เฉพาะเล่มนี้ + ข้อนี้"
       AVG(CASE WHEN s.grader_order = 1 THEN gs.score END) AS grader1_score,
@@ -436,6 +437,17 @@ export async function getUnlockCampaignByBagId(conn: PoolConnection,
   return rows;
 }
 
+export async function getUnlockCampaignNoconn(
+  bagId: number,
+): Promise<is_unlockType[]> {
+
+  const pool = DB.getInstance()
+
+  const sql = `SELECT s.campaign_id , ec.is_unlock from bags b JOIN sessions s ON s.id = b.session_id join exam_campaigns ec ON ec.id = s.campaign_id WHERE b.id = ?;`
+  const [rows] = await pool.query<is_unlockType[]>(sql, [bagId])
+  return rows;
+}
+
 
 
 export async function getInfomation(
@@ -468,10 +480,10 @@ export async function getInfomation(
 
 
 export async function getAllBags(
+  conn : PoolConnection,
   campaign_id: number
 ): Promise<AllBags[]> {
 
-  const pool = DB.getInstance()
 
   const sql = `
 SELECT b.id as bag_id, b.bag_no
@@ -481,10 +493,30 @@ SELECT b.id as bag_id, b.bag_no
         ORDER BY s.day_no,b.bag_no;
   `;
 
-  const [rows] = await pool.query<AllBags[]>(sql, [campaign_id]);
+  const [rows] = await conn.query<AllBags[]>(sql, [campaign_id]);
 
   return rows;
 }
+interface BagUnlock extends RowDataPacket {
+  is_unlock: number;
+}
+
+export async function getCampaignUnlock(
+  conn: PoolConnection,
+  campaign_id: number
+): Promise<number> {
+
+  const sql = `
+    SELECT is_unlock 
+    FROM exam_campaigns 
+    WHERE id = ?
+  `;
+
+  const [rows] = await conn.query<BagUnlock[]>(sql, [campaign_id]);
+
+  return rows[0]?.is_unlock ?? 0;
+}
+
 
 export async function getGraderBagSummary(
   conn: PoolConnection,

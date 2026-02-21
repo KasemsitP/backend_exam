@@ -2,6 +2,7 @@
 import path from "path";
 import PDFDocument from "pdfkit";
 import seatPlanRepo, { SeatPlanRow, SeatPlanNameRow } from "../Repo/seatplan.repo";
+import graderReportRepo from "../Repo/grader-report.repo";
 import seatrepo from "../Repo/seat.repo";
 
 
@@ -14,6 +15,11 @@ export class SeatPlanService {
     }): Promise<Buffer> {
         const { session_id, campaign_id } = options;
         const title = options.title ?? "ผังที่นั่งสอบ";
+
+        const info = await seatPlanRepo.getExamInfoWithSessions(campaign_id)
+        if (!info) {
+            throw new Error("ไม่พบข้อมูลรอบสอบ");
+        }
 
         const rows: SeatPlanRow[] =
             await seatPlanRepo.findSeatPlanByCampaignAndSession(
@@ -39,7 +45,15 @@ export class SeatPlanService {
 
         // ===== Header =====
         doc.font(fontBold).fontSize(16).text(title, { align: "center" });
-        doc.moveDown(0.5);
+        doc.moveDown(0.3);
+        doc.font(fontNormal)
+            .fontSize(14)
+            .text(`${info.exam.name}`, { align: "center" });
+        doc.moveDown(0.3);
+        doc.font(fontNormal)
+            .fontSize(14)
+            .text(`${info.exam.site}`, { align: "center" });
+        doc.moveDown(0.3);
 
         // ===== Table layout =====
         const pageWidth = doc.page.width;

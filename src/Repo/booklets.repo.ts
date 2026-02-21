@@ -16,10 +16,16 @@ export interface DbBookletInBagRow extends RowDataPacket {
   bag_no: number;
   seq_in_bag: number | null;
   status: string;
+  random_num: string;
   qr_payload: string | null;
   user_code: string;
   full_name: string;
 }
+interface SessionRow extends RowDataPacket {
+  session_id: number;
+  day_no: number;
+}
+
 
 class BookletsRepo {
   // หาค่า seq_in_bag สูงสุดในถุงนี้ (เผื่อมีของเก่าแล้ว จะต่อจากเลขเดิม)
@@ -47,10 +53,11 @@ class BookletsRepo {
       bagNo: number;
       seqInBag: number;
       status: "CREATED" | "PACKAGED" | "SCANNED" | "GRADED";
-      created_at: Date
+      created_at: Date;
+      random_num: string;
     }
   ): Promise<number> {
-    const { sessionId, userSessionId, bagNo, seqInBag, status, created_at } = params;
+    const { sessionId, userSessionId, bagNo, seqInBag, status, created_at, random_num } = params;
 
     const sql = `
       INSERT INTO booklets (
@@ -59,8 +66,9 @@ class BookletsRepo {
         bag_id,
         seq_in_bag,
         status,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?,?)
+        created_at,
+        random_num
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     console.log(bagNo)
     const [result] = await conn.execute<ResultSetHeader>(sql, [
@@ -69,7 +77,8 @@ class BookletsRepo {
       bagNo,
       seqInBag,
       status,
-      created_at
+      created_at,
+      random_num,
     ]);
 
     return result.insertId;
@@ -102,6 +111,7 @@ SELECT
         bk.bag_id,
         bk.seq_in_bag,
         bk.status,
+        bk.random_num,
         us.qr_payload  AS qr_payload,
         u.user_code,
         u.full_name,
@@ -168,6 +178,37 @@ SELECT
     ]);
     return rows[0] || null;
   }
+
+  async getDayno(
+    conn: PoolConnection,
+    sessionId : number
+  ): Promise<SessionRow | null> {
+
+    const sql = `
+      SELECT id as session_id, day_no from sessions WHERE id = ? limit 1;
+    `;
+
+    const [rows] = await conn.execute<SessionRow[]>(sql, [
+      sessionId,
+    ]);
+
+    return rows[0] || null;
+  }
+
+async getLatestRandomNumForUpdate(connection: any, sessionId: string | number) {
+    const query = `
+        SELECT random_num 
+        FROM booklets 
+        WHERE session_id = ? AND random_num IS NOT NULL
+        ORDER BY id DESC 
+        LIMIT 1 
+        FOR UPDATE
+    `;
+    
+    const [rows] = await connection.query(query, [sessionId]);
+    
+    return rows.length > 0 ? rows[0] : null;
+}
 }
 
 
