@@ -55,15 +55,24 @@ class Authrepo {
     }
     async findByUsername(username: string): Promise<RowDataPacket | null> {
         const sql = `
-        SELECT 
-            a.*, 
-            r.code as role_code 
-        FROM 
-            accounts a
-        LEFT JOIN 
-            roles r ON a.role_id = r.id
-        WHERE 
-            a.username = ?
+SELECT 
+    a.*, 
+    r.code as role_code,
+    g.id as grader_id,
+    g.campaign_id
+FROM accounts a
+INNER JOIN roles r 
+    ON a.role_id = r.id
+LEFT JOIN graders g 
+    ON g.account_id = a.id
+LEFT JOIN exam_campaigns ec
+    ON ec.id = g.campaign_id
+WHERE 
+    a.username = ?
+    AND (
+        g.id IS NULL               -- ไม่ใช่ grader → ผ่านเลย
+        OR ec.is_active = 1        -- เป็น grader → ต้อง active
+    );
     `;
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [username]);
         return rows[0] || null;

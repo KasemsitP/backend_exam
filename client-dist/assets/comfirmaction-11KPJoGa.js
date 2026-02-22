@@ -1,0 +1,1 @@
+import{S as n}from"./sweetalert2-NNS-RXd7.js";const e=async t=>(await n.fire({title:t.title,text:t.text,icon:"warning",showCancelButton:!0,confirmButtonText:t.confirmText,cancelButtonText:"ยกเลิก",confirmButtonColor:t.confirmColor??"#2563EB",cancelButtonColor:"#64748B"})).isConfirmed;export{e as c};

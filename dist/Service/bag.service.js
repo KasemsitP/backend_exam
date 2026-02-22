@@ -234,6 +234,7 @@ bagService.CreateBagAndInsertBooklets = (campaign_id, payload, datetime) => __aw
         for (const qr of payload) {
             const decoded = yield key_service_1.keyService.decryptQrPayload(qr, campaign_id);
             if (decoded.cid !== campaign_id) {
+                console.log("decoded.cid:", decoded.cid, "campaign_id:", campaign_id);
                 throw new Error(`QR ไม่ตรง campaign`);
             }
             if (sessionId === null) {

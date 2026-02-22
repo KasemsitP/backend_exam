@@ -1,0 +1,1 @@
+import{j as r}from"./@vendor-core-BNBX1K9v.js";import{a as l,c as u,b3 as a,b4 as c}from"./index-CJG29mJu.js";function x({permission:s,anyOf:e,fallback:n=null,children:o}){const t=l(u)?.roles;return(s?a(t,s):e&&e.length>0?c(t,e):!!t?.length)?r.jsx(r.Fragment,{children:o}):r.jsx(r.Fragment,{children:n})}export{x as S};

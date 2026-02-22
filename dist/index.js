@@ -59,7 +59,7 @@ dotenv_1.default.config();
 exports.app = (0, express_1.default)();
 exports.app.set('trust proxy', 1);
 exports.app.use((0, compression_1.default)({
-    threshold: 0, //  บีบทุกอย่างทันที (เอาไว้เทสก่อน)
+    threshold: 1024, //  บีบทุกอย่างทันที (เอาไว้เทสก่อน)
 }));
 exports.app.disable("x-powered-by");
 exports.app.use(express_1.default.json({ limit: "10mb" }));
@@ -132,13 +132,14 @@ exports.app.use((0, express_session_1.default)({
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
+    rolling: true,
     cookie: {
         httpOnly: true,
         // ถ้าอยู่บน Render (HTTPS) จะเป็น true, ถ้าเทสต์เครื่องตัวเอง (HTTP) จะเป็น false
         secure: isProduction,
         // อยู่โดเมนเดียวกันแล้ว ใช้ lax ได้เลย (แถมปลอดภัยกว่าด้วย)
         sameSite: "lax",
-        maxAge: 1000 * 60 * 60,
+        maxAge: 1000 * 60 * 30,
     },
 }));
 // app.use(session({

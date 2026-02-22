@@ -22,7 +22,7 @@ export class authcontroller {
 
       await conn.beginTransaction();
 
-      await authservice.IsDuplicate(username); 
+      await authservice.IsDuplicate(username);
 
       const roleExists = await authrepo.checkRole(role);
       if (!roleExists) throw new Error("ไม่พบ role ที่ระบุ");
@@ -32,12 +32,12 @@ export class authcontroller {
       const hash = await utills.hash(password);
 
       const userData = { username, password: hash, full_name, email, role };
-      const insertId = await authrepo.createAccount(userData); 
+      const insertId = await authrepo.createAccount(userData);
       const accountId = insertId;
 
       if (!accountId) throw new Error("สร้างบัญชีไม่สำเร็จ");
       console.log(accountId)
-      console.log(isGrader , campaignId)
+      console.log(isGrader, campaignId)
 
       if (isGrader && campaignId) {
         await graderRepo.create(
@@ -78,62 +78,66 @@ export class authcontroller {
   // }
 
 
-static login = async (req: Request, res: Response) => {
-  const { username, password } = req.body;
+  static login = async (req: Request, res: Response) => {
+    const { username, password } = req.body;
 
-  try {
-    const result = await authservice.CheckUsername(username, password);
-    const userId = Number(result.id);
-    const conn = DB.getInstance();
+    try {
+      const result = await authservice.CheckUsername(username, password);
 
-    //  ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
-    await conn.execute(
-      "DELETE FROM auth_sessions WHERE account_id = ?",
-      [userId]
-    );
+      if (Number(result.active) !== 1) {
+        throw new Error("บัญชีถูกระงับการใช้งาน");
+      }
+      const userId = Number(result.id);
+      const conn = DB.getInstance();
 
-    //  regenerate session ใหม่
-    await new Promise<void>((resolve, reject) => {
-      req.session.regenerate((err) => (err ? reject(err) : resolve()));
-    });
+      //  ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
+      await conn.execute(
+        "DELETE FROM auth_sessions WHERE account_id = ?",
+        [userId]
+      );
 
-    //  set session ใหม่
-    req.session.userId = userId;
-    req.session.sessionVersion = Number(result.sessionVersion);
-    req.session.roles = result.roles;
+      //  regenerate session ใหม่
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((err) => (err ? reject(err) : resolve()));
+      });
 
-    //  save session
-    await new Promise<void>((resolve, reject) => {
-      req.session.save((err) => (err ? reject(err) : resolve()));
-    });
+      //  set session ใหม่
+      req.session.userId = userId;
+      req.session.sessionVersion = Number(result.sessionVersion);
+      req.session.roles = result.roles;
 
-    console.log("login sid =", req.sessionID, "userId =", userId);
+      //  save session
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => (err ? reject(err) : resolve()));
+      });
 
-    //  ผูก sid ใหม่กับ account_id
-    await authrepo.updateAuthsession(userId, req.sessionID);
+      console.log("login sid =", req.sessionID, "userId =", userId);
 
-    return res.status(200).json({
-      message: "เข้าสู่ระบบสำเร็จ",
-      user: result,
-    });
+      //  ผูก sid ใหม่กับ account_id
+      await authrepo.updateAuthsession(userId, req.sessionID);
 
-  } catch (error: any) {
-    return res.status(400).json({ message: error.message });
-  }
-};
+      return res.status(200).json({
+        message: "เข้าสู่ระบบสำเร็จ",
+        user: result,
+      });
+
+    } catch (error: any) {
+      return res.status(400).json({ message: error.message });
+    }
+  };
   static getMe = async (req: Request, res: Response) => {
     try {
       const userId = req.session.userId;
-      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+      if (!userId) return res.status(401).json({ message: "ไม่ได้รับอนุญาต" });
 
       // ดึงข้อมูลสดจาก DB (รวม roles)
       const row = await authrepo.findMeById(userId);
-      if (!row) return res.status(401).json({ message: "Not authenticated" });
+      if (!row) return res.status(401).json({ message: "ไม่ได้รับอนุญาต" });
 
       // กัน user โดน revoke
       if (Number(row.active) !== 1) {
         req.session.destroy(() => { });
-        return res.status(403).json({ message: "Account revoked/disabled" });
+        return res.status(403).json({ message: "บัญชีถูกระงับการใช้งาน" });
       }
 
       const roleCode = (row.role_code || "staff").toLowerCase();
@@ -205,7 +209,7 @@ static login = async (req: Request, res: Response) => {
   static delete = async (req: Request, res: Response) => {
     try {
       console.log("Deleting account id:", req.params.id);
-      
+
       const id = parseInt(req.params.id, 10);
       await authservice.deleteAccount(id);
       res.status(200).json({ id: id });

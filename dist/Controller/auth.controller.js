@@ -77,52 +77,50 @@ authcontroller.login = (req, res) => __awaiter(void 0, void 0, void 0, function*
     const { username, password } = req.body;
     try {
         const result = yield auth_service_1.authservice.CheckUsername(username, password);
-        req.session.userId = Number(result.id);
+        if (Number(result.active) !== 1) {
+            throw new Error("บัญชีถูกระงับการใช้งาน");
+        }
+        const userId = Number(result.id);
+        const conn = DB_1.DB.getInstance();
+        //  ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
+        yield conn.execute("DELETE FROM auth_sessions WHERE account_id = ?", [userId]);
+        //  regenerate session ใหม่
+        yield new Promise((resolve, reject) => {
+            req.session.regenerate((err) => (err ? reject(err) : resolve()));
+        });
+        //  set session ใหม่
+        req.session.userId = userId;
         req.session.sessionVersion = Number(result.sessionVersion);
         req.session.roles = result.roles;
-        // console.log(result.id , req.sessionID)
-        // const resUpdate = await authrepo.updateAuthsession(result.id , req.sessionID)
-        // console.log(resUpdate)
-        // res.status(200).json({
-        //   message: "เข้าสู่ระบบสำเร็จ",
-        //   user: result,
-        // });
-        try {
-            yield new Promise((resolve, reject) => {
-                req.session.save((err) => (err ? reject(err) : resolve()));
-            });
-            console.log("login sid =", req.sessionID, "userId =", result.id);
-            // อัปเดต account_id ใน auth_sessions
-            yield auth_repo_1.default.updateAuthsession(result.id, req.sessionID);
-        }
-        catch (err) {
-            console.error("Session or auth_sessions update failed:", err);
-            // ตรงนี้เลือกได้ว่าจะให้ login ผ่านอยู่ดี หรือจะ response 500
-            // ถ้าอยากให้ล็อกอินได้ต่อแม้ updateAuthsession fail:
-            // ไม่ต้อง throw ต่อ
-        }
+        //  save session
+        yield new Promise((resolve, reject) => {
+            req.session.save((err) => (err ? reject(err) : resolve()));
+        });
+        console.log("login sid =", req.sessionID, "userId =", userId);
+        //  ผูก sid ใหม่กับ account_id
+        yield auth_repo_1.default.updateAuthsession(userId, req.sessionID);
         return res.status(200).json({
             message: "เข้าสู่ระบบสำเร็จ",
             user: result,
         });
     }
     catch (error) {
-        return res.status(400).send({ message: error.message });
+        return res.status(400).json({ message: error.message });
     }
 });
 authcontroller.getMe = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.session.userId;
         if (!userId)
-            return res.status(401).json({ message: "Not authenticated" });
+            return res.status(401).json({ message: "ไม่ได้รับอนุญาต" });
         // ดึงข้อมูลสดจาก DB (รวม roles)
         const row = yield auth_repo_1.default.findMeById(userId);
         if (!row)
-            return res.status(401).json({ message: "Not authenticated" });
+            return res.status(401).json({ message: "ไม่ได้รับอนุญาต" });
         // กัน user โดน revoke
         if (Number(row.active) !== 1) {
             req.session.destroy(() => { });
-            return res.status(403).json({ message: "Account revoked/disabled" });
+            return res.status(403).json({ message: "บัญชีถูกระงับการใช้งาน" });
         }
         const roleCode = (row.role_code || "staff").toLowerCase();
         return res.status(200).json({

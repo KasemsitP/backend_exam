@@ -253,6 +253,7 @@ export class bagService {
                 const decoded = await keyService.decryptQrPayload(qr, campaign_id);
 
                 if (decoded.cid !== campaign_id) {
+                    console.log("decoded.cid:", decoded.cid, "campaign_id:", campaign_id)
                     throw new Error(`QR ไม่ตรง campaign`);
                 }
 
