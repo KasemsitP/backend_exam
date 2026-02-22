@@ -1,0 +1,1 @@
+import{a as o,c as u,bA as a,bB as c,j as e}from"./index-Do3m78ZB.js";function f({permission:t,anyOf:r,fallback:n=null,children:l}){const s=o(u)?.roles;return(t?a(s,t):r&&r.length>0?c(s,r):!!s?.length)?e.jsx(e.Fragment,{children:l}):e.jsx(e.Fragment,{children:n})}export{f as S};
