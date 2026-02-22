@@ -78,48 +78,49 @@ export class authcontroller {
   // }
 
 
-  static login = async (req: Request, res: Response) => {
-    const { username, password } = req.body;
-    try {
-      const result = await authservice.CheckUsername(username, password)
-      req.session.userId = Number(result.id);
-      req.session.sessionVersion = Number(result.sessionVersion);
-      req.session.roles = result.roles;
+static login = async (req: Request, res: Response) => {
+  const { username, password } = req.body;
 
+  try {
+    const result = await authservice.CheckUsername(username, password);
+    const userId = Number(result.id);
+    const conn = DB.getInstance();
 
+    //  ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
+    await conn.execute(
+      "DELETE FROM auth_sessions WHERE account_id = ?",
+      [userId]
+    );
 
-      // console.log(result.id , req.sessionID)
-      // const resUpdate = await authrepo.updateAuthsession(result.id , req.sessionID)
-      // console.log(resUpdate)
-      // res.status(200).json({
-      //   message: "เข้าสู่ระบบสำเร็จ",
-      //   user: result,
-      // });
-      try {
-        await new Promise<void>((resolve, reject) => {
-          req.session.save((err) => (err ? reject(err) : resolve()));
-        });
+    //  regenerate session ใหม่
+    await new Promise<void>((resolve, reject) => {
+      req.session.regenerate((err) => (err ? reject(err) : resolve()));
+    });
 
-        console.log("login sid =", req.sessionID, "userId =", result.id);
+    //  set session ใหม่
+    req.session.userId = userId;
+    req.session.sessionVersion = Number(result.sessionVersion);
+    req.session.roles = result.roles;
 
-        // อัปเดต account_id ใน auth_sessions
-        await authrepo.updateAuthsession(result.id, req.sessionID);
-      } catch (err) {
-        console.error("Session or auth_sessions update failed:", err);
-        // ตรงนี้เลือกได้ว่าจะให้ login ผ่านอยู่ดี หรือจะ response 500
-        // ถ้าอยากให้ล็อกอินได้ต่อแม้ updateAuthsession fail:
-        // ไม่ต้อง throw ต่อ
-      }
+    //  save session
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
 
-      return res.status(200).json({
-        message: "เข้าสู่ระบบสำเร็จ",
-        user: result,
-      });
+    console.log("login sid =", req.sessionID, "userId =", userId);
 
-    } catch (error: any) {
-      return res.status(400).send({ message: error.message });
-    }
+    //  ผูก sid ใหม่กับ account_id
+    await authrepo.updateAuthsession(userId, req.sessionID);
+
+    return res.status(200).json({
+      message: "เข้าสู่ระบบสำเร็จ",
+      user: result,
+    });
+
+  } catch (error: any) {
+    return res.status(400).json({ message: error.message });
   }
+};
   static getMe = async (req: Request, res: Response) => {
     try {
       const userId = req.session.userId;

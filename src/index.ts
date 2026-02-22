@@ -8,7 +8,6 @@ import compression from "compression";
 import dotenv from "dotenv"
 import MySQLStoreFactory from "express-mysql-session";
 import session from 'express-session';
-import csrf from "tiny-csrf";
 import { Logging } from './Middleware/logging';
 import { DB } from './model/DB';
 import authrouter from "./Routes/routes.auth"
@@ -47,7 +46,7 @@ export const app = express();
 app.set('trust proxy', 1);
 app.use(
   compression({
-    threshold: 0, //  บีบทุกอย่างทันที (เอาไว้เทสก่อน)
+    threshold: 1024, //  บีบทุกอย่างทันที (เอาไว้เทสก่อน)
   })
 );
 app.disable("x-powered-by");
@@ -140,13 +139,14 @@ app.use(
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
+    rolling: true,
     cookie: {
       httpOnly: true,
       // ถ้าอยู่บน Render (HTTPS) จะเป็น true, ถ้าเทสต์เครื่องตัวเอง (HTTP) จะเป็น false
       secure: isProduction,
       // อยู่โดเมนเดียวกันแล้ว ใช้ lax ได้เลย (แถมปลอดภัยกว่าด้วย)
       sameSite: "lax",
-      maxAge: 1000 * 60 * 60,
+      maxAge: 1000 * 60 * 30,
     },
   })
 );
