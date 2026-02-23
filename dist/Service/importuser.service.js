@@ -17,7 +17,6 @@ exports.userImportService = void 0;
 const DB_1 = require("../model/DB");
 const importuser_repo_1 = __importDefault(require("../Repo/importuser.repo"));
 const session_repo_1 = __importDefault(require("../Repo/session.repo"));
-const lodash_shuffle_1 = __importDefault(require("lodash.shuffle"));
 const lodash_1 = require("lodash");
 function normalizeDate(input) {
     // ... (ฟังก์ชันเดิมของคุณ ดีอยู่แล้ว) ...
@@ -176,12 +175,12 @@ userImportService.importUsersToCampaign = (campaignId, rows) => __awaiter(void 0
         const currentMax = yield importuser_repo_1.default.findMaxUserCodeByCampaign(campaignId, connection);
         let generatedRunning = currentMax + 1;
         let skipped = 0;
-        const shuffledRows = (0, lodash_shuffle_1.default)(rows);
+        //  const shuffledRows = shuffle(rows);
         // ------------------------------------------------------------------
         // Phase 1: เตรียมข้อมูลทั้งหมดไว้ใน Memory
         // ------------------------------------------------------------------
         const processedData = [];
-        for (const row of shuffledRows) {
+        for (const row of rows) { //      for (const row of shuffledRows) {
             const firstName = (_e = (_d = (_c = (_b = row.firstname) !== null && _b !== void 0 ? _b : row.first_name) !== null && _c !== void 0 ? _c : row.firstName) !== null && _d !== void 0 ? _d : row["ชื่อ"]) !== null && _e !== void 0 ? _e : row["first name"];
             const lastName = (_j = (_h = (_g = (_f = row.lastname) !== null && _f !== void 0 ? _f : row.last_name) !== null && _g !== void 0 ? _g : row.lastName) !== null && _h !== void 0 ? _h : row["นามสกุล"]) !== null && _j !== void 0 ? _j : row["last name"];
             const title = (_l = (_k = row.title) !== null && _k !== void 0 ? _k : row["คำนำหน้า"]) !== null && _l !== void 0 ? _l : row["prefix"];

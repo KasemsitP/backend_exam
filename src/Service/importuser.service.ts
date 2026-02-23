@@ -194,14 +194,14 @@ export class userImportService {
       
       let generatedRunning = currentMax + 1;
       let skipped = 0;
-      const shuffledRows = shuffle(rows);
+    //  const shuffledRows = shuffle(rows);
 
       // ------------------------------------------------------------------
       // Phase 1: เตรียมข้อมูลทั้งหมดไว้ใน Memory
       // ------------------------------------------------------------------
       const processedData = [];
 
-      for (const row of shuffledRows) {
+      for (const row of rows) { //      for (const row of shuffledRows) {
         const firstName = row.firstname ?? row.first_name ?? row.firstName ?? row["ชื่อ"] ?? row["first name"];
         const lastName = row.lastname ?? row.last_name ?? row.lastName ?? row["นามสกุล"] ?? row["last name"];
         const title = row.title ?? row["คำนำหน้า"] ?? row["prefix"];

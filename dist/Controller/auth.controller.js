@@ -84,21 +84,31 @@ authcontroller.login = (req, res) => __awaiter(void 0, void 0, void 0, function*
         const conn = DB_1.DB.getInstance();
         //  ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
         yield conn.execute("DELETE FROM auth_sessions WHERE account_id = ?", [userId]);
-        //  regenerate session ใหม่
+        // 2. regenerate session ใหม่
         yield new Promise((resolve, reject) => {
             req.session.regenerate((err) => (err ? reject(err) : resolve()));
         });
-        //  set session ใหม่
+        // 3. set session ใหม่
         req.session.userId = userId;
         req.session.sessionVersion = Number(result.sessionVersion);
         req.session.roles = result.roles;
-        //  save session
+        // 4. save session แบบให้ชัวร์ว่าเซฟเสร็จ
         yield new Promise((resolve, reject) => {
-            req.session.save((err) => (err ? reject(err) : resolve()));
+            req.session.save((err) => {
+                if (err)
+                    return reject(err);
+                resolve();
+            });
         });
-        console.log("login sid =", req.sessionID, "userId =", userId);
-        //  ผูก sid ใหม่กับ account_id
-        yield auth_repo_1.default.updateAuthsession(userId, req.sessionID);
+        // 5. ผูก sid ใหม่กับ account_id (ต้องทำหลังเซฟเสร็จชัวร์ๆ)
+        // เพิ่ม try/catch ป้องกันจังหวะที่เซฟเสร็จแต่มองไม่เห็นใน DB ทันที
+        try {
+            yield auth_repo_1.default.updateAuthsession(userId, req.sessionID);
+        }
+        catch (dbErr) {
+            console.error("Failed to map account_id to session:", dbErr);
+            // ไม่ต้อง throw error ปล่อยให้ login ผ่านไปก่อน
+        }
         return res.status(200).json({
             message: "เข้าสู่ระบบสำเร็จ",
             user: result,

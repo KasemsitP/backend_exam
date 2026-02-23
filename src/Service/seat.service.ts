@@ -117,88 +117,63 @@ type AssignedStat = {
 
 export class seatService {
 
-    static async ArrangeSeat(campaign_id: number, RoomCode: string, seatsPerRow: number) {
+   static async ArrangeSeat(campaign_id: number, RoomCode: string, seatsPerRow: number) {
         const NumberSeatper = seatsPerRow ?? 5;
 
-        // 1) ดึงคนที่ "ยังไม่ถูกจัด" ใน campaign นี้
         const users = await seatrepo.GetAllUserByCampaign(Number(campaign_id));
-
-        // 2) ดึงข้อมูลห้องใน campaign นี้ แล้วหาเฉพาะห้องที่เราจัดอยู่
         const examrooms = await examRoomRepo.findByCampaignIdCon(campaign_id);
         const realRoom = examrooms.find(r => r.room_code === RoomCode);
 
-        // กันกรณีหาไม่เจอ
         if (!realRoom) {
             throw new Error(`Room ${RoomCode} not found in campaign ${campaign_id}`);
         }
 
-        const roomCapacity = realRoom.capacity; // เช่น = 5
-
-        // 3) เลือกเฉพาะจำนวนคนตามความจุห้อง
-        const usersForThisRoom = users
-            .sort((a, b) => Number(a.user_code) - Number(b.user_code))
-            .slice(0, roomCapacity);   //  ตรงนี้คือ limit ตาม capacity
-
+        const roomCapacity = realRoom.capacity;
+        
+       const usersForThisRoom = users.slice(0, roomCapacity);
         const rows: UserData[][] = [];
+        const numRows = Math.ceil(usersForThisRoom.length / NumberSeatper);
 
-        usersForThisRoom.forEach((user, idx) => {
-            const rowIndex = Math.floor(idx / NumberSeatper);
-            if (!rows[rowIndex]) rows[rowIndex] = [];
-            rows[rowIndex].push(user);
-        });
+        // 🚀 OPTIMIZATION 1: วางที่นั่งแบบชาญฉลาด (Greedy Placement)
+        for (let r = 0; r < numRows; r++) {
+            // ดึงกลุ่มคนสำหรับแถวนี้เท่านั้น (รับประกันว่าเลขที่นั่งยังคงตามแถว)
+            const rowUsers = usersForThisRoom.slice(r * NumberSeatper, (r + 1) * NumberSeatper);
+            const placedRow: UserData[] = new Array(rowUsers.length).fill(null);
+            const availableUsers = [...rowUsers];
 
-        console.log(
-            rows.map((row, idx) =>
-                `Row ${idx + 1}: ` +
-                row.map(u => u.last_name).join(", ")
-            ).join("\n")
-        );
+            for (let c = 0; c < rowUsers.length; c++) {
+                let bestIdx = -1;
+                
+                // พยายามหาคนในกลุ่มที่ "นามสกุลไม่ชนคนทางซ้าย และไม่ชนคนข้างบน"
+                for (let i = 0; i < availableUsers.length; i++) {
+                    const u = availableUsers[i];
+                    const leftConflict = c > 0 && placedRow[c - 1]?.last_name === u.last_name;
+                    const topConflict = r > 0 && rows[r - 1]?.[c]?.last_name === u.last_name;
+                    
+                    if (!leftConflict && !topConflict) {
+                        bestIdx = i; // เจอคนรอดแล้ว เอาคนนี้แหละ!
+                        break;
+                    }
+                }
 
-        // for (let i = 0; i < rows.length; i++) {
-        //     for (let j = 0; j < rows[i].length; j++) {
-        //         console.log(`Row ${i + 1}, Seat ${j + 1}:`, rows[i][j]);
-        //     }
-        // }
-        // const MAX_PASSES = 10;
+                // ถ้าหาไม่ได้จริงๆ (กรณี Worst Case ในแถวนั้นนามสกุลเหมือนกันหมด) ให้หยิบคนแรกมาวางก่อน
+                if (bestIdx === -1) bestIdx = 0;
 
-        // for (let pass = 0; pass < MAX_PASSES; pass++) {
-        //     let changed = false;
+                placedRow[c] = availableUsers[bestIdx];
+                availableUsers.splice(bestIdx, 1);
+            }
+            rows.push(placedRow);
+        }
 
-        //     for (let i = 0; i < rows.length; i++) {
-        //         for (let j = 0; j < rows[i].length; j++) {
-
-        //             if (!hasConflict(rows, i, j)) continue;
-
-        //             for (let k = 0; k < rows[i].length; k++) {
-        //                 if (k === j) continue;
-        //                 if (rows[i][k].last_name === rows[i][j].last_name) continue;
-
-        //                 [rows[i][j], rows[i][k]] = [rows[i][k], rows[i][j]];
-
-        //                 if (!hasConflict(rows, i, j) && !hasConflict(rows, i, k)) {
-        //                     console.log(`🔄 Swap Row ${i + 1}: Seat ${j + 1} <-> Seat ${k + 1}`);
-        //                     changed = true;
-        //                     break;
-        //                 }
-
-        //                 [rows[i][j], rows[i][k]] = [rows[i][k], rows[i][j]];
-        //             }
-        //         }
-        //     }
-
-        //     if (!changed) break; // ถ้าไม่มีอะไรสลับเพิ่มแล้ว ก็จบ
-        // }
+        // 🚀 OPTIMIZATION 2: Pass Swap แบบเดิม แต่จะทำงานน้อยลงมากๆ เพราะเราจัดไว้ดีแล้ว 99%
         const MAX_PASSES = 10;
-
         for (let pass = 0; pass < MAX_PASSES; pass++) {
-
             const conflicts = findConflicts(rows);
             if (conflicts.length === 0) break;
 
             let changed = false;
-
             for (const { r, c } of conflicts) {
-
+                // สลับเฉพาะคนในแถวเดียวกัน (r)
                 for (let k = 0; k < rows[r].length; k++) {
                     if (k === c) continue;
                     if (rows[r][k].last_name === rows[r][c].last_name) continue;
@@ -213,36 +188,11 @@ export class seatService {
                     [rows[r][c], rows[r][k]] = [rows[r][k], rows[r][c]];
                 }
             }
-
-            if (!changed) break;
+            if (!changed) break; // ถ้าติดแหง็ก (แก้ไม่ได้แล้ว) ก็ให้หยุดทันที ไม่เปลือง CPU
         }
 
-
-
-        // console.log(
-        //     rows.map((row, idx) =>
-        //         `Row ${idx + 1}: ` +
-        //         row.map(u => u.last_name).join(", ")
-        //     ).join("\n")
-        // );
-
-
-        console.log(
-            rows.map((row, idx) => {
-                const usersStr = row
-                    .map(user => `${user.user_code}:${user.full_name}`)
-                    .join(", ");
-                return `Row ${idx + 1}: [${usersStr}]`;
-            }).join("\n")
-        );
-
-        // console.log(columns)
-
-        return rows
-
-
+        return rows;
     }
-
     static async ArrangeSeatCreate(
         campaign_id: number,
         roomCode: string,

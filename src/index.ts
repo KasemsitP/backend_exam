@@ -130,7 +130,26 @@ const sessionStore = new MySQLStore({
 
 //prod
 
+//prod
 
+// app.use(
+//   session({
+//     name: "sid",
+//     secret: process.env.SESSION_SECRET || "dev-secret",
+//     resave: false,
+//     saveUninitialized: false,
+//     store: sessionStore,
+//     rolling: false,
+//     cookie: {
+//       httpOnly: true,
+//       // ถ้าอยู่บน Render (HTTPS) จะเป็น true, ถ้าเทสต์เครื่องตัวเอง (HTTP) จะเป็น false
+//       secure: isProduction,
+//       // อยู่โดเมนเดียวกันแล้ว ใช้ lax ได้เลย (แถมปลอดภัยกว่าด้วย)
+//       sameSite: "lax",
+//       maxAge: 1000 * 60 * 30,
+//     },
+//   })
+// );
 
 app.use(
   session({
@@ -139,17 +158,21 @@ app.use(
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
-    rolling: true,
+    rolling: false,
     cookie: {
       httpOnly: true,
-      // ถ้าอยู่บน Render (HTTPS) จะเป็น true, ถ้าเทสต์เครื่องตัวเอง (HTTP) จะเป็น false
-      secure: isProduction,
-      // อยู่โดเมนเดียวกันแล้ว ใช้ lax ได้เลย (แถมปลอดภัยกว่าด้วย)
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      sameSite:
+        process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 1000 * 60 * 30,
     },
   })
 );
+
+app.use((req, res, next) => {
+  console.log("Session:", req.session);
+  next();
+});
 
 // app.use(session({
 //   secret: "your-secret-key",

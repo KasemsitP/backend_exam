@@ -21,7 +21,32 @@ class SignSheetRepo {
     // --- 1. Fetch ALL data (For PDF Export) ---
     async findUserSessionByCampaignAndSession(sessionId: number, campaign_id: number): Promise<any[]> {
         const sql = `
- SELECT
+        select
+                us.id          AS user_session_id,
+                u.id           AS user_id,
+                u.title        AS title,
+                u.user_code    AS userCode,
+                u.full_name    AS firstName,
+                ''             AS lastName,
+                uc.room_code   AS roomName,
+                uc.row_no,
+                uc.col_no,
+                us.qr_payload
+            FROM user_sessions us
+            JOIN user_campaigns uc ON us.user_campaign_id = uc.id
+            JOIN users u ON uc.user_id = u.id
+            LEFT JOIN exam_rooms er ON er.room_code = uc.room_code AND er.campaign_id = uc.campaign_id
+            WHERE us.session_id = ? AND us.campaign_id = ?
+            ORDER BY uc.room_code, uc.row_no, uc.col_no;
+        `;
+        const [rows] = await this.pool.execute<any[]>(sql, [sessionId, campaign_id]);
+        return rows;
+    }
+
+    // SELECT
+
+
+/* SELECT
                 us.id          AS user_session_id,
                 u.id           AS user_id,
                 u.title        AS title,
@@ -38,11 +63,7 @@ class SignSheetRepo {
             LEFT JOIN exam_rooms er ON er.room_code = uc.room_code AND er.campaign_id = uc.campaign_id
             WHERE us.session_id = ? AND us.campaign_id = ?
             ORDER BY u.user_code + 0  ASC;
-        `;
-        const [rows] = await this.pool.execute<any[]>(sql, [sessionId, campaign_id]);
-        return rows;
-    }
-
+*/
     // --- 2. Fetch Paginated data (For Web Display) ---
     async findUserSessionsWithPagination(
         sessionId: number,
@@ -90,10 +111,11 @@ class SignSheetRepo {
                 ''             AS lastName,
                 uc.room_code   AS roomName,
                 us.qr_payload,
-                uc.row_no
+                uc.row_no,
+                uc.col_no
             ${baseJoins}
             ${whereClause}
-            ORDER BY CAST(u.user_code AS UNSIGNED) ASC
+            ORDER BY uc.room_code, uc.row_no, uc.col_no
             LIMIT ? OFFSET ?
         `;
 

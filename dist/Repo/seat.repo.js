@@ -20,7 +20,8 @@ class Seatrepo {
 FROM users u
 JOIN user_campaigns uc ON u.id = uc.user_id
 WHERE uc.campaign_id = ?
-  AND uc.room_code IS NULL;
+  AND uc.room_code IS NULL
+  ORDER BY u.user_code +'0' asc;
 `;
             const [rows] = yield this.pool.execute(sql, [campaign_id]);
             return rows;
@@ -71,15 +72,33 @@ WHERE uc.campaign_id = ?
     }
     saveSeatAssignments(campaign_id, roomCode, seats, conn) {
         return __awaiter(this, void 0, void 0, function* () {
-            for (const seat of seats) {
-                yield conn.execute(`
-        UPDATE user_campaigns
-        SET room_code = ?,
-            row_no    = ?,
-            col_no    = ?
-        WHERE campaign_id = ?
-          AND user_id     = ?
-        `, [roomCode, seat.row_no, seat.col_no, campaign_id, seat.user_id]);
+            if (!seats || seats.length === 0)
+                return;
+            // 🚀 OPTIMIZATION 3: Bulk Update
+            // แบ่งก้อนยิงทีละ 500 รายการ เพื่อไม่ให้ Query Statement ยาวเกินลิมิตของ MySQL
+            const CHUNK_SIZE = 500;
+            for (let i = 0; i < seats.length; i += CHUNK_SIZE) {
+                const batch = seats.slice(i, i + CHUNK_SIZE);
+                // สร้าง Query โครงสร้าง UPDATE ... SET col = CASE user_id WHEN ...
+                let sql = `UPDATE user_campaigns SET room_code = ?, row_no = CASE user_id `;
+                const values = [roomCode];
+                // เซ็ตเงื่อนไข row_no
+                for (const seat of batch) {
+                    sql += `WHEN ? THEN ? `;
+                    values.push(seat.user_id, seat.row_no);
+                }
+                sql += `END, col_no = CASE user_id `;
+                // เซ็ตเงื่อนไข col_no
+                for (const seat of batch) {
+                    sql += `WHEN ? THEN ? `;
+                    values.push(seat.user_id, seat.col_no);
+                }
+                // เงื่อนไข WHERE ปิดท้าย
+                const userIds = batch.map(s => s.user_id);
+                sql += `END WHERE campaign_id = ? AND user_id IN (${userIds.map(() => '?').join(',')})`;
+                values.push(campaign_id, ...userIds);
+                // ยิงทีเดียว อัปเดต 500 คน!
+                yield conn.execute(sql, values);
             }
         });
     }
