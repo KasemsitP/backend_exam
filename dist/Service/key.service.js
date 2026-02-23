@@ -21,6 +21,7 @@ const importuser_repo_1 = __importDefault(require("../Repo/importuser.repo"));
 const dashboard_repo_1 = __importDefault(require("../Repo/dashboard.repo"));
 const settings_repo_1 = __importDefault(require("../Repo/settings.repo"));
 const campaign_repo_1 = __importDefault(require("../Repo/campaign.repo"));
+const auth_service_1 = require("./auth.service");
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 const ALGORITHM = "aes-128-cbc";
 const PAYLOAD_ENCODING = "utf8";
@@ -447,4 +448,28 @@ keyService.GetDashBoard = (campaign_id) => __awaiter(void 0, void 0, void 0, fun
         subjectsQuestions, // จะคงไว้ก็ได้ (ไว้ debug)
         sessions, // ✅ ตัวใหม่ที่ UI ใช้ง่ายสุด
     };
+});
+keyService.getForgetKey = (campaign_id, key_id, account_id, password) => __awaiter(void 0, void 0, void 0, function* () {
+    const keyData = yield key_repo_1.default.findKeys(key_id, campaign_id);
+    const key = keyData === null || keyData === void 0 ? void 0 : keyData.key;
+    if (!keyData) {
+        throw new Error("ไม่พบคีย์ที่ต้องการดึงข้อมูล");
+    }
+    if (!key) {
+        throw new Error("ไม่พบคีย์ที่ต้องการดึงข้อมูล");
+    }
+    const isPasswordValid = yield auth_service_1.authservice.CheckPasswordByID(account_id, password);
+    console.log(isPasswordValid);
+    if (!isPasswordValid) {
+        throw new Error("รหัสผ่านไม่ถูกต้อง");
+    }
+    if (isPasswordValid.active === 0) {
+        throw new Error("บัญชีถูกระงับการใช้งาน");
+    }
+    if (isPasswordValid.roles[0] !== "manager") {
+        throw new Error("คุณไม่มีสิทธิ์ในการดึงข้อมูลคีย์นี้เนื่องจากคุณไม่ใช่ผู้จัดการคีย์");
+    }
+    const decryptedKey1Buffer = aesDecrypt(Buffer.from(key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+    console.log("Decrypted Key for verification:", decryptedKey1Buffer.toString(PAYLOAD_ENCODING));
+    return decryptedKey1Buffer.toString(PAYLOAD_ENCODING);
 });

@@ -32,6 +32,24 @@ export class authservice {
             sessionVersion: Number(row.session_version ?? 1),
         };
     }
+
+    static CheckPasswordByID = async (account_id: number, password: string) => {
+        const row = await authrepo.findMeByIdAndPassword(account_id);
+
+        if (!row) throw new Error("ไม่พบผู้ใช้");
+        if (Number(row.active) !== 1) throw new Error("บัญชีถูกระงับการใช้งาน");
+        const match = await utills.bcryptCompare(password, row.password_hash);
+        if (!match) throw new Error("รหัสผ่านไม่ถูกต้อง");
+        const roleCode = (row.role_code).toLowerCase();
+        return {
+            id: row.id,
+            name: row.full_name,
+            username: row.username,
+            roles: [roleCode],
+            active: Number(row.active),
+        };
+    }
+
     static getAllAccounts = async () => {
         const rows = await authrepo.findAllAccountsWithRoles();
         // (แปลง active (0/1) เป็น boolean)
@@ -40,7 +58,7 @@ export class authservice {
             active: !!row.active
         }));
     }
-    static getAllGradersAccounts = async (campaign : number) => {
+    static getAllGradersAccounts = async (campaign: number) => {
         const rows = await authrepo.findAllAccountsGraderByCampaign(Number(campaign));
         return rows.map(row => ({
             ...row,
@@ -84,7 +102,7 @@ export class authservice {
 
         const target = await authrepo.findAccountBasicById(targetAccountId);
         if (!target) throw new Error("ไม่พบผู้ใช้");
-       // console.log(target)
+        // console.log(target)
 
         if (Number(target.active) !== 1) {
             // ถูก revoke อยู่แล้ว
@@ -116,8 +134,8 @@ export class authservice {
         } else {
             await authrepo.deleteAccount(id);
         }
-        
-    //    await authrepo.deleteAccount(id);
+
+        //    await authrepo.deleteAccount(id);
         return { id };
     }
 

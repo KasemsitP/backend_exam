@@ -10,6 +10,7 @@ keyRouter.delete("/keys/:campaignId/:accountId/:keyId", keyController.delete);
 keyRouter.get("/keys/prerequisites/:campaignId", keyController.getPrerequisites);
 keyRouter.post("/keys/encrypt-session-bulk", keyController.runBulkEncryption);
 keyRouter.post("/keys/test-decrypt", keyController.testDecrypt);
+keyRouter.post("/keys/forget", keyController.forgetKey);
 keyRouter.get("/keys/dashboard/:campaignId", keyController.getDashboard);
 
 

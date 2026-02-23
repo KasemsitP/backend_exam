@@ -70,7 +70,22 @@ export class keyController {
       res.status(204).send({ message: "ลบคีย์สำเร็จแล้ว" });
     } catch (error: any) {
       res.status(500).send({ message: error.message });
-     // console.log("Error in delete controller:", error);
+      // console.log("Error in delete controller:", error);
+    }
+  };
+
+  static getForgetKeys = async (req: Request, res: Response) => {
+    try {
+      const { campaignId, keyId, accountId, password } = req.body;
+
+      if (!campaignId || !keyId || !accountId || !password) {
+        return res.status(400).send({ message: "ข้อมูลไม่ถูกต้อง" });
+      }
+      const result = await keyService.delete(keyId, campaignId, accountId);
+      res.status(204).send({ success: true, message: "กู้คีย์สำเร็จแล้ว", data: result });
+    } catch (error: any) {
+      res.status(500).send({ message: error.message });
+      // console.log("Error in delete controller:", error);
     }
   };
   static getPrerequisites = async (req: Request, res: Response) => {
@@ -143,6 +158,20 @@ export class keyController {
       return res.status(500).json({ message: "Internal server error" });
     }
   };
+  static forgetKey = async (req: Request, res: Response) => {
+    console.log("forgetKey controller called with body:", req.body);
+    try {
+      const { campaignId, keyId, accountId, password } = req.body;
 
+      if (!campaignId || !keyId || !accountId || !password) {
+        return res.status(400).send({ message: "ข้อมูลไม่ถูกต้อง" });
+      }
+      const result = await keyService.getForgetKey(campaignId, keyId, accountId, password);
+      console.log("Forget Key Result:", result);
+      res.status(200).send({ success: true, message: "กู้คีย์สำเร็จแล้ว", data: result });
+    } catch (error: any) {
+      res.status(500).send({ message: error.message });
+       console.log("Error  controller:", error);
+    }
+  }
 }
-

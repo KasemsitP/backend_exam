@@ -47,6 +47,24 @@ authservice.CheckUsername = (username, password) => __awaiter(void 0, void 0, vo
         sessionVersion: Number((_b = row.session_version) !== null && _b !== void 0 ? _b : 1),
     };
 });
+authservice.CheckPasswordByID = (account_id, password) => __awaiter(void 0, void 0, void 0, function* () {
+    const row = yield auth_repo_1.default.findMeByIdAndPassword(account_id);
+    if (!row)
+        throw new Error("ไม่พบผู้ใช้");
+    if (Number(row.active) !== 1)
+        throw new Error("บัญชีถูกระงับการใช้งาน");
+    const match = yield utills_1.utills.bcryptCompare(password, row.password_hash);
+    if (!match)
+        throw new Error("รหัสผ่านไม่ถูกต้อง");
+    const roleCode = (row.role_code).toLowerCase();
+    return {
+        id: row.id,
+        name: row.full_name,
+        username: row.username,
+        roles: [roleCode],
+        active: Number(row.active),
+    };
+});
 authservice.getAllAccounts = () => __awaiter(void 0, void 0, void 0, function* () {
     const rows = yield auth_repo_1.default.findAllAccountsWithRoles();
     // (แปลง active (0/1) เป็น boolean)

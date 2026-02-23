@@ -1,0 +1,500 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const worker_threads_1 = require("worker_threads");
+const pdfkit_1 = __importDefault(require("pdfkit"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const os_1 = __importDefault(require("os"));
+const DB_1 = require("../model/DB");
+const grading_report_repo_1 = require("../Repo/grading-report.repo");
+const passlist_repo_1 = __importDefault(require("../Repo/passlist.repo"));
+const ranking_report_repo_1 = __importDefault(require("../Repo/ranking-report.repo"));
+function keyOf(sessionId, subjectId, questionNo) {
+    return `${sessionId}:${subjectId}:${questionNo}`;
+}
+// Logic จัดกลุ่มข้อมูลจาก DB ให้เป็นรูปแบบที่พร้อมพิมพ์
+function buildBookletBlocks(raw, questionCount, unlock) {
+    var _a, _b, _c, _d;
+    const byBooklet = new Map();
+    for (const r of raw) {
+        let block = byBooklet.get(r.booklet_id);
+        if (!block) {
+            block = {
+                bookletId: r.booklet_id,
+                examCode: unlock === 1 ? r.exam_code : String(r.random_num),
+                questionCount: 0,
+                questions: [],
+            };
+            byBooklet.set(r.booklet_id, block);
+        }
+        block.questions.push({
+            questionNo: r.question_no, label: (_a = r.label) !== null && _a !== void 0 ? _a : `ข้อ ${r.question_no}`,
+            category: (_b = r.category) !== null && _b !== void 0 ? _b : null, grader1Score: r.grader1_score != null ? Number(r.grader1_score) : null,
+            grader1Name: (_c = r.grader1_names) !== null && _c !== void 0 ? _c : null, grader2Score: r.grader2_score != null ? Number(r.grader2_score) : null,
+            grader2Name: (_d = r.grader2_names) !== null && _d !== void 0 ? _d : null, finalScore: r.final_score != null ? Number(r.final_score) : null,
+        });
+    }
+    for (const block of byBooklet.values()) {
+        const map = new Map();
+        for (const q of block.questions)
+            map.set(q.questionNo, q);
+        const maxQ = questionCount && questionCount > 0 ? questionCount : Array.from(map.keys()).reduce((m, q) => Math.max(m, q), 0);
+        const filled = [];
+        for (let q = 1; q <= maxQ; q++) {
+            const s = map.get(q);
+            filled.push(s !== null && s !== void 0 ? s : { questionNo: q, label: `ข้อ ${q}`, category: null, grader1Score: null, grader1Name: null, grader2Score: null, grader2Name: null, finalScore: null });
+        }
+        block.questionCount = maxQ;
+        block.questions = filled;
+    }
+    return Array.from(byBooklet.values()).sort((a, b) => a.bookletId - b.bookletId);
+}
+const FONT_NORMAL = path_1.default.resolve(__dirname, "../../fonts/THSarabunNew.ttf");
+const FONT_BOLD = path_1.default.resolve(__dirname, "../../fonts/THSarabunNew-Bold.ttf");
+// =========================================================
+// Core Drawing Function: ใบปะหน้าถุง (ใช้ซ้ำใน BagScore และ CampaignBag)
+// =========================================================
+function drawBagScorePage(doc, info, booklets, questionCount, questionLabels, unlock) {
+    var _a, _b, _c, _d, _e, _f;
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+    const { left, right, top, bottom } = doc.page.margins;
+    const contentWidth = pageWidth - left - right;
+    const labelMap = new Map(questionLabels.map((q) => [q.question_no, q.label]));
+    const title_code = unlock === 1 ? "รหัสประจำตัวสอบ" : "เลขรหัส";
+    let y = top;
+    doc.font(FONT_BOLD).fontSize(16).text(`เอกสารคะแนนการทดสอบเพื่อบรรจุเป็นข้าราชการอัยการในตำแหน่งอัยการผู้ช่วย พ.ศ.${info === null || info === void 0 ? void 0 : info.year_be} (${info === null || info === void 0 ? void 0 : info.campaign_size})`, left, y, { width: contentWidth, align: "center" });
+    doc.font(FONT_NORMAL).fontSize(30).text(`ถุงที่ ${info === null || info === void 0 ? void 0 : info.bag_no}`, left, y, { width: contentWidth, align: "right" });
+    y += 24;
+    doc.font(FONT_NORMAL).fontSize(14).text(`วิชา${info === null || info === void 0 ? void 0 : info.subject_name}`, left, y, { width: contentWidth, align: "center" });
+    y = doc.y + 10;
+    const totalRows = 30;
+    const colCodeWidth = 60, colPerScoreWidth = 22, colsPerQuestion = 4, colSumWidth = 40;
+    const baseRowH1 = 42, baseRowH2 = 18, baseRowH = 16;
+    const totalQuestionCols = questionCount * colsPerQuestion;
+    const usedWidth = colCodeWidth + totalQuestionCols * colPerScoreWidth + colSumWidth * 2;
+    const widthScale = usedWidth > contentWidth ? contentWidth / usedWidth : 1;
+    const availableTableHeight = pageHeight - bottom - y;
+    const needH = (baseRowH1 + baseRowH2) + (totalRows * baseRowH);
+    const heightScale = needH > availableTableHeight ? availableTableHeight / needH : 1;
+    const scale = Math.min(widthScale, heightScale, 1);
+    const cwCode = colCodeWidth * scale, cwScore = colPerScoreWidth * scale, cwSum = colSumWidth * scale;
+    const rowH1 = baseRowH1 * scale, rowH2 = baseRowH2 * scale, rowH = baseRowH * scale;
+    const fontHeaderSize = Math.max(7, 10 * scale), fontBodySize = Math.max(6, 9 * scale);
+    const startX = left;
+    // Draw Header
+    let x = startX;
+    doc.lineWidth(0.5).strokeColor("black");
+    doc.font(FONT_BOLD).fontSize(fontHeaderSize);
+    // รวบเส้น Header ชั้นบน
+    let p = doc.rect(x, y, cwCode, rowH1 + rowH2);
+    doc.text(title_code, x, y + 6 * scale, { width: cwCode, align: "center" });
+    x += cwCode;
+    for (let q = 1; q <= questionCount; q++) {
+        const groupW = colsPerQuestion * cwScore;
+        p = p.rect(x, y, groupW, rowH1);
+        doc.text(`ข้อ ${q}\n${(_a = labelMap.get(q)) !== null && _a !== void 0 ? _a : ""}`, x, y + 4 * scale, { width: groupW, align: "center", ellipsis: true });
+        x += groupW;
+    }
+    p = p.rect(x, y, cwSum, rowH1 + rowH2);
+    doc.text("รวม", x, y + 6 * scale, { width: cwSum, align: "center" });
+    x += cwSum;
+    p = p.rect(x, y, cwSum, rowH1 + rowH2);
+    doc.text("รวมทั้งหมด", x, y + 6 * scale, { width: cwSum, align: "center" });
+    p.stroke();
+    // แถวล่าง: หัวคอลัมน์ย่อย
+    y += rowH1;
+    x = startX + cwCode;
+    const subHeads = ["ค.1", "ค.2", "ต่าง", "เฉลี่ย"];
+    p = doc.lineWidth(0.5); // เริ่ม path ใหม่
+    for (let q = 1; q <= questionCount; q++) {
+        for (let h = 0; h < colsPerQuestion; h++) {
+            p = p.rect(x, y, cwScore, rowH2);
+            doc.text(subHeads[h], x, y + 3 * scale, { width: cwScore, align: "center" });
+            x += cwScore;
+        }
+    }
+    p.stroke();
+    y += rowH2;
+    // Draw Body
+    doc.font(FONT_NORMAL).fontSize(fontBodySize);
+    for (let i = 0; i < totalRows; i++) {
+        const bk = booklets[i];
+        x = startX;
+        // ⚡ รวบเส้น Body แถวนี้ทั้งหมด
+        let pathRow = doc.rect(x, y, cwCode, rowH);
+        if (bk)
+            doc.text((_b = bk.examCode) !== null && _b !== void 0 ? _b : "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), { width: cwCode - 4 * scale, align: "left", ellipsis: true });
+        x += cwCode;
+        let totalPerSubject = 0;
+        for (let q = 1; q <= questionCount; q++) {
+            const qRow = (_c = bk === null || bk === void 0 ? void 0 : bk.questions) === null || _c === void 0 ? void 0 : _c.find((qq) => qq.questionNo === q);
+            const s1 = (_d = qRow === null || qRow === void 0 ? void 0 : qRow.grader1Score) !== null && _d !== void 0 ? _d : null;
+            const s2 = (_e = qRow === null || qRow === void 0 ? void 0 : qRow.grader2Score) !== null && _e !== void 0 ? _e : null;
+            const diff = s1 != null && s2 != null ? Math.abs(Number(s1) - Number(s2)) : null;
+            const avg = s1 != null && s2 != null ? (Number(s1) + Number(s2)) / 2 : (_f = qRow === null || qRow === void 0 ? void 0 : qRow.finalScore) !== null && _f !== void 0 ? _f : null;
+            const vals = [s1, s2, diff, avg];
+            vals.forEach((val) => {
+                pathRow = pathRow.rect(x, y, cwScore, rowH);
+                doc.text(val == null ? "" : Number(val).toFixed(1), x, y + 3 * scale, { width: cwScore, align: "center", ellipsis: true });
+                x += cwScore;
+            });
+            if (avg != null)
+                totalPerSubject += Number(avg);
+        }
+        pathRow = pathRow.rect(x, y, cwSum, rowH);
+        doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, { width: cwSum, align: "center" });
+        x += cwSum;
+        pathRow = pathRow.rect(x, y, cwSum, rowH);
+        doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, { width: cwSum, align: "center" });
+        pathRow.stroke(); // วาดเส้นทีเดียว
+        y += rowH;
+    }
+}
+// =========================================================
+// Task 1: Generate Bag Score PDF
+// =========================================================
+function buildBagScorePdf(options, writeStream) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
+        const { bagId } = options;
+        const conn = yield DB_1.DB.getInstance().getConnection();
+        try {
+            const info = yield (0, grading_report_repo_1.getInfomation)(bagId);
+            const questionCount = (_a = (yield (0, grading_report_repo_1.findQuestionCountForBagSubject)(conn, bagId, 0))) !== null && _a !== void 0 ? _a : 0;
+            const questionLabels = yield (0, grading_report_repo_1.findQuestionLabelForBagSubject)(conn, bagId, 0);
+            const rawPerBooklet = yield (0, grading_report_repo_1.findBookletQuestionStatsForBag)(conn, bagId, 0);
+            const result_is_unlock = yield (0, grading_report_repo_1.getUnlockCampaignNoconn)(bagId);
+            const unlock = (_c = (_b = result_is_unlock[0]) === null || _b === void 0 ? void 0 : _b.is_unlock) !== null && _c !== void 0 ? _c : 0;
+            const booklets = buildBookletBlocks(rawPerBooklet, questionCount, unlock).sort((a, b) => a.examCode.localeCompare(b.examCode, undefined, { numeric: true }));
+            const doc = new pdfkit_1.default({
+                size: "A4", layout: "landscape", margins: { top: 40, bottom: 40, left: 40, right: 40 },
+                autoFirstPage: true, bufferPages: false, // 🚀
+            });
+            doc.pipe(writeStream);
+            drawBagScorePage(doc, info, booklets, questionCount, questionLabels !== null && questionLabels !== void 0 ? questionLabels : [], unlock);
+            doc.end();
+        }
+        finally {
+            conn.release();
+        }
+    });
+}
+// =========================================================
+// Task 2: Generate Campaign Bag Scores PDF (หลายๆ ถุง)
+// =========================================================
+function buildCampaignBagScoresPdf(options, writeStream) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        const conn = yield DB_1.DB.getInstance().getConnection();
+        try {
+            const bagRows = yield (0, grading_report_repo_1.getAllBags)(conn, options.campaignId);
+            const unlockData = yield (0, grading_report_repo_1.getCampaignUnlock)(conn, options.campaignId);
+            const unlock = unlockData !== null && unlockData !== void 0 ? unlockData : 0;
+            if (!bagRows.length)
+                throw new Error("ไม่พบถุงใด ๆ ในแคมเปญนี้");
+            const doc = new pdfkit_1.default({
+                size: "A4", layout: "landscape", margins: { top: 40, bottom: 40, left: 40, right: 40 },
+                autoFirstPage: false, bufferPages: false,
+            });
+            doc.pipe(writeStream);
+            for (let i = 0; i < bagRows.length; i++) {
+                const bagId = bagRows[i].bag_id;
+                doc.addPage();
+                const info = yield (0, grading_report_repo_1.getInfomation)(bagId);
+                const questionCount = (_a = (yield (0, grading_report_repo_1.findQuestionCountForBagSubject)(conn, bagId, 0))) !== null && _a !== void 0 ? _a : 0;
+                const questionLabels = yield (0, grading_report_repo_1.findQuestionLabelForBagSubject)(conn, bagId, 0);
+                const rawPerBooklet = yield (0, grading_report_repo_1.findBookletQuestionStatsForBag)(conn, bagId, 0);
+                const booklets = buildBookletBlocks(rawPerBooklet, questionCount, unlock).sort((a, b) => a.examCode.localeCompare(b.examCode, undefined, { numeric: true }));
+                drawBagScorePage(doc, info, booklets, questionCount, questionLabels !== null && questionLabels !== void 0 ? questionLabels : [], unlock);
+                // พัก Event loop ถ้ามีหลายถุง
+                if (i % 5 === 0)
+                    yield new Promise(resolve => setTimeout(resolve, 0));
+            }
+            doc.end();
+        }
+        finally {
+            conn.release();
+        }
+    });
+}
+// =========================================================
+// Task 3: Generate Grader Bag Summary
+// =========================================================
+function buildGraderBagSummaryPdf(options, writeStream) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c, _d, _e;
+        const { bagId, graderId } = options;
+        const conn = yield DB_1.DB.getInstance().getConnection();
+        try {
+            const info = yield (0, grading_report_repo_1.getInfomation)(bagId);
+            const graderInfo = yield (0, grading_report_repo_1.getGraderInfo)(conn, bagId, graderId);
+            const rows = yield (0, grading_report_repo_1.getGraderBagSummary)(conn, bagId, graderId);
+            const doc = new pdfkit_1.default({
+                size: "A4", layout: "portrait", margins: { top: 60, bottom: 50, left: 50, right: 50 },
+                autoFirstPage: true, bufferPages: false,
+            });
+            doc.pipe(writeStream);
+            const pageWidth = doc.page.width;
+            const { left, right, bottom } = doc.page.margins;
+            doc.font(FONT_NORMAL).fontSize(30).text(`ถุงที่ ${(_a = info === null || info === void 0 ? void 0 : info.bag_no) !== null && _a !== void 0 ? _a : ""}`, left, 30, { width: pageWidth - left - right, align: "right" });
+            doc.font(FONT_BOLD).fontSize(16).text("ใบบันทึกคะแนนผู้ตรวจ", { align: "center" }).moveDown(0.3);
+            doc.font(FONT_NORMAL).fontSize(14).text(`วิชา ${(_b = info === null || info === void 0 ? void 0 : info.subject_name) !== null && _b !== void 0 ? _b : ""}   ปี พ.ศ. ${(_c = info === null || info === void 0 ? void 0 : info.year_be) !== null && _c !== void 0 ? _c : ""}`, { align: "center" }).moveDown(0.3);
+            doc.text(`ข้อ ${graderInfo === null || graderInfo === void 0 ? void 0 : graderInfo.question_no}  ผู้ตรวจคนที่ ${graderInfo === null || graderInfo === void 0 ? void 0 : graderInfo.grader_order}`, { align: "center" }).moveDown(0.3);
+            doc.text(`ชื่อ ${graderInfo === null || graderInfo === void 0 ? void 0 : graderInfo.full_name} `, { align: "center" }).moveDown(1);
+            const startX = left;
+            let y = doc.y + 5;
+            const tableWidth = pageWidth - left - right;
+            const colNoWidth = 40, colScoreWidth = 100;
+            const colQrWidth = tableWidth - colNoWidth - colScoreWidth;
+            const rowHeight = 20;
+            const drawHeader = () => {
+                doc.font(FONT_BOLD).fontSize(12).lineWidth(0.5).strokeColor("black");
+                doc.rect(startX, y, colNoWidth, rowHeight)
+                    .rect(startX + colNoWidth, y, colQrWidth, rowHeight)
+                    .rect(startX + colNoWidth + colQrWidth, y, colScoreWidth, rowHeight).stroke();
+                doc.text("ลำดับ", startX, y + 4, { width: colNoWidth, align: "center" });
+                doc.text("QR Payload", startX + colNoWidth, y + 4, { width: colQrWidth, align: "center" });
+                doc.text("คะแนน", startX + colNoWidth + colQrWidth, y + 4, { width: colScoreWidth, align: "center" });
+                y += rowHeight;
+                doc.font(FONT_NORMAL).fontSize(11);
+            };
+            drawHeader();
+            for (let idx = 0; idx < rows.length; idx++) {
+                const row = rows[idx];
+                if (y + rowHeight > doc.page.height - bottom) {
+                    doc.addPage({ layout: "portrait" });
+                    doc.font(FONT_NORMAL).fontSize(30).text(`ถุงที่ ${(_d = info === null || info === void 0 ? void 0 : info.bag_no) !== null && _d !== void 0 ? _d : ""} (ต่อ)`, left, 30, { width: pageWidth - left - right, align: "right" });
+                    y = doc.page.margins.top;
+                    drawHeader();
+                }
+                const xNo = startX, xQr = startX + colNoWidth, xScore = xQr + colQrWidth;
+                // ⚡ รวบเส้น
+                doc.rect(xNo, y, colNoWidth, rowHeight)
+                    .rect(xQr, y, colQrWidth, rowHeight)
+                    .rect(xScore, y, colScoreWidth, rowHeight).stroke();
+                doc.text(String(idx + 1), xNo, y + 4, { width: colNoWidth, align: "center" });
+                doc.text((_e = row.qr_payload) !== null && _e !== void 0 ? _e : "-", xQr + 2, y + 4, { width: colQrWidth - 4, align: "left" });
+                doc.text(row.total_score != null ? Number(row.total_score).toFixed(0) : "", xScore, y + 4, { width: colScoreWidth, align: "center" });
+                y += rowHeight;
+                if (idx % 200 === 0)
+                    yield new Promise(resolve => setTimeout(resolve, 0));
+            }
+            doc.end();
+        }
+        finally {
+            conn.release();
+        }
+    });
+}
+// =========================================================
+// Task 4: Generate Pass List PDF
+// =========================================================
+function buildPassListPdf(options, writeStream) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        const { campaignId, sort, order, includeScore } = options;
+        const { examInfo, rows } = yield passlist_repo_1.default.getPassListRows({ campaignId, sort, order });
+        const doc = new pdfkit_1.default({ size: "A4", margins: { top: 40, bottom: 40, left: 48, right: 48 }, autoFirstPage: true, bufferPages: false });
+        doc.pipe(writeStream);
+        doc.font(FONT_NORMAL).fontSize(14).text("บัญชีรายชื่อผู้สอบผ่านข้อเขียน", { align: "center" }).moveDown(0.2);
+        doc.fontSize(12).text("(แนบท้ายประกาศ...)", { align: "center" }).moveDown(0.2);
+        doc.text(`อัยการผู้ช่วย พ.ศ.${examInfo.year_be} (${examInfo.campaign_size})`, { align: "center" }).moveDown(0.2);
+        doc.text(`ณ ${examInfo.site}`, { align: "center" }).moveDown(0.6);
+        const tableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const colW = includeScore ? [tableWidth * 0.10, tableWidth * 0.22, tableWidth * 0.48, tableWidth * 0.20] : [tableWidth * 0.12, tableWidth * 0.24, tableWidth * 0.64];
+        const startX = doc.page.margins.left;
+        let y = doc.y;
+        const headerH = 20, rowH = 18;
+        const x1 = startX, x2 = x1 + colW[0], x3 = x2 + colW[1], x4 = x3 + colW[2];
+        const drawHeader = () => {
+            doc.lineWidth(0.7).strokeColor("black");
+            let p = doc.rect(startX, y, tableWidth, headerH).moveTo(x2, y).lineTo(x2, y + headerH).moveTo(x3, y).lineTo(x3, y + headerH);
+            if (includeScore)
+                p = p.moveTo(x4, y).lineTo(x4, y + headerH);
+            p.stroke();
+            const ty = y + 4;
+            doc.font(FONT_BOLD).fontSize(12);
+            doc.text("ลำดับที่", x1, ty, { width: colW[0], align: "center" });
+            doc.text("เลขประจำตัวสอบ", x2, ty, { width: colW[1], align: "center" });
+            doc.text("ชื่อ-สกุล", x3, ty, { width: colW[2], align: "center" });
+            if (includeScore)
+                doc.text("คะแนน", x4, ty, { width: colW[3], align: "center" });
+            y += headerH;
+            doc.font(FONT_NORMAL).fontSize(12);
+        };
+        drawHeader();
+        for (let idx = 0; idx < rows.length; idx++) {
+            const r = rows[idx];
+            if (y + rowH > doc.page.height - doc.page.margins.bottom) {
+                doc.addPage();
+                y = doc.page.margins.top;
+                drawHeader();
+            }
+            let p = doc.rect(startX, y, tableWidth, rowH).moveTo(x2, y).lineTo(x2, y + rowH).moveTo(x3, y).lineTo(x3, y + rowH);
+            if (includeScore)
+                p = p.moveTo(x4, y).lineTo(x4, y + rowH);
+            p.stroke();
+            const ty = y + 3;
+            doc.text(String(idx + 1), x1, ty, { width: colW[0], align: "center" });
+            doc.text(r.userCode, x2, ty, { width: colW[1], align: "center" });
+            doc.text(`${(_a = r.title) !== null && _a !== void 0 ? _a : ""}${r.title ? " " : ""}${r.fullName}`, x3 + 6, ty, { width: colW[2] - 12, align: "left" });
+            if (includeScore)
+                doc.text(r.finalScore == null ? "-" : Number(r.finalScore).toFixed(2), x4, ty, { width: colW[3], align: "center" });
+            y += rowH;
+            if (idx % 200 === 0)
+                yield new Promise(resolve => setTimeout(resolve, 0));
+        }
+        doc.end();
+    });
+}
+// =========================================================
+// Task 5: Generate Ranking PDF
+// =========================================================
+function buildRankingPdf(options, writeStream) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const examInfo = yield ranking_report_repo_1.default.getExamInfo(options.campaignId);
+        const rawData = yield ranking_report_repo_1.default.getRankingRawRows({ campaignId: options.campaignId, subjectIds: options.subjectIds });
+        const usersMap = new Map();
+        for (const row of rawData) {
+            if (!usersMap.has(row.user_code)) {
+                usersMap.set(row.user_code, { userCode: row.user_code, title: row.title, fullName: row.full_name, roomCode: row.room_code, totalScore: 0, groupScores: [], isCompleted: true, scoresMap: new Map() });
+            }
+            const user = usersMap.get(row.user_code);
+            const key = keyOf(row.session_id, row.subject_id, row.question_no);
+            user.scoresMap.set(key, row.avg_score);
+            if (!row.has_both)
+                user.isCompleted = false;
+            if (row.avg_score != null)
+                user.totalScore += Number(row.avg_score);
+        }
+        const groups = options.groups || [];
+        for (const user of usersMap.values()) {
+            user.groupScores = groups.map((group) => {
+                let sum = 0;
+                for (const item of group.items) {
+                    const sc = user.scoresMap.get(keyOf(item.sessionId, item.subjectId, item.questionNo));
+                    if (sc != null)
+                        sum += Number(sc);
+                }
+                return sum;
+            });
+        }
+        let rankingList = Array.from(usersMap.values());
+        if (options.onlyCompleted)
+            rankingList = rankingList.filter((u) => u.isCompleted);
+        const sortBy = (options.sortBy || "TOTAL_DESC");
+        rankingList.sort((a, b) => {
+            if (sortBy === "EXAMCODE_ASC")
+                return a.userCode.localeCompare(b.userCode);
+            if (sortBy === "EXAMCODE_DESC")
+                return b.userCode.localeCompare(a.userCode);
+            if (sortBy === "NAME_ASC")
+                return a.fullName.localeCompare(b.fullName, "th");
+            if (sortBy === "NAME_DESC")
+                return b.fullName.localeCompare(a.fullName, "th");
+            const dir = sortBy === "TOTAL_ASC" ? 1 : -1;
+            if (Math.abs(a.totalScore - b.totalScore) > 0.0001)
+                return (a.totalScore - b.totalScore) * dir;
+            for (let i = 0; i < groups.length; i++) {
+                if (Math.abs(a.groupScores[i] - b.groupScores[i]) > 0.0001)
+                    return (a.groupScores[i] - b.groupScores[i]) * dir;
+            }
+            return a.userCode.localeCompare(b.userCode);
+        });
+        if (options.limit > 0)
+            rankingList = rankingList.slice(0, options.limit);
+        const doc = new pdfkit_1.default({ size: "A4", margins: { top: 40, bottom: 40, left: 40, right: 40 }, autoFirstPage: true, bufferPages: false });
+        doc.pipe(writeStream);
+        const drawHeaderInfo = () => {
+            doc.font(FONT_BOLD).fontSize(16).text("บัญชีรายชื่อเรียงลำดับคะแนน", { align: "center" });
+            doc.font(FONT_NORMAL).fontSize(12).text(`สนามสอบ: ${examInfo.site} (${examInfo.campaign_size} ${examInfo.year_be})`, { align: "center" }).moveDown(0.5);
+        };
+        drawHeaderInfo();
+        const pageWidth = doc.page.width - 80;
+        const colWidths = [pageWidth * 0.1, pageWidth * 0.2, pageWidth * 0.55, pageWidth * 0.15];
+        const drawTableHeader = (currentY) => {
+            doc.font(FONT_BOLD).fontSize(12).lineWidth(0.5)
+                .rect(40, currentY, pageWidth, 20)
+                .moveTo(40 + colWidths[0], currentY).lineTo(40 + colWidths[0], currentY + 20)
+                .moveTo(40 + colWidths[0] + colWidths[1], currentY).lineTo(40 + colWidths[0] + colWidths[1], currentY + 20)
+                .moveTo(40 + colWidths[0] + colWidths[1] + colWidths[2], currentY).lineTo(40 + colWidths[0] + colWidths[1] + colWidths[2], currentY + 20)
+                .stroke();
+            ["ลำดับ", "รหัสประจำตัว", "ชื่อ-สกุล", "คะแนนรวม"].forEach((h, i) => {
+                doc.text(h, 40 + colWidths.slice(0, i).reduce((a, b) => a + b, 0), currentY + 5, { width: colWidths[i], align: "center" });
+            });
+        };
+        let y = doc.y;
+        drawTableHeader(y);
+        y += 20;
+        doc.font(FONT_NORMAL).fontSize(12);
+        for (let idx = 0; idx < rankingList.length; idx++) {
+            const row = rankingList[idx];
+            if (y > doc.page.height - 50) {
+                doc.addPage();
+                drawHeaderInfo();
+                y = doc.y;
+                drawTableHeader(y);
+                y += 20;
+                doc.font(FONT_NORMAL);
+            }
+            doc.rect(40, y, pageWidth, 20)
+                .moveTo(40 + colWidths[0], y).lineTo(40 + colWidths[0], y + 20)
+                .moveTo(40 + colWidths[0] + colWidths[1], y).lineTo(40 + colWidths[0] + colWidths[1], y + 20)
+                .moveTo(40 + colWidths[0] + colWidths[1] + colWidths[2], y).lineTo(40 + colWidths[0] + colWidths[1] + colWidths[2], y + 20).stroke();
+            let x = 40;
+            doc.text(String(idx + 1), x, y + 4, { width: colWidths[0], align: "center" });
+            x += colWidths[0];
+            doc.text(row.userCode, x, y + 4, { width: colWidths[1], align: "center" });
+            x += colWidths[1];
+            doc.text(`${row.title ? row.title : ''}${row.fullName}`, x + 5, y + 4, { width: colWidths[2] - 10, align: "left" });
+            x += colWidths[2];
+            doc.text(row.totalScore.toFixed(2), x, y + 4, { width: colWidths[3], align: "center" });
+            y += 20;
+            if (idx % 200 === 0)
+                yield new Promise(resolve => setTimeout(resolve, 0));
+        }
+        doc.end();
+    });
+}
+// =========================================================
+// Main Dispatcher
+// =========================================================
+function runTask() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const { task, options } = worker_threads_1.workerData;
+            const fileName = `grading_${task}_${Date.now()}_${Math.floor(Math.random() * 1000)}.pdf`;
+            const filePath = path_1.default.join(os_1.default.tmpdir(), fileName);
+            const writeStream = fs_1.default.createWriteStream(filePath);
+            if (task === 'generateBagScorePdf')
+                yield buildBagScorePdf(options, writeStream);
+            else if (task === 'generateCampaignBagScoresPdf')
+                yield buildCampaignBagScoresPdf(options, writeStream);
+            else if (task === 'generateGraderBagSummaryPdf')
+                yield buildGraderBagSummaryPdf(options, writeStream);
+            else if (task === 'generatePassListPdf')
+                yield buildPassListPdf(options, writeStream);
+            else if (task === 'generateRankingPdf')
+                yield buildRankingPdf(options, writeStream);
+            writeStream.on('finish', () => { worker_threads_1.parentPort === null || worker_threads_1.parentPort === void 0 ? void 0 : worker_threads_1.parentPort.postMessage({ status: 'success', filePath }); });
+            writeStream.on('error', (err) => { throw err; });
+        }
+        catch (error) {
+            worker_threads_1.parentPort === null || worker_threads_1.parentPort === void 0 ? void 0 : worker_threads_1.parentPort.postMessage({ status: 'error', message: String(error) });
+        }
+    });
+}
+runTask();

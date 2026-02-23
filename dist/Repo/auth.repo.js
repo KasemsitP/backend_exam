@@ -83,6 +83,19 @@ LIMIT 1;
             return rows[0] || null;
         });
     }
+    findMeByIdAndPassword(ID) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+SELECT a.*, r.code AS role_code
+FROM accounts a
+LEFT JOIN roles r ON r.id = a.role_id
+WHERE a.id = ?
+LIMIT 1;
+    `;
+            const [rows] = yield this.pool.execute(sql, [ID]);
+            return rows[0] || null;
+        });
+    }
     findAllAccountsWithRoles() {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `

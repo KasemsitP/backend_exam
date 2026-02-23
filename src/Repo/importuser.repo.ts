@@ -255,6 +255,84 @@ SELECT count(uc.id) as count from user_campaigns uc WHERE uc.campaign_id = ?;
     const max = Number(rows[0]?.count ?? 0);
     return max;
   }
+
+
+
+// test optimized
+
+async bulkUpsertUsers(
+    usersData: any[],
+    dbClient: DbClient
+  ): Promise<{ id: number; user_code: string }[]> {
+    if (usersData.length === 0) return [];
+
+    // เตรียม Array ซ้อน Array สำหรับ VALUES ?
+    const values = usersData.map((u) => [
+      u.userCode,
+      u.fullName,
+      u.firstName,
+      u.lastName,
+      u.title,
+      u.nationalId ?? null,
+      u.birthDate ?? null,
+    ]);
+
+    const sql = `
+      INSERT INTO users (user_code, full_name, first_name, last_name, title, national_id, birth_date)
+      VALUES ?
+      ON DUPLICATE KEY UPDATE
+        full_name = VALUES(full_name),
+        first_name = VALUES(first_name),
+        last_name = VALUES(last_name),
+        title = VALUES(title),
+        national_id = IFNULL(VALUES(national_id), users.national_id),
+        birth_date = IFNULL(VALUES(birth_date), users.birth_date)
+    `;
+
+    // ⚠️ สำคัญมาก: ต้องใช้ .query() เพื่อให้ '?' รองรับ Array 2 มิติ
+    await dbClient.query(sql, [values]);
+
+    // เนื่องจาก MySQL ไม่รองรับ RETURNING เราจึงต้อง SELECT กลับมาด้วย user_code
+    const userCodes = usersData.map((u) => u.userCode);
+    const fetchSql = `SELECT id, user_code FROM users WHERE user_code IN (?)`;
+    const [rows] = await dbClient.query(fetchSql, [userCodes]);
+
+    return rows as { id: number; user_code: string }[];
+  }
+
+  async bulkInsertUserCampaigns(
+    campaignData: { userId: number; campaignId: number }[],
+    dbClient: DbClient
+  ): Promise<{ id: number; user_id: number }[]> {
+    if (campaignData.length === 0) return [];
+
+    const values = campaignData.map((c) => [c.userId, c.campaignId]);
+    
+    // ใช้ INSERT IGNORE เพื่อข้ามถ้าคนนี้เคยผูก Campaign นี้ไปแล้ว
+    const sql = `INSERT IGNORE INTO user_campaigns (user_id, campaign_id) VALUES ?`;
+    await dbClient.query(sql, [values]);
+
+    // SELECT IDs กลับมาเพื่อไปผูกกับ Sessions ต่อ
+    const userIds = campaignData.map((c) => c.userId);
+    const campaignId = campaignData[0].campaignId;
+    const fetchSql = `SELECT id, user_id FROM user_campaigns WHERE campaign_id = ? AND user_id IN (?)`;
+    const [rows] = await dbClient.query(fetchSql, [campaignId, userIds]);
+
+    return rows as { id: number; user_id: number }[];
+  }
+
+  async bulkInsertUserSessions(
+    sessionData: { userCampaignId: number; sessionId: number; campaignId: number }[],
+    dbClient: DbClient
+  ): Promise<number> {
+    if (sessionData.length === 0) return 0;
+
+    const values = sessionData.map((s) => [s.userCampaignId, s.sessionId, s.campaignId]);
+    const sql = `INSERT IGNORE INTO user_sessions (user_campaign_id, session_id, campaign_id) VALUES ?`;
+
+    const [result]: any = await dbClient.query(sql, [values]);
+    return result.affectedRows; // คืนค่าจำนวนแถวที่ถูกสร้างสำเร็จ
+  }
 }
 
 const userImportRepo = new UserImportRepo();

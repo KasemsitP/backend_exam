@@ -88,6 +88,18 @@ LIMIT 1;
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [ID]);
         return rows[0] || null;
     }
+
+    async findMeByIdAndPassword(ID: number): Promise<RowDataPacket | null> {
+        const sql = `
+SELECT a.*, r.code AS role_code
+FROM accounts a
+LEFT JOIN roles r ON r.id = a.role_id
+WHERE a.id = ?
+LIMIT 1;
+    `;
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [ID]);
+        return rows[0] || null;
+    }
     async findAllAccountsWithRoles(): Promise<RowDataPacket[]> {
         const sql = `
 SELECT 

@@ -84,6 +84,20 @@ keyController.delete = (req, res) => __awaiter(void 0, void 0, void 0, function*
         // console.log("Error in delete controller:", error);
     }
 });
+keyController.getForgetKeys = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaignId, keyId, accountId, password } = req.body;
+        if (!campaignId || !keyId || !accountId || !password) {
+            return res.status(400).send({ message: "ข้อมูลไม่ถูกต้อง" });
+        }
+        const result = yield key_service_1.keyService.delete(keyId, campaignId, accountId);
+        res.status(204).send({ success: true, message: "กู้คีย์สำเร็จแล้ว", data: result });
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+        // console.log("Error in delete controller:", error);
+    }
+});
 keyController.getPrerequisites = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const campaignId = parseInt(req.params.campaignId, 10);
@@ -143,5 +157,21 @@ keyController.getDashboard = (req, res) => __awaiter(void 0, void 0, void 0, fun
     catch (err) {
         console.error("getDashboard error:", err);
         return res.status(500).json({ message: "Internal server error" });
+    }
+});
+keyController.forgetKey = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    console.log("forgetKey controller called with body:", req.body);
+    try {
+        const { campaignId, keyId, accountId, password } = req.body;
+        if (!campaignId || !keyId || !accountId || !password) {
+            return res.status(400).send({ message: "ข้อมูลไม่ถูกต้อง" });
+        }
+        const result = yield key_service_1.keyService.getForgetKey(campaignId, keyId, accountId, password);
+        console.log("Forget Key Result:", result);
+        res.status(200).send({ success: true, message: "กู้คีย์สำเร็จแล้ว", data: result });
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+        console.log("Error  controller:", error);
     }
 });

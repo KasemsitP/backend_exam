@@ -6,6 +6,7 @@ import { PoolConnection } from "mysql2/promise";
 import dashboardRepo from "../Repo/dashboard.repo";
 import settingsRepo from "../Repo/settings.repo";
 import campaignRepo from "../Repo/campaign.repo";
+import { authservice } from "./auth.service";
 
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 
@@ -566,6 +567,32 @@ export class keyService {
             sessions,           // ✅ ตัวใหม่ที่ UI ใช้ง่ายสุด
         };
     };
+
+    static getForgetKey = async (campaign_id: number, key_id: number, account_id: number, password: string) => {
+        const keyData = await keyRepo.findKeys(key_id, campaign_id);
+        const key = keyData?.key;
+        if (!keyData) {
+            throw new Error("ไม่พบคีย์ที่ต้องการดึงข้อมูล");
+        }
+        if (!key) {
+            throw new Error("ไม่พบคีย์ที่ต้องการดึงข้อมูล");
+        }
+        const isPasswordValid = await authservice.CheckPasswordByID(account_id, password)
+        console.log(isPasswordValid)
+        if (!isPasswordValid) {
+            throw new Error("รหัสผ่านไม่ถูกต้อง");
+        }
+        if (isPasswordValid.active === 0) {
+            throw new Error("บัญชีถูกระงับการใช้งาน");
+        }
+        if (isPasswordValid.roles[0] !== "manager") {
+            throw new Error("คุณไม่มีสิทธิ์ในการดึงข้อมูลคีย์นี้เนื่องจากคุณไม่ใช่ผู้จัดการคีย์");
+        }
+
+        const decryptedKey1Buffer = aesDecrypt(Buffer.from(key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+        console.log("Decrypted Key for verification:", decryptedKey1Buffer.toString(PAYLOAD_ENCODING));
+        return decryptedKey1Buffer.toString(PAYLOAD_ENCODING);
+    }
 
 }
 
