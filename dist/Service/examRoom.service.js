@@ -58,6 +58,10 @@ examRoomService.saveRoom = (payload) => __awaiter(void 0, void 0, void 0, functi
             room_code: payload.roomCode,
             capacity: payload.capacity,
         };
+        const is_duplicate = yield examroom_repo_1.default.IsDubpliateCode(campaignId, payload.roomCode, connection);
+        if (is_duplicate) {
+            throw new Error("ไม่สามารถสร้างห้องสอบชื่อซ้ำกันได้ กรุณาเปลี่ยนชื่อห้องสอบ");
+        }
         yield examroom_repo_1.default.upsert(roomData, connection);
         // ส่งกลับเป็นรูป frontend
         return toFrontendRoom(roomData);
@@ -77,6 +81,10 @@ examRoomService.deleteRoom = (campaignIdStr, roomCode) => __awaiter(void 0, void
         const campaignId = Number(campaignIdStr);
         if (isNaN(campaignId))
             throw new Error("Invalid Campaign ID");
+        const isAssigned = yield examroom_repo_1.default.isAssigned(campaignId, roomCode, connection);
+        if (isAssigned) {
+            throw new Error("ไม่สามารถลบห้องสอบนี้ได้ เนื่องจากมีผู้สอบที่ถูกกำหนดให้สอบในห้องนี้แล้ว กรุณารีเซ็ตห้องสอบก่อนลบ");
+        }
         yield examroom_repo_1.default.delete(campaignId, roomCode, connection);
         return { campaignId: campaignIdStr, roomCode };
     }

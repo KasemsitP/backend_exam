@@ -59,7 +59,7 @@ export class userImportService {
 
   //     const previsNumber = await userImportRepo.findPreviousNumber(campaignId, connection);
   //     const currentMax = await userImportRepo.findMaxUserCodeByCampaign(campaignId, connection);
-      
+
   //     let generatedRunning = currentMax + 1;
   //     let skipped = 0;
   //     const shuffledRows = shuffle(rows);
@@ -111,7 +111,7 @@ export class userImportService {
   //     for (const batch of rowChunks) {
   //       // ใช้ for...of แทนเพื่อรันแบบ Sequential บน Single Connection
   //       for (const data of batch) {
-          
+
   //         // 1. จัดการ User
   //         const { user, created: userCreated } = await userImportRepo.findOrCreateUser({
   //           user_code: data.userCode,
@@ -180,21 +180,24 @@ export class userImportService {
       totalCampaignLinks: 0,
       totalSessionLinks: 0,
     };
-
     try {
       await connection.beginTransaction();
 
       const sessions = await sessionRepo.findAllLiteByCampaignId(campaignId, connection);
-      if (sessions.length === 0) {
+      if (sessions.length < 3) {
         console.warn(`Campaign ID ${campaignId} has no sessions to link.`);
+        throw new Error(`รอบสอบนี้ยังไม่สร้างวันที่สอบครบ 3 วัน กรุณาสร้างให้เรียบร้อยก่อนนำเข้าผู้สอบ`); // <-- เพิ่ม Error เพื่อบังคับให้มี Session ก่อน (ถ้าไม่มี Session เลย)
       }
+      console.log("Sessions to link:", sessions.length);
+
+    //  throw new Error("ทดสอบ Rollback"); // <-- ลองโยน Error เพื่อดูว่า Rollback ทำงานไหม (ลบออกเมื่อทดสอบเสร็จ)
 
       const previsNumber = await userImportRepo.findPreviousNumber(campaignId, connection);
       const currentMax = await userImportRepo.findMaxUserCodeByCampaign(campaignId, connection);
-      
+
       let generatedRunning = currentMax + 1;
       let skipped = 0;
-    //  const shuffledRows = shuffle(rows);
+      //  const shuffledRows = shuffle(rows);
 
       // ------------------------------------------------------------------
       // Phase 1: เตรียมข้อมูลทั้งหมดไว้ใน Memory
@@ -237,19 +240,19 @@ export class userImportService {
       // ------------------------------------------------------------------
       // Phase 2: ยิง Database (เปลี่ยนจาก Promise.all เป็น for...of เพื่อความปลอดภัยใน Transaction)
       // ------------------------------------------------------------------
-// ------------------------------------------------------------------
+      // ------------------------------------------------------------------
       // Phase 2: ยิง Database (SUPER FAST BULK INSERT)
       // ------------------------------------------------------------------
       const CHUNK_SIZE = 500; // สามารถอัดเป็น 500-1000 ได้เลย
       const rowChunks = chunk(processedData, CHUNK_SIZE);
 
       for (const batch of rowChunks) {
-        
+
         // 1. Bulk Upsert Users
         const dbUsers = await userImportRepo.bulkUpsertUsers(batch, connection);
         // *หมายเหตุ: การนับ Created/Found เป๊ะๆ ในระดับ Bulk จะค่อนข้างซับซ้อน 
         // ปกติเราจะนับรวมยอด Processed เป็นหลัก หรือใช้ยอดจาก dbUsers
-        stats.totalUsersCreated += dbUsers.length; 
+        stats.totalUsersCreated += dbUsers.length;
 
         if (dbUsers.length === 0) continue;
 
@@ -258,14 +261,14 @@ export class userImportService {
           userId: u.id,
           campaignId: campaignId
         }));
-        
+
         const dbCampaigns = await userImportRepo.bulkInsertUserCampaigns(campaignPayload, connection);
         stats.totalCampaignLinks += dbCampaigns.length;
 
         // 3. เตรียมข้อมูล & Bulk Insert Session Links
         if (sessions.length > 0 && dbCampaigns.length > 0) {
           const sessionPayload: { userCampaignId: number; sessionId: number; campaignId: number }[] = [];
-          
+
           for (const uc of dbCampaigns) {
             for (const session of sessions) {
               sessionPayload.push({

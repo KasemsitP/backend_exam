@@ -69,6 +69,19 @@ class ExamRoomRepo {
     }
   }
 
+  async IsDubpliateCode(campaign_id: number, room_code: string, connection: Pool | PoolConnection = this.pool): Promise<any> {
+    const sql = `
+    select 1 from exam_rooms where campaign_id = ? and room_code = ? limit 1;
+    `;
+    const [rows] = await connection.execute<RowDataPacket[]>(sql, [
+      campaign_id,
+      room_code,
+    ]);
+    return rows.length > 0; // true if duplicate exists
+
+  }
+
+
   // ลบห้องสอบของ campaign นั้น ๆ
   async delete(
     campaignId: number,
@@ -85,7 +98,35 @@ class ExamRoomRepo {
       throw error;
     }
   }
+  async isAssigned(
+    campaignId: number,
+    roomCode: string,
+    connection: PoolConnection
+  ): Promise<boolean> {
+
+    const sql = `
+    SELECT COUNT(us.id) AS countnum
+    FROM user_campaigns us
+    WHERE us.room_code = ?
+      AND us.campaign_id = ?
+  `;
+
+    try {
+      const [rows] = await connection.execute<RowDataPacket[]>(
+        sql,
+        [roomCode, campaignId]
+      );
+
+      return rows[0].countnum > 0;
+    } catch (error) {
+      console.error("assigned already", error);
+      throw error;
+    }
+  }
 }
+
+
+
 
 const examRoomRepo = new ExamRoomRepo();
 export default examRoomRepo;

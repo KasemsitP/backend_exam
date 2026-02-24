@@ -32,12 +32,12 @@ bagController.bulkCreate = (req, res) => __awaiter(void 0, void 0, void 0, funct
 });
 bagController.CreateBagAndBooklets = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { campaignId, payload, datetime } = req.body;
-        if (!campaignId || !payload || !datetime) {
+        const { campaignId, payload, datetime, bagNo } = req.body;
+        if (!campaignId || !payload || !datetime || !bagNo) {
             return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
         }
         const dateTimes = datetime.map((d) => new Date(d));
-        const result = yield bag_service_1.bagService.CreateBagAndInsertBooklets(campaignId, payload, dateTimes);
+        const result = yield bag_service_1.bagService.CreateBagAndInsertBooklets(campaignId, payload, dateTimes, bagNo);
         return res.status(200).json(result);
     }
     catch (error) {
@@ -93,7 +93,7 @@ bagController.deleteById = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!bagId) {
             return res.status(400).send({ message: "Missing Bag ID" });
         }
-        const result = yield bag_service_1.bagService.deleteById(bagId);
+        const result = yield bag_service_1.bagService.deleteById(Number(bagId));
         console.log(result);
         res.status(200).json(result);
     }

@@ -170,6 +170,33 @@ class UserImportRepo {
             return true;
         });
     }
+    bulkUpdateQrPayload(updates_1) {
+        return __awaiter(this, arguments, void 0, function* (updates, dbClient = this.pool) {
+            if (updates.length === 0)
+                return true;
+            const ids = [];
+            const parameters = [];
+            let caseQueries = "";
+            // สร้างเงื่อนไข CASE WHEN สำหรับอัปเดตข้อมูลตาม ID
+            for (const update of updates) {
+                caseQueries += "WHEN ? THEN ? ";
+                parameters.push(update.id, update.payload);
+                ids.push(update.id);
+            }
+            const placeholders = ids.map(() => "?").join(",");
+            // นำ ID ทั้งหมดไปต่อท้าย array สำหรับเงื่อนไข WHERE IN (...)
+            parameters.push(...ids);
+            const sql = `
+      UPDATE user_sessions 
+      SET qr_payload = CASE id 
+        ${caseQueries}
+      END
+      WHERE id IN (${placeholders})
+    `;
+            yield dbClient.execute(sql, parameters);
+            return true;
+        });
+    }
     findMaxUserCodeByCampaign(campaignId_1) {
         return __awaiter(this, arguments, void 0, function* (campaignId, dbClient = this.pool) {
             var _a, _b;
@@ -194,6 +221,23 @@ SELECT count(uc.id) as count from user_campaigns uc WHERE uc.campaign_id = ?;
             const [rows] = yield dbClient.execute(sql, [campaignId]);
             const max = Number((_b = (_a = rows[0]) === null || _a === void 0 ? void 0 : _a.count) !== null && _b !== void 0 ? _b : 0);
             return max;
+        });
+    }
+    IsImported(campaignId_1) {
+        return __awaiter(this, arguments, void 0, function* (campaignId, dbClient = this.pool) {
+            const sql = `
+    SELECT us.session_id, COUNT(us.id) AS count_users
+    FROM user_sessions us
+    JOIN user_campaigns uc 
+      ON uc.id = us.user_campaign_id
+    WHERE uc.campaign_id = ?
+    GROUP BY us.session_id;
+  `;
+            const [rows] = yield dbClient.execute(sql, [campaignId]);
+            if (rows.length === 0)
+                return false;
+            const firstCount = rows[0].count_users;
+            return rows.every(row => row.count_users === firstCount);
         });
     }
     // test optimized

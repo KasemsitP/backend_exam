@@ -159,6 +159,27 @@ SELECT
             return rows.length > 0 ? rows[0] : null;
         });
     }
+    insertMany(conn, values) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+        INSERT INTO booklets 
+        (session_id, user_session_id, bag_id, seq_in_bag, status, created_at, random_num) 
+        VALUES ?
+    `;
+            // สังเกตการใช้ [values] เป็น array ซ้อน array สำหรับ mysql2 bulk insert
+            yield conn.query(sql, [values]);
+        });
+    }
+    deleteByBagId(conn, bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+        DELETE FROM booklets
+        WHERE bag_id = ?
+    `;
+            // สังเกตการใช้ [values] เป็น array ซ้อน array สำหรับ mysql2 bulk insert
+            yield conn.query(sql, [bagId]);
+        });
+    }
 }
 const bookletsRepo = new BookletsRepo();
 exports.default = bookletsRepo;

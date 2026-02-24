@@ -209,6 +209,24 @@ async getLatestRandomNumForUpdate(connection: any, sessionId: string | number) {
     
     return rows.length > 0 ? rows[0] : null;
 }
+async insertMany(conn: PoolConnection, values: any[][]): Promise<void> {
+    const sql = `
+        INSERT INTO booklets 
+        (session_id, user_session_id, bag_id, seq_in_bag, status, created_at, random_num) 
+        VALUES ?
+    `;
+    // สังเกตการใช้ [values] เป็น array ซ้อน array สำหรับ mysql2 bulk insert
+    await conn.query(sql, [values]); 
+}
+
+async deleteByBagId(conn: PoolConnection, bagId: number): Promise<void> {
+    const sql = `
+        DELETE FROM booklets
+        WHERE bag_id = ?
+    `;
+    // สังเกตการใช้ [values] เป็น array ซ้อน array สำหรับ mysql2 bulk insert
+    await conn.query(sql, [bagId]); 
+}
 }
 
 

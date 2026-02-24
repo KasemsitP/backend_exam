@@ -29,6 +29,7 @@ export class verifyService {
                         if (!isActiveCamp) {
                                 throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
                         }
+                        console.log("TEST CAM",isActiveCamp)
 
 
                         const decryptedPayload = await keyService.keyService.decryptQrPayload(
@@ -41,6 +42,11 @@ export class verifyService {
                                 throw new Error(`QR Code ไม่ถูกต้อง หรือถอดรหัสล้มเหลว`);
                         }
                         console.log(decryptedPayload)
+                        
+                        if (decryptedPayload.cid !== campaignIdNumeric) {
+                                throw new Error(`สมุดเล่มนี้อยู่คนละรอบสอบปัจจุบัน กรุณาติดต่อเจ้าหน้าที่`);
+                        }
+
 
                         // 3. ดึงข้อมูลผู้สอบ (ใช้ฟังก์ชันใน Canvas)
                         const userSession = await userSessionsRepo.findByUserCodeAndSessionIdForQRcode(

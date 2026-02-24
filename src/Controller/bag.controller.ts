@@ -23,13 +23,13 @@ export class bagController {
 
   static CreateBagAndBooklets = async (req: Request, res: Response) => {
     try {
-      const { campaignId, payload, datetime } = req.body;
-      if (!campaignId || !payload || !datetime) {
+      const { campaignId, payload, datetime , bagNo } = req.body;
+      if (!campaignId || !payload || !datetime || !bagNo) {
         return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
       }
 
       const dateTimes: Date[] = datetime.map((d: string) => new Date(d));
-      const result = await bagService.CreateBagAndInsertBooklets(campaignId, payload ,dateTimes);
+      const result = await bagService.CreateBagAndInsertBooklets(campaignId, payload ,dateTimes,bagNo);
       return res.status(200).json(result);
     } 
     catch (error: any) {
@@ -91,7 +91,7 @@ export class bagController {
       if (!bagId) {
         return res.status(400).send({ message: "Missing Bag ID" });
       }
-      const result = await bagService.deleteById(bagId);
+      const result = await bagService.deleteById(Number(bagId));
       console.log(result)
       res.status(200).json(result);
     } catch (error: any) {

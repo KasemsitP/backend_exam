@@ -22,6 +22,7 @@ verifyController.verify = (req, res) => __awaiter(void 0, void 0, void 0, functi
         if (!payload.qrPayload) {
             return res.status(400).send({ success: false, message: "Missing required fields" });
         }
+        console.log("Received QR Payload:", payload.qrPayload);
         const userSessionData = yield verify_service_1.verifyService.verifyQrPayload(payload);
         console.log(userSessionData);
         res.status(200).json(userSessionData);

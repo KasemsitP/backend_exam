@@ -54,6 +54,16 @@ export class examRoomService {
         capacity: payload.capacity,
       };
 
+      const is_duplicate = await examRoomRepo.IsDubpliateCode(
+        campaignId,
+        payload.roomCode,
+        connection
+      );
+      if (is_duplicate) {
+        throw new Error("ไม่สามารถสร้างห้องสอบชื่อซ้ำกันได้ กรุณาเปลี่ยนชื่อห้องสอบ");
+      }
+
+
       await examRoomRepo.upsert(roomData, connection);
 
       // ส่งกลับเป็นรูป frontend
@@ -72,6 +82,11 @@ export class examRoomService {
     try {
       const campaignId = Number(campaignIdStr);
       if (isNaN(campaignId)) throw new Error("Invalid Campaign ID");
+
+      const isAssigned = await examRoomRepo.isAssigned(campaignId, roomCode, connection);
+      if (isAssigned) {
+        throw new Error("ไม่สามารถลบห้องสอบนี้ได้ เนื่องจากมีผู้สอบที่ถูกกำหนดให้สอบในห้องนี้แล้ว กรุณารีเซ็ตห้องสอบก่อนลบ");
+      }
 
       await examRoomRepo.delete(campaignId, roomCode, connection);
 

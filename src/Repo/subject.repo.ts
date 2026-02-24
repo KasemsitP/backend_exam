@@ -162,7 +162,11 @@ class SubjectRepo {
     return subject;
   }
 
-  /* --------------------- CREATE subject (+questions) --------------------- */
+  async isduplicateSubject( code : string ) : Promise<boolean> {
+    const sql = `select 1 from subjects where code = ? limit 1`
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [code]);
+    return rows.length > 0;
+  }
 
   async createSubjectWithQuestions(input: CreateSubjectInput): Promise<Subject> {
     const conn = await this.pool.getConnection();

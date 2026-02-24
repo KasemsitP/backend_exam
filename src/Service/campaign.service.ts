@@ -9,7 +9,7 @@ export class campaignService {
     if (checkCampActive) {
       throw new Error("มีรอบสอบที่เปิดใช้งานอยู่แล้ว ไม่สามารถสร้างรอบสอบใหม่ได้");
     }
-
+    console.log(payload)
     const newCampaign = await campaignRepo.create(payload);
     return newCampaign;
   };

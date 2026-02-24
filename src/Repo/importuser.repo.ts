@@ -227,6 +227,38 @@ class UserImportRepo {
     }
     return true;
   }
+  async bulkUpdateQrPayload(
+    updates: { id: number; payload: string }[],
+    dbClient: DbClient | PoolConnection = this.pool
+  ): Promise<boolean> {
+    if (updates.length === 0) return true;
+
+    const ids: number[] = [];
+    const parameters: any[] = [];
+    let caseQueries = "";
+
+    // สร้างเงื่อนไข CASE WHEN สำหรับอัปเดตข้อมูลตาม ID
+    for (const update of updates) {
+      caseQueries += "WHEN ? THEN ? ";
+      parameters.push(update.id, update.payload);
+      ids.push(update.id);
+    }
+
+    const placeholders = ids.map(() => "?").join(",");
+    // นำ ID ทั้งหมดไปต่อท้าย array สำหรับเงื่อนไข WHERE IN (...)
+    parameters.push(...ids);
+
+    const sql = `
+      UPDATE user_sessions 
+      SET qr_payload = CASE id 
+        ${caseQueries}
+      END
+      WHERE id IN (${placeholders})
+    `;
+
+    await dbClient.execute(sql, parameters);
+    return true;
+  }
 
   async findMaxUserCodeByCampaign(
     campaignId: number,
@@ -256,11 +288,33 @@ SELECT count(uc.id) as count from user_campaigns uc WHERE uc.campaign_id = ?;
     return max;
   }
 
+  async IsImported(
+    campaignId: number,
+    dbClient: DbClient = this.pool
+  ): Promise<boolean> {
+
+    const sql = `
+    SELECT us.session_id, COUNT(us.id) AS count_users
+    FROM user_sessions us
+    JOIN user_campaigns uc 
+      ON uc.id = us.user_campaign_id
+    WHERE uc.campaign_id = ?
+    GROUP BY us.session_id;
+  `;
+
+    const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [campaignId]);
+
+    if (rows.length === 0) return false;
+
+    const firstCount = rows[0].count_users;
+
+    return rows.every(row => row.count_users === firstCount);
+  }
 
 
-// test optimized
+  // test optimized
 
-async bulkUpsertUsers(
+  async bulkUpsertUsers(
     usersData: any[],
     dbClient: DbClient
   ): Promise<{ id: number; user_code: string }[]> {
@@ -307,7 +361,7 @@ async bulkUpsertUsers(
     if (campaignData.length === 0) return [];
 
     const values = campaignData.map((c) => [c.userId, c.campaignId]);
-    
+
     // ใช้ INSERT IGNORE เพื่อข้ามถ้าคนนี้เคยผูก Campaign นี้ไปแล้ว
     const sql = `INSERT IGNORE INTO user_campaigns (user_id, campaign_id) VALUES ?`;
     await dbClient.query(sql, [values]);

@@ -67,6 +67,18 @@ class ExamRoomRepo {
             }
         });
     }
+    IsDubpliateCode(campaign_id_1, room_code_1) {
+        return __awaiter(this, arguments, void 0, function* (campaign_id, room_code, connection = this.pool) {
+            const sql = `
+    select 1 from exam_rooms where campaign_id = ? and room_code = ? limit 1;
+    `;
+            const [rows] = yield connection.execute(sql, [
+                campaign_id,
+                room_code,
+            ]);
+            return rows.length > 0; // true if duplicate exists
+        });
+    }
     // ลบห้องสอบของ campaign นั้น ๆ
     delete(campaignId, roomCode, connection) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -77,6 +89,24 @@ class ExamRoomRepo {
             }
             catch (error) {
                 console.error("Repo Error (Room Delete):", error);
+                throw error;
+            }
+        });
+    }
+    isAssigned(campaignId, roomCode, connection) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT COUNT(us.id) AS countnum
+    FROM user_campaigns us
+    WHERE us.room_code = ?
+      AND us.campaign_id = ?
+  `;
+            try {
+                const [rows] = yield connection.execute(sql, [roomCode, campaignId]);
+                return rows[0].countnum > 0;
+            }
+            catch (error) {
+                console.error("assigned already", error);
                 throw error;
             }
         });

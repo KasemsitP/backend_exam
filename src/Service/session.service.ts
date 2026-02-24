@@ -3,6 +3,12 @@ import { ApiSession, CreateSessionPayload } from "../Repo/session.repo";
 
 export class sessionService {
   static create = async (payload: CreateSessionPayload): Promise<ApiSession> => {
+    const checkDuplicate = await sessionRepo.checkisDuplicateSessionCode(payload.session_code, payload.campaign_id);
+    console.log(payload)
+    if (checkDuplicate) {
+      throw new Error(`วันที่สอบนี้มีอยู่แล้วในระบบสำหรับรอบสอบนี้`);
+    }
+
     const newSession = await sessionRepo.create(payload);
     return newSession;
   };

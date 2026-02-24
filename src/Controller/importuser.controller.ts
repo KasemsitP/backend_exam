@@ -8,10 +8,10 @@ export class userImportController {
       const campaignId = parseInt(req.params.campaignId, 10);
 
       if (isNaN(campaignId)) {
-        return res.status(400).send({ message: "Invalid Campaign ID" });
+        return res.status(400).send({ message: "รอบสอบไม่ถูกต้อง" });
       }
       if (!Array.isArray(rows) || rows.length === 0) {
-        return res.status(400).send({ message: "No rows to import" });
+        return res.status(400).send({ message: "ไม่มีข้อมูลที่จะนำเข้า" });
       }
       const stats = await userImportService.importUsersToCampaign(
         campaignId,

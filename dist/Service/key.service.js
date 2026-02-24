@@ -183,6 +183,10 @@ keyService.runBulkEncryptionForSession = (campaignId) => __awaiter(void 0, void 
     if (countkeys < 1) {
         throw new Error("ไม่สามารถทำการเข้ารหัสได้เนื่องจากรอบสอบนี้มีคีย์ไม่ครบ 2 คีย์");
     }
+    const is_imported = yield importuser_repo_1.default.IsImported(campaignId);
+    if (!is_imported) {
+        throw new Error("ไม่สามารถเข้ารหัสคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่มีการนำเข้าข้อมูลมาก่อน ");
+    }
     const connection = yield DB_1.DB.getInstance().getConnection();
     let usersEncrypted = 0;
     try {
@@ -221,18 +225,31 @@ keyService.runBulkEncryptionForSession = (campaignId) => __awaiter(void 0, void 
                 throw new Error(`users in some session not imported yet ${sessionId}`);
             }
             console.log(`Encrypting ${allUserLinks.length} users for session ${sessionId}`);
-            for (const userLink of allUserLinks) {
-                const payload = {
-                    cid: campaignId,
-                    sid: sessionId,
-                    uid: userLink.user_id,
-                };
-                const plainTextBuffer = Buffer.from(JSON.stringify(payload), PAYLOAD_ENCODING);
-                const step1 = aesEncrypt(plainTextBuffer, key1Buffer, iv1Buffer);
-                const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
-                const finalCiphertext = step2.toString(CIPHER_ENCODING);
-                yield importuser_repo_1.default.updateQrPayload(userLink.user_session_id, finalCiphertext, connection);
-                usersEncrypted++;
+            // 🚀 OPTIMIZATION: แบ่งข้อมูลเป็นก้อน (Chunking) เพื่อ Bulk Update
+            const CHUNK_SIZE = 500; // อัปเดตทีละ 500 แถวต่อ 1 Query
+            for (let i = 0; i < allUserLinks.length; i += CHUNK_SIZE) {
+                const chunk = allUserLinks.slice(i, i + CHUNK_SIZE);
+                const updatesPayload = [];
+                // 1. เข้ารหัสข้อมูลสำหรับ 500 คนใน Memory (ตรงนี้ทำงานเร็วมาก)
+                for (const userLink of chunk) {
+                    const payload = {
+                        cid: campaignId,
+                        sid: sessionId,
+                        uid: userLink.user_id,
+                    };
+                    const plainTextBuffer = Buffer.from(JSON.stringify(payload), PAYLOAD_ENCODING);
+                    const step1 = aesEncrypt(plainTextBuffer, key1Buffer, iv1Buffer);
+                    const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
+                    const finalCiphertext = step2.toString(CIPHER_ENCODING);
+                    // เก็บผลลัพธ์ลง Array เตรียมส่งอัปเดต
+                    updatesPayload.push({
+                        id: userLink.user_session_id,
+                        payload: finalCiphertext
+                    });
+                    usersEncrypted++;
+                }
+                // 2. ส่งข้อมูล 500 รายการไปอัปเดตใน Database ภายใน 1 Query
+                yield importuser_repo_1.default.bulkUpdateQrPayload(updatesPayload, connection);
             }
         }
         yield connection.commit();
@@ -451,9 +468,14 @@ keyService.GetDashBoard = (campaign_id) => __awaiter(void 0, void 0, void 0, fun
 });
 keyService.getForgetKey = (campaign_id, key_id, account_id, password) => __awaiter(void 0, void 0, void 0, function* () {
     const keyData = yield key_repo_1.default.findKeys(key_id, campaign_id);
+    console.log("Key Data Retrieved:", keyData);
+    console.log("Provided Account ID:", account_id);
     const key = keyData === null || keyData === void 0 ? void 0 : keyData.key;
     if (!keyData) {
         throw new Error("ไม่พบคีย์ที่ต้องการดึงข้อมูล");
+    }
+    if (Number(keyData.account_id) !== Number(account_id)) {
+        throw new Error("คุณไม่มีสิทธิ์ในการดึงข้อมูลคีย์นี้เนื่องจากคุณไม่ได้เป็นเจ้าของคีย์");
     }
     if (!key) {
         throw new Error("ไม่พบคีย์ที่ต้องการดึงข้อมูล");

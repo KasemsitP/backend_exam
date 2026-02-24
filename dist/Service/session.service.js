@@ -20,6 +20,11 @@ class sessionService {
 exports.sessionService = sessionService;
 _a = sessionService;
 sessionService.create = (payload) => __awaiter(void 0, void 0, void 0, function* () {
+    const checkDuplicate = yield session_repo_1.default.checkisDuplicateSessionCode(payload.session_code, payload.campaign_id);
+    console.log(payload);
+    if (checkDuplicate) {
+        throw new Error(`วันที่สอบนี้มีอยู่แล้วในระบบสำหรับรอบสอบนี้`);
+    }
     const newSession = yield session_repo_1.default.create(payload);
     return newSession;
 });

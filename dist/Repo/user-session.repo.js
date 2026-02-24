@@ -196,6 +196,27 @@ LIMIT 1;
             return rows[0] || null;
         });
     }
+    findUserSessionsBatch(conn, campaignId, sessionId, userCodes) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (userCodes.length === 0)
+                return [];
+            // สร้างเครื่องหมาย ?, ?, ? ตามจำนวน userCodes
+            const placeholders = userCodes.map(() => '?').join(',');
+            const sql = `
+        SELECT
+            us.id         AS id,
+            u.id          AS user_id,
+            u.user_code   AS user_code
+        FROM users u
+        JOIN user_campaigns uc ON uc.user_id = u.id AND uc.campaign_id = ?
+        JOIN user_sessions us  ON us.user_campaign_id = uc.id AND us.session_id = ? AND us.campaign_id = ?
+        WHERE u.user_code IN (${placeholders})
+    `;
+            const params = [campaignId, sessionId, campaignId, ...userCodes];
+            const [rows] = yield conn.execute(sql, params);
+            return rows;
+        });
+    }
 }
 const userSessionsRepo = new UserSessionsRepo();
 exports.default = userSessionsRepo;

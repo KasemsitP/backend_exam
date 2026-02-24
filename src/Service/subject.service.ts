@@ -20,6 +20,10 @@ export class SubjectService {
         if (!code || !name) {
             throw new Error("code and name are required");
         }
+        const isdup = await subjectRepo.isduplicateSubject(code.trim());
+        if (isdup) {
+            throw new Error("รหัสวิชานี้มีอยู่แล้วในระบบ");
+        }
 
         return subjectRepo.createSubjectWithQuestions({
             code: code.trim(),

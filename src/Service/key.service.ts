@@ -219,6 +219,10 @@ export class keyService {
         if (countkeys < 1) {
             throw new Error("ไม่สามารถทำการเข้ารหัสได้เนื่องจากรอบสอบนี้มีคีย์ไม่ครบ 2 คีย์");
         }
+        const is_imported = await userImportRepo.IsImported(campaignId);
+        if (!is_imported) {
+            throw new Error("ไม่สามารถเข้ารหัสคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่มีการนำเข้าข้อมูลมาก่อน ");
+        }
 
         const connection = await DB.getInstance().getConnection();
         let usersEncrypted = 0;
@@ -265,12 +269,10 @@ export class keyService {
             const iv1Buffer = STATIC_IV_BUFFER;
             const iv2Buffer = STATIC_IV_BUFFER; // (ใช้ตัวเดียวกันสำหรับ Layer 2 ตามโค้ด Demo)
             for (const sessionId of sessionIds) {
-
-                const allUserLinks =
-                    await userImportRepo.findAllUserLinksForSession(
-                        sessionId,
-                        connection
-                    );
+                const allUserLinks = await userImportRepo.findAllUserLinksForSession(
+                    sessionId,
+                    connection
+                );
 
                 if (allUserLinks.length === 0) {
                     console.warn(`No users found for session ${sessionId}`);
@@ -278,31 +280,41 @@ export class keyService {
                 }
                 console.log(`Encrypting ${allUserLinks.length} users for session ${sessionId}`);
 
-                for (const userLink of allUserLinks) {
+                // 🚀 OPTIMIZATION: แบ่งข้อมูลเป็นก้อน (Chunking) เพื่อ Bulk Update
+                const CHUNK_SIZE = 500; // อัปเดตทีละ 500 แถวต่อ 1 Query
 
-                    const payload = {
-                        cid: campaignId,
-                        sid: sessionId,
-                        uid: userLink.user_id,
-                    };
+                for (let i = 0; i < allUserLinks.length; i += CHUNK_SIZE) {
+                    const chunk = allUserLinks.slice(i, i + CHUNK_SIZE);
+                    const updatesPayload: { id: number; payload: string }[] = [];
 
-                    const plainTextBuffer = Buffer.from(
-                        JSON.stringify(payload),
-                        PAYLOAD_ENCODING
-                    );
+                    // 1. เข้ารหัสข้อมูลสำหรับ 500 คนใน Memory (ตรงนี้ทำงานเร็วมาก)
+                    for (const userLink of chunk) {
+                        const payload = {
+                            cid: campaignId,
+                            sid: sessionId,
+                            uid: userLink.user_id,
+                        };
 
-                    const step1 = aesEncrypt(plainTextBuffer, key1Buffer, iv1Buffer);
-                    const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
+                        const plainTextBuffer = Buffer.from(
+                            JSON.stringify(payload),
+                            PAYLOAD_ENCODING
+                        );
 
-                    const finalCiphertext = step2.toString(CIPHER_ENCODING);
+                        const step1 = aesEncrypt(plainTextBuffer, key1Buffer, iv1Buffer);
+                        const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
+                        const finalCiphertext = step2.toString(CIPHER_ENCODING);
 
-                    await userImportRepo.updateQrPayload(
-                        userLink.user_session_id,
-                        finalCiphertext,
-                        connection
-                    );
+                        // เก็บผลลัพธ์ลง Array เตรียมส่งอัปเดต
+                        updatesPayload.push({
+                            id: userLink.user_session_id,
+                            payload: finalCiphertext
+                        });
 
-                    usersEncrypted++;
+                        usersEncrypted++;
+                    }
+
+                    // 2. ส่งข้อมูล 500 รายการไปอัปเดตใน Database ภายใน 1 Query
+                    await userImportRepo.bulkUpdateQrPayload(updatesPayload, connection);
                 }
             }
 
@@ -570,13 +582,19 @@ export class keyService {
 
     static getForgetKey = async (campaign_id: number, key_id: number, account_id: number, password: string) => {
         const keyData = await keyRepo.findKeys(key_id, campaign_id);
+        console.log("Key Data Retrieved:", keyData);
+        console.log("Provided Account ID:", account_id);
         const key = keyData?.key;
         if (!keyData) {
             throw new Error("ไม่พบคีย์ที่ต้องการดึงข้อมูล");
         }
+        if (Number(keyData.account_id) !== Number(account_id)) {
+            throw new Error("คุณไม่มีสิทธิ์ในการดึงข้อมูลคีย์นี้เนื่องจากคุณไม่ได้เป็นเจ้าของคีย์");
+        }
         if (!key) {
             throw new Error("ไม่พบคีย์ที่ต้องการดึงข้อมูล");
         }
+
         const isPasswordValid = await authservice.CheckPasswordByID(account_id, password)
         console.log(isPasswordValid)
         if (!isPasswordValid) {

@@ -188,8 +188,9 @@ ORDER BY
       throw error;
     }
   }
-  async deleteById(bagNo: string, connection: PoolConnection) {
+  async deleteById(bagNo: number, connection: PoolConnection) {
     // (ลบโดยใช้ bag_no ที่เป็น VARCHAR)
+
     const sql = `DELETE FROM bags WHERE id = ?;`;
     try {
       const [result] = await connection.execute(sql, [bagNo]);
@@ -340,6 +341,59 @@ SELECT s.name from subjects s JOIN session_subjects ss ON   ss.subject_id = s.id
       throw error;
     }
   }
+  async getAllBagNumbersForSession(sessionId: number, conn: PoolConnection): Promise<number[]> {
+    const sql = `SELECT bag_no FROM bags WHERE session_id = ?`;
+    const [rows] = await conn.execute<RowDataPacket[]>(sql, [sessionId]);
+    return rows.map(r => r.bag_no);
+}
+async getActiveBagNumbers(sessionId: number, conn: PoolConnection): Promise<number[]> {
+    const sql = `
+        SELECT bag_no 
+        FROM bags 
+        WHERE session_id = ? 
+        AND (
+            status = 'COMPLETED' 
+            OR (status = 'DRAFT' AND created_at >= NOW() - INTERVAL 15 MINUTE)
+        )
+    `;
+    const [rows] = await conn.execute<RowDataPacket[]>(sql, [sessionId]);
+    return rows.map(r => r.bag_no);
+}
+async updateBagStatusToCompleted(bagId: number, conn: PoolConnection): Promise<void> {
+    const sql = `UPDATE bags SET status = 'COMPLETED' WHERE id = ?`;
+    await conn.execute(sql, [bagId]);
+}
+async insertDraftBag(
+    sessionId: number,
+    bagNo: number,
+    connection: PoolConnection
+): Promise<any> { // แนะนำให้ใช้ Promise<ResultSetHeader> ถ้า import มาแล้ว
+    
+    // ตั้งค่า status เป็น DRAFT และ count_items เป็น 0 ไปก่อน
+    const sql = `
+        INSERT INTO bags (session_id, bag_no, status, count_items) 
+        VALUES (?, ?, 'DRAFT', 0)
+    `;
+
+    const [result] = await connection.execute(sql, [sessionId, bagNo]);
+    
+    // return result กลับไป เพื่อให้เราดึง result.insertId ไปใช้เป็น bagId ได้
+    return result;
+}
+async getEmptyBag(sessionId: number, conn: PoolConnection): Promise<{id: number, bag_no: number} | null> {
+    const sql = `
+        SELECT b.id, b.bag_no 
+        FROM bags b
+        LEFT JOIN booklets bk ON bk.bag_id = b.id
+        WHERE b.session_id = ? 
+        GROUP BY b.id, b.bag_no
+        HAVING COUNT(bk.id) = 0
+        ORDER BY b.bag_no ASC
+        LIMIT 1
+    `;
+    const [rows] = await conn.execute<any[]>(sql, [sessionId]);
+    return rows.length > 0 ? { id: rows[0].id, bag_no: rows[0].bag_no } : null;
+}
 }
 
 const bagRepo = new BagRepo();

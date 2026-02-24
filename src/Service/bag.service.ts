@@ -22,7 +22,7 @@ interface InsertBookletsPayload {
     scannedCodes: string[];
 }
 export interface ApiBookletLinked {
-    id: number;
+    id?: number;
     sessionId: number;
     bagNo: number;
     userSessionId: number;
@@ -228,123 +228,95 @@ export class bagService {
     static CreateBagAndInsertBooklets = async (
         campaign_id: number,
         payload: string[],
-        datetime: Date[]
+        datetime: Date[],
+        expected_bag_no: number,
     ) => {
         const connection = await DB.getInstance().getConnection();
 
         try {
             await connection.beginTransaction();
 
-            console.log(datetime)
+            if (payload.length !== datetime.length) throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
 
-            if (payload.length !== datetime.length) {
-                throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
-            }
-
+            // 1️⃣ Parallel Decode
+            const decodedPromises = payload.map(qr => keyService.decryptQrPayload(qr, campaign_id));
+            const decodedResults = await Promise.all(decodedPromises);
 
             let sessionId: number | null = null;
-            const results: ApiBookletLinked[] = [];
-            let sessionlabel;
-
-            // 1️⃣ decode + validate ทั้งหมดก่อน
             const decodedList = [];
+            const userCodesToFetch: string[] = [];
 
-            for (const qr of payload) {
-                const decoded = await keyService.decryptQrPayload(qr, campaign_id);
-
-                if (decoded.cid !== campaign_id) {
-                    console.log("decoded.cid:", decoded.cid, "campaign_id:", campaign_id)
-                    throw new Error(`QR ไม่ตรง campaign`);
-                }
-
-                if (sessionId === null) {
-                    sessionId = decoded.sid;
-                } else if (decoded.sid !== sessionId) {
-                    throw new Error(`QR ต่าง session`);
-                }
+            for (let i = 0; i < decodedResults.length; i++) {
+                const decoded = decodedResults[i];
+                if (decoded.cid !== campaign_id) throw new Error(`QR ไม่ตรง campaign`);
+                if (sessionId === null) sessionId = decoded.sid;
+                else if (decoded.sid !== sessionId) throw new Error(`QR ต่าง session`);
 
                 decodedList.push(decoded);
+                userCodesToFetch.push(decoded.uid);
+            }
+            if (!sessionId) throw new Error("ไม่พบ session");
+
+            // ==========================================
+            // 2️⃣ หาเลขถุงที่แหว่งไป อีกครั้ง! (ป้องกันคนแย่ง)
+            // ==========================================
+            const existingBagNos = await bagRepo.getAllBagNumbersForSession(sessionId, connection);
+            let targetBagNo = 1;
+            existingBagNos.sort((a, b) => a - b);
+            for (const no of existingBagNos) {
+                if (no === targetBagNo) targetBagNo++;
+                else break;
             }
 
-            if (!sessionId) {
-                throw new Error("ไม่พบ session");
+            if (targetBagNo !== expected_bag_no) {
+                throw new Error(`มีผู้ใช้สร้างหมายเลขถุง ${expected_bag_no} ไปแล้ว กรุณากดยืนยันอีกครั้งเพื่อรับหมายเลขถุงใหม่`);
             }
 
-            // 2️⃣ สร้างถุงครั้งเดียว
-            const maxNo = await bagRepo.getMaxBagNoForSession(sessionId, connection);
-            const bagResult = await bagRepo.CreateBagByConnection(
-                sessionId,
-                maxNo + 1,
-                connection
-            );
 
+            const bagResult = await bagRepo.CreateBagByConnection(sessionId, targetBagNo, connection);
             const bagId = bagResult.insertId;
 
-            console.log("Created Bag ID:", bagId);
+            // ==========================================
+            // 4️⃣ Bulk Insert Booklets
+            // ==========================================
+            const userSessions = await userSessionsRepo.findUserSessionsBatch(
+                connection, campaign_id, sessionId, userCodesToFetch
+            );
+            const userSessionMap = new Map(userSessions.map(us => [us.user_code, us]));
 
-            const day_no_payload = await bookletsRepo.getDayno(connection, sessionId)
-            const dataNo = day_no_payload?.day_no || 0
-            if (dataNo === 0) {
-                throw new Error("ไม่พบวันที่สอบ");
-            }
-            let currentRunningNumber = 0;
+            const day_no_payload = await bookletsRepo.getDayno(connection, sessionId);
+            const dataNo = day_no_payload?.day_no || 0;
+            if (dataNo === 0) throw new Error("ไม่พบวันที่สอบ");
+
             const latestRecord = await bookletsRepo.getLatestRandomNumForUpdate(connection, sessionId);
+            let currentRunningNumber = latestRecord?.random_num ? parseInt(latestRecord.random_num.slice(-4), 10) : 0;
 
-            if (latestRecord?.random_num) {
-                // เอา 4 ตัวท้ายเสมอ
-                const runningString = latestRecord.random_num.slice(-4);
-                currentRunningNumber = parseInt(runningString, 10) || 0;
-            }
+            const bookletsToInsert = [];
 
-            // 3️⃣ insert booklets
-            let seq = 1;
             for (let i = 0; i < decodedList.length; i++) {
                 const decoded = decodedList[i];
-                const scannedAt = datetime[i]; //  ตัวนี้แหละ
+                const scannedAt = datetime[i];
+                const userSession = userSessionMap.get(decoded.uid);
+                if (!userSession) throw new Error(`ไม่พบ user_session สำหรับ user: ${decoded.uid}`);
 
-                const userSession =
-                    await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
-                        connection,
-                        {
-                            campaignId: campaign_id,
-                            sessionId,
-                            userCode: decoded.uid,
-                        }
-                    );
-
-                if (!userSession) {
-                    throw new Error(`ไม่พบ user_session ${decoded.uid}`);
-                }
-
-                currentRunningNumber++; // บวก 1 ในแต่ละรอบของลูป
-
-                // ทำให้เป็น 4 หลักเสมอ
+                currentRunningNumber++;
                 const paddedRunning = String(currentRunningNumber).padStart(4, '0');
-
-                // เอา dataNo มาต่อหน้า
                 const nextRandomNum = `${dataNo}${paddedRunning}`;
+                const seq = i + 1;
 
-                const bookletId = await bookletsRepo.insertOne(connection, {
+                bookletsToInsert.push([
                     sessionId,
-                    userSessionId: userSession.id,
-                    bagNo: bagId,
-                    seqInBag: seq,
-                    status: "CREATED",
-                    created_at: scannedAt,
-                    random_num: nextRandomNum
-                });
+                    userSession.id,
+                    bagId, // ใส่ ID ที่เพิ่งสร้างสำเร็จ
+                    seq,
+                    "CREATED", // หรือ status ตามที่ตาราง booklet ใช้
+                    scannedAt,
+                    nextRandomNum
+                ]);
+            }
 
-                results.push({
-                    id: bookletId,
-                    sessionId,
-                    bagNo: bagId,
-                    userSessionId: userSession.id,
-                    seqInBag: seq,
-                    userCode: userSession.user_code,
-                    random_num: nextRandomNum
-                });
-
-                seq++;
+            if (bookletsToInsert.length > 0) {
+                await bookletsRepo.insertMany(connection, bookletsToInsert);
             }
 
             await connection.commit();
@@ -352,25 +324,85 @@ export class bagService {
             return {
                 bagId,
                 campaign_id,
-                bagNo: maxNo + 1,
+                bagNo: targetBagNo, // ส่งกลับให้ Frontend แสดงผล
             };
-        } catch (error) {
+
+        } catch (error: any) {
             await connection.rollback();
+
+            if (error?.code === 'ER_DUP_ENTRY') {
+
+                if (error.message.includes('booklets.user_session_id')) {
+                    throw new Error('มีเล่มข้อสอบที่เคยถูกสแกนเข้าระบบแล้ว โปรดตรวจสอบอีกครั้ง');
+                }
+
+                throw new Error('ข้อมูลซ้ำในระบบ');
+            }
+
             throw error;
         } finally {
             connection.release();
         }
     };
+    static CheckbookletsSubjects = async (
+        campaign_id: number,
+        payload: string[],
+        datetime: Date[]
+    ) => {
+        const connection = await DB.getInstance().getConnection();
 
+        try {
+            if (payload.length !== datetime.length) {
+                throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
+            }
 
+            // 1️⃣ Parallel Decode
+            const decodedPromises = payload.map(qr => keyService.decryptQrPayload(qr, campaign_id));
+            const decodedResults = await Promise.all(decodedPromises);
 
-    static deleteById = async (bagId: string) => {
+            let sessionId: number | null = null;
+            for (const decoded of decodedResults) {
+                if (decoded.cid !== campaign_id) throw new Error(`QR ไม่ตรง campaign`);
+                if (sessionId === null) sessionId = decoded.sid;
+                else if (decoded.sid !== sessionId) throw new Error(`QR ต่าง session`);
+            }
+            if (!sessionId) throw new Error("ไม่พบ session");
+
+            // 2️⃣ เช็ควิชา
+            const subjectResult = await bagRepo.CheckSubjectBooks(sessionId);
+
+            // ==========================================
+            // 3️⃣ หาเลขถุงที่แหว่งไป (แค่หาเฉยๆ ไม่สร้าง!)
+            // ==========================================
+            // สมมติใน Repo มีฟังก์ชันดึงเลขถุงทั้งหมดของ Session (SELECT bag_no FROM bags WHERE session_id = ?)
+            const existingBagNos = await bagRepo.getAllBagNumbersForSession(sessionId, connection);
+
+            let targetBagNo = 1;
+            existingBagNos.sort((a, b) => a - b);
+            for (const no of existingBagNos) {
+                if (no === targetBagNo) targetBagNo++;
+                else break; // เจอเลขที่ว่างแล้ว
+            }
+
+            // คืนค่าเฉพาะเลขถุงคาดการณ์
+            return {
+                success: true,
+                subject_name: subjectResult,
+                bagNo: targetBagNo, // โชว์เลขนี้ใน Swal ฝั่ง Frontend
+            };
+        } catch (error) {
+            throw error;
+        } finally {
+            connection.release();
+        }
+    };
+    static deleteById = async (bagId: number) => {
         const connection = await DB.getInstance().getConnection();
         try {
             await connection.beginTransaction();
 
-            // (TODO: ควรเช็คว่ามี Booklets ในถุงนี้หรือไม่ก่อนลบ)
-            // (สมมติว่า Repo ใช้ 'bagId' (String))
+
+            await bookletsRepo.deleteByBagId( connection , bagId);
             await bagRepo.deleteById(bagId, connection);
 
             await connection.commit();
@@ -434,118 +466,6 @@ export class bagService {
         }
     }
 
-    static CheckbookletsSubjects = async (
-        campaign_id: number,
-        payload: string[],
-        datetime: Date[]
-    ) => {
-        const connection = await DB.getInstance().getConnection();
 
-        try {
-            await connection.beginTransaction();
-
-            //console.log(datetime)
-
-            if (payload.length !== datetime.length) {
-                throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
-            }
-
-
-            let sessionId: number | null = null;
-            const results: ApiBookletLinked[] = [];
-            let sessionlabel;
-
-            // 1️⃣ decode + validate ทั้งหมดก่อน
-            const decodedList = [];
-
-            for (const qr of payload) {
-                const decoded = await keyService.decryptQrPayload(qr, campaign_id);
-
-                if (decoded.cid !== campaign_id) {
-                    throw new Error(`QR ไม่ตรง campaign`);
-                }
-
-                if (sessionId === null) {
-                    sessionId = decoded.sid;
-                } else if (decoded.sid !== sessionId) {
-                    throw new Error(`QR ต่าง session`);
-                }
-
-                decodedList.push(decoded);
-            }
-
-            if (!sessionId) {
-                throw new Error("ไม่พบ session");
-            }
-
-            const subjectResult = await bagRepo.CheckSubjectBooks(sessionId)
-
-            // 2️⃣ สร้างถุงครั้งเดียว
-            const maxNo = await bagRepo.getMaxBagNoForSession(sessionId, connection);
-            // const bagResult = await bagRepo.CreateBagByConnection(
-            //     sessionId,
-            //     maxNo + 1,
-            //     connection
-            // );
-
-            // const bagId = bagResult.insertId;
-
-            // console.log("Created Bag ID:", bagId);
-
-            // // 3️⃣ insert booklets
-            // let seq = 1;
-            // for (let i = 0; i < decodedList.length; i++) {
-            //     const decoded = decodedList[i];
-            //     const scannedAt = datetime[i]; // 👈 ตัวนี้แหละ
-
-            //     const userSession =
-            //         await userSessionsRepo.findUserSessionByCampaignSessionAndUserCode(
-            //             connection,
-            //             {
-            //                 campaignId: campaign_id,
-            //                 sessionId,
-            //                 userCode: decoded.uid,
-            //             }
-            //         );
-
-            //     if (!userSession) {
-            //         throw new Error(`ไม่พบ user_session ${decoded.uid}`);
-            //     }
-
-            //     const bookletId = await bookletsRepo.insertOne(connection, {
-            //         sessionId,
-            //         userSessionId: userSession.id,
-            //         bagNo: bagId,
-            //         seqInBag: seq,
-            //         status: "CREATED",
-            //         created_at: scannedAt,       
-            //     });
-
-            //     results.push({
-            //         id: bookletId,
-            //         sessionId,
-            //         bagNo: bagId,
-            //         userSessionId: userSession.id,
-            //         seqInBag: seq,
-            //         userCode: userSession.user_code,
-            //     });
-
-            //     seq++;
-            // }
-
-            await connection.commit();
-
-            return {
-                success: true,
-                subject_name: subjectResult,
-                bagNo: maxNo + 1,
-            };
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
-        }
-    };
 }
 

@@ -31,6 +31,10 @@ SubjectService.createSubject = (req) => __awaiter(void 0, void 0, void 0, functi
     if (!code || !name) {
         throw new Error("code and name are required");
     }
+    const isdup = yield subject_repo_1.default.isduplicateSubject(code.trim());
+    if (isdup) {
+        throw new Error("รหัสวิชานี้มีอยู่แล้วในระบบ");
+    }
     return subject_repo_1.default.createSubjectWithQuestions({
         code: code.trim(),
         name: name.trim(),

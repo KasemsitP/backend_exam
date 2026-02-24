@@ -100,7 +100,13 @@ class SubjectRepo {
             return subject;
         });
     }
-    /* --------------------- CREATE subject (+questions) --------------------- */
+    isduplicateSubject(code) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `select 1 from subjects where code = ? limit 1`;
+            const [rows] = yield this.pool.execute(sql, [code]);
+            return rows.length > 0;
+        });
+    }
     createSubjectWithQuestions(input) {
         return __awaiter(this, void 0, void 0, function* () {
             var _a;

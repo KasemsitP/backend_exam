@@ -145,9 +145,28 @@ GROUP BY s.id, s.code, s.name`
         return rows[0]
     }
 
-    async CheckHasSubjects(session_id: number,dbClient: DbClient = this.pool): Promise<boolean> {
+    async CheckHasSubjects(session_id: number, dbClient: DbClient = this.pool): Promise<boolean> {
         const sql = `SELECT * FROM session_subjects where session_id = ?;`
         const [rows] = await dbClient.execute<any[]>(sql, [session_id]);
+        return rows.length > 0;
+    }
+    async CheckDubplicateSubject(session_id: number, subject_id: number, dbClient: DbClient = this.pool): Promise<boolean> {
+        const sql2 = `select s.campaign_id from sessions s where id = ?;`
+        const [rows2] = await dbClient.execute<any[]>(sql2, [session_id]);
+        if (rows2.length === 0) {
+            throw new Error(`ไม่พบ session_id: ${session_id} ในตาราง sessions`);
+        }
+        const campaign_id = rows2[0].campaign_id;
+        const sql = `SELECT 1
+FROM session_subjects ss
+WHERE ss.subject_id = ?
+AND ss.session_id IN (
+    SELECT s.id
+    FROM sessions s
+    WHERE s.campaign_id = ?
+)
+LIMIT 1;`;
+        const [rows] = await dbClient.execute<any[]>(sql, [subject_id, campaign_id]);
         return rows.length > 0;
     }
 }

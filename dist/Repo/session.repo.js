@@ -33,6 +33,13 @@ class SessionRepo {
             return this.findById(newId, dbClient);
         });
     }
+    checkisDuplicateSessionCode(session_code_1, campaign_id_1) {
+        return __awaiter(this, arguments, void 0, function* (session_code, campaign_id, dbClient = this.pool) {
+            const sql = `SELECT 1 FROM sessions WHERE session_code = ? AND campaign_id = ? LIMIT 1`;
+            const [rows] = yield dbClient.execute(sql, [session_code, campaign_id]);
+            return rows.length > 0;
+        });
+    }
     findById(id_1) {
         return __awaiter(this, arguments, void 0, function* (id, dbClient = this.pool) {
             const sql = "SELECT * FROM sessions WHERE id = ?";
@@ -56,11 +63,25 @@ class SessionRepo {
      * (โค้ดเดิม)
      * ลบ Session เดียว (รองรับ Transaction)
      */
-    delete(id_1) {
-        return __awaiter(this, arguments, void 0, function* (id, dbClient = this.pool) {
-            const sql = "DELETE FROM sessions WHERE id = ?";
-            const [result] = yield dbClient.execute(sql, [id]);
-            return result.affectedRows > 0;
+    delete(id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const connection = yield this.pool.getConnection();
+            try {
+                yield connection.beginTransaction();
+                // 1️⃣ ลบ child
+                yield connection.execute("DELETE FROM session_subjects WHERE session_id = ?", [id]);
+                // 2️⃣ ลบ parent
+                const [result] = yield connection.execute("DELETE FROM sessions WHERE id = ?", [id]);
+                yield connection.commit();
+                return result.affectedRows > 0;
+            }
+            catch (error) {
+                yield connection.rollback();
+                throw error;
+            }
+            finally {
+                connection.release(); // สำคัญมาก
+            }
         });
     }
     findAllLiteByCampaignId(campaignId_1) {

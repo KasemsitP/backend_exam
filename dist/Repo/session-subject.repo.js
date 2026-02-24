@@ -106,6 +106,27 @@ GROUP BY s.id, s.code, s.name`;
             return rows.length > 0;
         });
     }
+    CheckDubplicateSubject(session_id_1, subject_id_1) {
+        return __awaiter(this, arguments, void 0, function* (session_id, subject_id, dbClient = this.pool) {
+            const sql2 = `select s.campaign_id from sessions s where id = ?;`;
+            const [rows2] = yield dbClient.execute(sql2, [session_id]);
+            if (rows2.length === 0) {
+                throw new Error(`ไม่พบ session_id: ${session_id} ในตาราง sessions`);
+            }
+            const campaign_id = rows2[0].campaign_id;
+            const sql = `SELECT 1
+FROM session_subjects ss
+WHERE ss.subject_id = ?
+AND ss.session_id IN (
+    SELECT s.id
+    FROM sessions s
+    WHERE s.campaign_id = ?
+)
+LIMIT 1;`;
+            const [rows] = yield dbClient.execute(sql, [subject_id, campaign_id]);
+            return rows.length > 0;
+        });
+    }
 }
 const sessionSubjectRepo = new SessionSubjectRepo();
 exports.default = sessionSubjectRepo;

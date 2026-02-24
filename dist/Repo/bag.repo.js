@@ -301,6 +301,62 @@ SELECT s.name from subjects s JOIN session_subjects ss ON   ss.subject_id = s.id
             }
         });
     }
+    getAllBagNumbersForSession(sessionId, conn) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `SELECT bag_no FROM bags WHERE session_id = ?`;
+            const [rows] = yield conn.execute(sql, [sessionId]);
+            return rows.map(r => r.bag_no);
+        });
+    }
+    getActiveBagNumbers(sessionId, conn) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+        SELECT bag_no 
+        FROM bags 
+        WHERE session_id = ? 
+        AND (
+            status = 'COMPLETED' 
+            OR (status = 'DRAFT' AND created_at >= NOW() - INTERVAL 15 MINUTE)
+        )
+    `;
+            const [rows] = yield conn.execute(sql, [sessionId]);
+            return rows.map(r => r.bag_no);
+        });
+    }
+    updateBagStatusToCompleted(bagId, conn) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `UPDATE bags SET status = 'COMPLETED' WHERE id = ?`;
+            yield conn.execute(sql, [bagId]);
+        });
+    }
+    insertDraftBag(sessionId, bagNo, connection) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // ตั้งค่า status เป็น DRAFT และ count_items เป็น 0 ไปก่อน
+            const sql = `
+        INSERT INTO bags (session_id, bag_no, status, count_items) 
+        VALUES (?, ?, 'DRAFT', 0)
+    `;
+            const [result] = yield connection.execute(sql, [sessionId, bagNo]);
+            // return result กลับไป เพื่อให้เราดึง result.insertId ไปใช้เป็น bagId ได้
+            return result;
+        });
+    }
+    getEmptyBag(sessionId, conn) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+        SELECT b.id, b.bag_no 
+        FROM bags b
+        LEFT JOIN booklets bk ON bk.bag_id = b.id
+        WHERE b.session_id = ? 
+        GROUP BY b.id, b.bag_no
+        HAVING COUNT(bk.id) = 0
+        ORDER BY b.bag_no ASC
+        LIMIT 1
+    `;
+            const [rows] = yield conn.execute(sql, [sessionId]);
+            return rows.length > 0 ? { id: rows[0].id, bag_no: rows[0].bag_no } : null;
+        });
+    }
 }
 const bagRepo = new BagRepo();
 exports.default = bagRepo;

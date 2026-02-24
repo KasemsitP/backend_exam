@@ -20,6 +20,12 @@ export class sessionSubjectService {
             if (checkHasSubjects) {
                 throw new Error("วันที่สอบนี้มีวิชาอยู่แล้ว ไม่สามารถเพิ่มได้");
             }
+            console.log("checkHasSubjects:", payload.session_id, payload.subject_id, checkHasSubjects);
+            const checkDuplicateSubject = await sessionSubjectRepo.CheckDubplicateSubject(payload.session_id, payload.subject_id, connection);
+            console.log("checkDuplicateSubject:", checkDuplicateSubject);
+            if (checkDuplicateSubject) {
+                throw new Error("วิชานี้ถูกเพิ่มไปแล้ว ไม่สามารถเพิ่มซ้ำได้");
+            }
 
             const session = await sessionRepo.findById(payload.session_id, connection);
             if (!session) {

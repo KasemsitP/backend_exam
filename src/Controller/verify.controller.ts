@@ -8,6 +8,7 @@ export class verifyController {
             if (!payload.qrPayload) {
                 return res.status(400).send({ success: false, message: "Missing required fields" });
             }
+            console.log("Received QR Payload:", payload.qrPayload);
 
             const userSessionData = await verifyService.verifyQrPayload(payload);
             console.log(userSessionData)

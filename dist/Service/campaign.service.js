@@ -26,6 +26,7 @@ campaignService.create = (payload) => __awaiter(void 0, void 0, void 0, function
     if (checkCampActive) {
         throw new Error("มีรอบสอบที่เปิดใช้งานอยู่แล้ว ไม่สามารถสร้างรอบสอบใหม่ได้");
     }
+    console.log(payload);
     const newCampaign = yield campaign_repo_1.default.create(payload);
     return newCampaign;
 });

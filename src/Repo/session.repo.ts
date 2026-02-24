@@ -19,7 +19,7 @@ class SessionRepo {
     this.pool = DB.getInstance();
   }
 
-  
+
   async create(
     payload: CreateSessionPayload,
     dbClient: DbClient = this.pool
@@ -40,6 +40,16 @@ class SessionRepo {
     const [result] = await dbClient.execute<any>(sql, params);
     const newId = result.insertId;
     return this.findById(newId, dbClient);
+  }
+
+  async checkisDuplicateSessionCode(
+    session_code: string,
+    campaign_id: number,
+    dbClient: DbClient = this.pool
+  ): Promise<boolean> {
+    const sql = `SELECT 1 FROM sessions WHERE session_code = ? AND campaign_id = ? LIMIT 1`;
+    const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [session_code, campaign_id]);
+    return rows.length > 0;
   }
 
 
@@ -71,21 +81,44 @@ class SessionRepo {
    * (โค้ดเดิม)
    * ลบ Session เดียว (รองรับ Transaction)
    */
-  async delete(id: number, dbClient: DbClient = this.pool): Promise<boolean> {
-    const sql = "DELETE FROM sessions WHERE id = ?";
-    const [result] = await dbClient.execute<any>(sql, [id]);
+async delete(id: number): Promise<boolean> {
+  const connection = await this.pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // 1️⃣ ลบ child
+    await connection.execute(
+      "DELETE FROM session_subjects WHERE session_id = ?",
+      [id]
+    );
+
+    // 2️⃣ ลบ parent
+    const [result]: any = await connection.execute(
+      "DELETE FROM sessions WHERE id = ?",
+      [id]
+    );
+
+    await connection.commit();
+
     return result.affectedRows > 0;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release(); // สำคัญมาก
   }
+}
   async findAllLiteByCampaignId(
     campaignId: number,
     dbClient: DbClient = this.pool
   ): Promise<Array<{ id: number }>> {
-    
+
     const sql = "SELECT id FROM sessions WHERE campaign_id = ?";
     const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [
       campaignId,
     ]);
-    
+
     // (แปลงผลลัพธ์ให้ถูกต้อง)
     return rows.map(row => ({
       id: row.id,
