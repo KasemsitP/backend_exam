@@ -10,6 +10,7 @@ declare module "express-session" {
     userId?: number;
     sessionVersion?: number;
     roles?: string[];
+    campaignId?: number; // เพิ่ม campaignId ใน session data
   }
 }
 
@@ -22,16 +23,32 @@ export class authcontroller {
 
       await conn.beginTransaction();
 
-      await authservice.IsDuplicate(username);
-
+      // 1. เช็ค Role ก่อนเป็นอันดับแรก
       const roleExists = await authrepo.checkRole(role);
       if (!roleExists) throw new Error("ไม่พบ role ที่ระบุ");
-
       const isGrader = roleExists.code === "GRADER";
+
+      // 2. แปลง Username หากเป็น Grader และมี CampaignId
+      let finalUsername = username;
+      if (isGrader && campaignId) {
+        finalUsername = `${campaignId}_${username}`;
+      }
+
+      // 3. เช็คว่ามี Username (ที่แปลงแล้ว) ซ้ำหรือไม่
+      await authservice.IsDuplicate(finalUsername);
 
       const hash = await utills.hash(password);
 
-      const userData = { username, password: hash, full_name, email, role };
+      // 4. บันทึกข้อมูลด้วย finalUsername
+      const userData = {
+        username: finalUsername,
+        password: hash,
+        full_name,
+        email,
+        role
+      };
+
+      // ... (โค้ดส่วนที่เหลือเหมือนเดิม) ...
       const insertId = await authrepo.createAccount(userData);
       const accountId = insertId;
 
@@ -51,8 +68,9 @@ export class authcontroller {
 
       await conn.commit();
 
-      return res.status(201).json({ message: "ลงทะเบียนสำเร็จ", id: accountId });
+      return res.status(201).json({ message: "ลงทะเบียนสำเร็จ", id: accountId, username: finalUsername });
     } catch (error: any) {
+      console.error("Registration error:", error.message);
       await conn.rollback();
       return res
         .status(400)
@@ -61,7 +79,6 @@ export class authcontroller {
       conn.release();
     }
   };
-
 
   //   static register = async (req: Request, res: Response) => {
   //   try {  //full name not null , role
@@ -79,24 +96,28 @@ export class authcontroller {
 
 
   static login = async (req: Request, res: Response) => {
-    const { username, password } = req.body;
+    // 1. รับค่า campaignId (หรือ campaign_id แล้วแต่หน้าบ้านส่งมา) เพิ่มเติม
+    const { username, password, campaignId } = req.body;
+    console.log(req.body)
 
     try {
+      // 2. ส่ง campaignId เข้าไปเช็คด้วย (ถ้าไม่มีก็ส่ง undefined ไป ซึ่ง service จะค้นหาแบบปกติ)
       const result = await authservice.CheckUsername(username, password);
 
       if (Number(result.active) !== 1) {
         throw new Error("บัญชีถูกระงับการใช้งาน");
       }
+
       const userId = Number(result.id);
       const conn = DB.getInstance();
 
-      //  ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
-await conn.execute(
+      // ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
+      await conn.execute(
         "DELETE FROM auth_sessions WHERE account_id = ?",
         [userId]
       );
 
-      // 2. regenerate session ใหม่
+      // regenerate session ใหม่
       await new Promise<void>((resolve, reject) => {
         req.session.regenerate((err) => (err ? reject(err) : resolve()));
       });
@@ -106,7 +127,13 @@ await conn.execute(
       req.session.sessionVersion = Number(result.sessionVersion);
       req.session.roles = result.roles;
 
-      // 4. save session แบบให้ชัวร์ว่าเซฟเสร็จ
+      // แนะนำ: เก็บ campaignId ไว้ใน session ด้วย เพื่อให้ระบบจำได้ว่าล็อคอินรอบไหน
+      // (ดึงมาจาก result.campaignId ที่เราเพิ่มไว้ใน authservice)
+      if (result.campaignId) {
+        req.session.campaignId = Number(result.campaignId);
+      }
+
+      // save session แบบให้ชัวร์ว่าเซฟเสร็จ
       await new Promise<void>((resolve, reject) => {
         req.session.save((err) => {
           if (err) return reject(err);
@@ -114,13 +141,11 @@ await conn.execute(
         });
       });
 
-      // 5. ผูก sid ใหม่กับ account_id (ต้องทำหลังเซฟเสร็จชัวร์ๆ)
-      // เพิ่ม try/catch ป้องกันจังหวะที่เซฟเสร็จแต่มองไม่เห็นใน DB ทันที
+      // ผูก sid ใหม่กับ account_id
       try {
-         await authrepo.updateAuthsession(userId, req.sessionID);
-      } catch(dbErr) {
-         console.error("Failed to map account_id to session:", dbErr);
-         // ไม่ต้อง throw error ปล่อยให้ login ผ่านไปก่อน
+        await authrepo.updateAuthsession(userId, req.sessionID);
+      } catch (dbErr) {
+        console.error("Failed to map account_id to session:", dbErr);
       }
 
       return res.status(200).json({
@@ -129,9 +154,11 @@ await conn.execute(
       });
 
     } catch (error: any) {
+      console.log("Login error:", error.message);
       return res.status(400).json({ message: error.message });
     }
   };
+
   static getMe = async (req: Request, res: Response) => {
     try {
       const userId = req.session.userId;

@@ -276,30 +276,30 @@ function findBookletQuestionStatsForBag(conn, bagId, subjectId // ยังไ�
         SEPARATOR ', '
       ) AS grader2_names
 
-    FROM booklets b
-    JOIN bags bg
-      ON b.bag_id = bg.id
-    JOIN user_sessions us
-      ON b.user_session_id = us.id
-    JOIN user_campaigns uc
-      ON us.user_campaign_id = uc.id
-    JOIN users u
-      ON uc.user_id = u.id
+FROM bags bg
+LEFT JOIN booklets b
+  ON b.bag_id = bg.id
 
-    JOIN grading_slots s
-      ON s.booklet_id = b.id
-    JOIN grading_scores gs
-      ON gs.slot_id = s.id
+LEFT JOIN user_sessions us
+  ON b.user_session_id = us.id
+LEFT JOIN user_campaigns uc
+  ON us.user_campaign_id = uc.id
+LEFT JOIN users u
+  ON uc.user_id = u.id
 
-    LEFT JOIN subject_questions sq
-      ON sq.subject_id = s.subject_id
-     AND sq.question_no = s.question_no
+LEFT JOIN grading_slots s
+  ON s.booklet_id = b.id
+LEFT JOIN grading_scores gs
+  ON gs.slot_id = s.id
 
-    LEFT JOIN graders g
-      ON g.id = gs.entered_by
-    LEFT JOIN accounts a
-      ON a.id = g.account_id
+LEFT JOIN subject_questions sq
+  ON sq.subject_id = s.subject_id
+ AND sq.question_no = s.question_no
 
+LEFT JOIN graders g
+  ON g.id = gs.entered_by
+LEFT JOIN accounts a
+  ON a.id = g.account_id
     WHERE bg.id = ?
 
     GROUP BY

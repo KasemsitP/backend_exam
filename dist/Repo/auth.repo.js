@@ -96,6 +96,13 @@ LIMIT 1;
             return rows[0] || null;
         });
     }
+    getActiveCampaigns() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `SELECT id FROM exam_campaigns WHERE is_active = 1`;
+            const [rows] = yield this.pool.execute(sql);
+            return rows;
+        });
+    }
     findAllAccountsWithRoles() {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `

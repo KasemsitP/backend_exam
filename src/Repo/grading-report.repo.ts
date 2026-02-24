@@ -380,6 +380,80 @@ export async function findBookletQuestionStatsForBag(
         SEPARATOR ', '
       ) AS grader2_names
 
+FROM bags bg
+LEFT JOIN booklets b
+  ON b.bag_id = bg.id
+
+LEFT JOIN user_sessions us
+  ON b.user_session_id = us.id
+LEFT JOIN user_campaigns uc
+  ON us.user_campaign_id = uc.id
+LEFT JOIN users u
+  ON uc.user_id = u.id
+
+LEFT JOIN grading_slots s
+  ON s.booklet_id = b.id
+LEFT JOIN grading_scores gs
+  ON gs.slot_id = s.id
+
+LEFT JOIN subject_questions sq
+  ON sq.subject_id = s.subject_id
+ AND sq.question_no = s.question_no
+
+LEFT JOIN graders g
+  ON g.id = gs.entered_by
+LEFT JOIN accounts a
+  ON a.id = g.account_id
+    WHERE bg.id = ?
+
+    GROUP BY
+      b.id,
+      u.user_code,
+      s.question_no,
+      sq.label,
+      sq.note
+
+    ORDER BY
+      b.id,
+      s.question_no;
+  `;
+
+  const [rows] = await conn.query<RawBookletQuestionStatsRow[]>(sql, [bagId]);
+  return rows;
+}
+
+/*  const sql = `
+    SELECT
+      b.id        AS booklet_id,
+      u.user_code AS exam_code,
+      s.question_no,
+      sq.label,
+      sq.note AS category,
+      b.random_num,
+
+      -- ค่าเฉลี่ยคะแนนของผู้ตรวจลำดับ 1 "เฉพาะเล่มนี้ + ข้อนี้"
+      AVG(CASE WHEN s.grader_order = 1 THEN gs.score END) AS grader1_score,
+
+      -- ค่าเฉลี่ยคะแนนของผู้ตรวจลำดับ 2 "เฉพาะเล่มนี้ + ข้อนี้"
+      AVG(CASE WHEN s.grader_order = 2 THEN gs.score END) AS grader2_score,
+
+      -- ค่าเฉลี่ยรวมทุกผู้ตรวจของ "เล่มนี้ + ข้อนี้" (ใช้เป็น finalScore)
+      AVG(gs.score) AS final_score,
+
+      -- รายชื่อผู้ตรวจลำดับ 1 ของเล่มนี้ + ข้อนี้
+      GROUP_CONCAT(
+        DISTINCT CASE WHEN s.grader_order = 1 THEN a.full_name END
+        ORDER BY a.full_name
+        SEPARATOR ', '
+      ) AS grader1_names,
+
+      -- รายชื่อผู้ตรวจลำดับ 2 ของเล่มนี้ + ข้อนี้
+      GROUP_CONCAT(
+        DISTINCT CASE WHEN s.grader_order = 2 THEN a.full_name END
+        ORDER BY a.full_name
+        SEPARATOR ', '
+      ) AS grader2_names
+
     FROM booklets b
     JOIN bags bg
       ON b.bag_id = bg.id
@@ -417,10 +491,7 @@ export async function findBookletQuestionStatsForBag(
       b.id,
       s.question_no;
   `;
-
-  const [rows] = await conn.query<RawBookletQuestionStatsRow[]>(sql, [bagId]);
-  return rows;
-}
+*/ 
 
 interface is_unlockType extends RowDataPacket {
   campaign_id: number

@@ -26,25 +26,44 @@ authservice.IsDuplicate = (username) => __awaiter(void 0, void 0, void 0, functi
         throw new Error("มีชื่อผู้ใช้งานซ้ำ");
     }
 });
+// เพิ่ม parameter campaignId (optional สำหรับกรณีแอดมินล็อกอินปกติ)
 authservice.CheckUsername = (username, password) => __awaiter(void 0, void 0, void 0, function* () {
     var _b;
-    const row = yield auth_repo_1.default.findByUsername(username);
+    // จังหวะที่ 1: ลองค้นหาด้วย username ตรงๆ ก่อน (สำหรับ Admin หรือ Staff)
+    let row = yield auth_repo_1.default.findByUsername(username);
+    let currentCampaignId = null;
+    // จังหวะที่ 2: ถ้าไม่เจอ ลองเช็คว่าเป็น Grader หรือไม่ โดยหาแคมเปญที่ Active อยู่
+    if (!row) {
+        const activeCampaigns = yield auth_repo_1.default.getActiveCampaigns();
+        if (activeCampaigns.length === 1) {
+            // ถ้ามีเปิดใช้งานแค่ 1 แคมเปญ เอา ID มาต่อหน้าชื่อ
+            currentCampaignId = activeCampaigns[0].id;
+            const searchUsername = `${currentCampaignId}_${username}`;
+            // ค้นหาอีกรอบด้วยชื่อที่มี _ นำหน้า (เช่น 1_grader)
+            row = yield auth_repo_1.default.findByUsername(searchUsername);
+        }
+        else if (activeCampaigns.length > 1) {
+            // ดัก Error ไว้ เผื่ออนาคตมีการเปิด 2 แคมเปญพร้อมกัน ระบบจะได้ไม่พัง
+            throw new Error("ระบบมีรอบการสอบที่เปิดใช้งานมากกว่า 1 รอบ ไม่สามารถระบุผู้ใช้งานได้");
+        }
+    }
+    // ถ้ายังไม่เจออีก แปลว่าพิมพ์ชื่อผิดจริงๆ
     if (!row)
-        throw new Error("ไม่พบผู้ใช้");
+        throw new Error("ไม่พบผู้ใช้ หรือชื่อผู้ใช้งานไม่ถูกต้อง");
     if (Number(row.active) !== 1)
         throw new Error("บัญชีถูกระงับการใช้งาน");
     const match = yield utills_1.utills.bcryptCompare(password, row.password_hash);
     if (!match)
         throw new Error("รหัสผ่านไม่ถูกต้อง");
-    //const { password_hash, ...secureUserData } = row;
     const roleCode = (row.role_code || "staff").toLowerCase();
     return {
         id: row.id,
         name: row.full_name,
-        username: row.username,
+        username: row.username, // จะคืนค่าเป็น '1_grader' หรือ 'admin' ตามใน DB
         roles: [roleCode],
         active: Number(row.active),
         sessionVersion: Number((_b = row.session_version) !== null && _b !== void 0 ? _b : 1),
+        campaignId: currentCampaignId || row.campaign_id // คืนค่าแคมเปญกลับไปด้วย
     };
 });
 authservice.CheckPasswordByID = (account_id, password) => __awaiter(void 0, void 0, void 0, function* () {

@@ -29,13 +29,28 @@ authcontroller.register = (req, res) => __awaiter(void 0, void 0, void 0, functi
     try {
         const { username, password, full_name, email, role, campaignId } = req.body;
         yield conn.beginTransaction();
-        yield auth_service_1.authservice.IsDuplicate(username);
+        // 1. เช็ค Role ก่อนเป็นอันดับแรก
         const roleExists = yield auth_repo_1.default.checkRole(role);
         if (!roleExists)
             throw new Error("ไม่พบ role ที่ระบุ");
         const isGrader = roleExists.code === "GRADER";
+        // 2. แปลง Username หากเป็น Grader และมี CampaignId
+        let finalUsername = username;
+        if (isGrader && campaignId) {
+            finalUsername = `${campaignId}_${username}`;
+        }
+        // 3. เช็คว่ามี Username (ที่แปลงแล้ว) ซ้ำหรือไม่
+        yield auth_service_1.authservice.IsDuplicate(finalUsername);
         const hash = yield utills_1.utills.hash(password);
-        const userData = { username, password: hash, full_name, email, role };
+        // 4. บันทึกข้อมูลด้วย finalUsername
+        const userData = {
+            username: finalUsername,
+            password: hash,
+            full_name,
+            email,
+            role
+        };
+        // ... (โค้ดส่วนที่เหลือเหมือนเดิม) ...
         const insertId = yield auth_repo_1.default.createAccount(userData);
         const accountId = insertId;
         if (!accountId)
@@ -49,9 +64,10 @@ authcontroller.register = (req, res) => __awaiter(void 0, void 0, void 0, functi
             }, conn);
         }
         yield conn.commit();
-        return res.status(201).json({ message: "ลงทะเบียนสำเร็จ", id: accountId });
+        return res.status(201).json({ message: "ลงทะเบียนสำเร็จ", id: accountId, username: finalUsername });
     }
     catch (error) {
+        console.error("Registration error:", error.message);
         yield conn.rollback();
         return res
             .status(400)
@@ -74,17 +90,20 @@ authcontroller.register = (req, res) => __awaiter(void 0, void 0, void 0, functi
 //   }
 // }
 authcontroller.login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { username, password } = req.body;
+    // 1. รับค่า campaignId (หรือ campaign_id แล้วแต่หน้าบ้านส่งมา) เพิ่มเติม
+    const { username, password, campaignId } = req.body;
+    console.log(req.body);
     try {
+        // 2. ส่ง campaignId เข้าไปเช็คด้วย (ถ้าไม่มีก็ส่ง undefined ไป ซึ่ง service จะค้นหาแบบปกติ)
         const result = yield auth_service_1.authservice.CheckUsername(username, password);
         if (Number(result.active) !== 1) {
             throw new Error("บัญชีถูกระงับการใช้งาน");
         }
         const userId = Number(result.id);
         const conn = DB_1.DB.getInstance();
-        //  ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
+        // ลบ session เก่าทั้งหมดของ user (บังคับเครื่องเดียว)
         yield conn.execute("DELETE FROM auth_sessions WHERE account_id = ?", [userId]);
-        // 2. regenerate session ใหม่
+        // regenerate session ใหม่
         yield new Promise((resolve, reject) => {
             req.session.regenerate((err) => (err ? reject(err) : resolve()));
         });
@@ -92,7 +111,12 @@ authcontroller.login = (req, res) => __awaiter(void 0, void 0, void 0, function*
         req.session.userId = userId;
         req.session.sessionVersion = Number(result.sessionVersion);
         req.session.roles = result.roles;
-        // 4. save session แบบให้ชัวร์ว่าเซฟเสร็จ
+        // แนะนำ: เก็บ campaignId ไว้ใน session ด้วย เพื่อให้ระบบจำได้ว่าล็อคอินรอบไหน
+        // (ดึงมาจาก result.campaignId ที่เราเพิ่มไว้ใน authservice)
+        if (result.campaignId) {
+            req.session.campaignId = Number(result.campaignId);
+        }
+        // save session แบบให้ชัวร์ว่าเซฟเสร็จ
         yield new Promise((resolve, reject) => {
             req.session.save((err) => {
                 if (err)
@@ -100,14 +124,12 @@ authcontroller.login = (req, res) => __awaiter(void 0, void 0, void 0, function*
                 resolve();
             });
         });
-        // 5. ผูก sid ใหม่กับ account_id (ต้องทำหลังเซฟเสร็จชัวร์ๆ)
-        // เพิ่ม try/catch ป้องกันจังหวะที่เซฟเสร็จแต่มองไม่เห็นใน DB ทันที
+        // ผูก sid ใหม่กับ account_id
         try {
             yield auth_repo_1.default.updateAuthsession(userId, req.sessionID);
         }
         catch (dbErr) {
             console.error("Failed to map account_id to session:", dbErr);
-            // ไม่ต้อง throw error ปล่อยให้ login ผ่านไปก่อน
         }
         return res.status(200).json({
             message: "เข้าสู่ระบบสำเร็จ",
@@ -115,6 +137,7 @@ authcontroller.login = (req, res) => __awaiter(void 0, void 0, void 0, function*
         });
     }
     catch (error) {
+        console.log("Login error:", error.message);
         return res.status(400).json({ message: error.message });
     }
 });

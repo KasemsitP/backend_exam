@@ -100,6 +100,11 @@ LIMIT 1;
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [ID]);
         return rows[0] || null;
     }
+    async getActiveCampaigns(): Promise<RowDataPacket[]> {
+        const sql = `SELECT id FROM exam_campaigns WHERE is_active = 1`;
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql);
+        return rows;
+    }
     async findAllAccountsWithRoles(): Promise<RowDataPacket[]> {
         const sql = `
 SELECT 
