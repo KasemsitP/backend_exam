@@ -1,25 +1,11 @@
-
-
+// Repo/dashboard.repo.ts
 import { DB } from "../model/DB";
 import { Pool, PoolConnection } from "mysql2/promise";
-import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { RowDataPacket } from "mysql2";
 
 interface scoreAverage extends RowDataPacket {
-  question_no: number; avg_score: number
-}
-interface ScoreDistributionSummary extends RowDataPacket {
-  total_users: number;
-  no_score: number;
-}
-
-interface ScoreBucketRow extends RowDataPacket {
-  bucket_index: number; // 0..19
-  count: number;
-}
-
-
-interface ScoreTotalRow extends RowDataPacket {
-  total_score: number | null;
+  question_no: number;
+  avg_score: number;
 }
 
 interface SubjectQuestionRow extends RowDataPacket {
@@ -27,8 +13,8 @@ interface SubjectQuestionRow extends RowDataPacket {
   subject_id: number;
   subject_code: string;
   subject_name: string;
-  subject_question_id: number;
-  question_no: number;
+  subject_question_id: number | null;
+  question_no: number | null;
   question_label: string | null;
   max_score: number | null;
   exam_date: Date;
@@ -37,10 +23,12 @@ interface SubjectQuestionRow extends RowDataPacket {
 }
 
 class DashboardRepo {
-  private pool: Pool
+  private pool: Pool;
+
   constructor() {
     this.pool = DB.getInstance();
   }
+
   async getCampaignBasicCounts(campaign_id: number) {
     const sql = `
       SELECT
@@ -59,112 +47,112 @@ class DashboardRepo {
     return rows[0] ?? null;
   }
 
-
   async getStatusSession(campaign_id: number) {
     const sql = `WITH uc AS (
-  SELECT campaign_id, COUNT(*) AS users_in_campaign
-  FROM user_campaigns
-  GROUP BY campaign_id
-),
-us_count AS (
-  SELECT campaign_id, session_id, COUNT(*) AS users_in_session
-  FROM user_sessions
-  GROUP BY campaign_id, session_id
-)
-SELECT
-  s.campaign_id,
-  s.id           AS session_id,
-  s.session_code,
-  subj.name AS subject_name,
-  COALESCE(uc.users_in_campaign, 0)  AS users_in_campaign,
-  COALESCE(us_count.users_in_session, 0) AS users_in_session,
-  CASE 
-    WHEN COALESCE(us_count.users_in_session, 0) = 0 THEN 'NOT_IMPORTED'
-    ELSE 'IMPORTED'
-  END AS import_status
-FROM sessions s
-LEFT JOIN uc 
-  ON uc.campaign_id = s.campaign_id
-LEFT JOIN us_count 
-  ON us_count.campaign_id = s.campaign_id
- AND us_count.session_id  = s.id
-LEFT JOIN session_subjects sj
-ON sj.session_id = s.id
-LEFT JOIN subjects subj
-ON subj.id = sj.subject_id
-WHERE s.campaign_id = ?  -- ใส่ campaign ที่กำลังดู
-ORDER BY s.exam_date, s.session_code;`
-
-    const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
-    return row;
-  }
-  async getIsEncrypted(campaign_id: number) {
-    const sql = `SELECT
-  s.campaign_id,
-  s.id AS session_id,
-  s.session_code,
-
-  COUNT(us.id) AS total_users_in_session,
-  SUM(CASE WHEN us.qr_payload IS NOT NULL THEN 1 ELSE 0 END) AS encrypted_users,
-  SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) AS pending_users,
-
-  COUNT(DISTINCT ss.subject_id) AS subject_count,
-
-  CASE
-    WHEN COUNT(DISTINCT ss.subject_id) = 0 THEN 'NO_SESSION_SUBJECT'
-    WHEN COUNT(us.id) = 0 THEN 'NO_USERS'
-    WHEN SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) = 0 THEN 'ENCRYPTED_ALL'
-    ELSE 'PARTIAL'
-  END AS encryption_status
-
-FROM sessions s
-LEFT JOIN session_subjects ss
-  ON ss.session_id = s.id
-LEFT JOIN user_sessions us
-  ON us.session_id = s.id
- AND us.campaign_id = s.campaign_id
-
-WHERE s.campaign_id = ?
-
-GROUP BY
-  s.campaign_id, s.id, s.session_code
-
-ORDER BY
-  s.exam_date, s.session_code;`
-
-    const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
-    return row;
-  }
-  async getBagCountsPerSession(campaign_id: number) {
-    const sql = `
+      SELECT campaign_id, COUNT(*) AS users_in_campaign
+      FROM user_campaigns
+      GROUP BY campaign_id
+    ),
+    us_count AS (
+      SELECT campaign_id, session_id, COUNT(*) AS users_in_session
+      FROM user_sessions
+      GROUP BY campaign_id, session_id
+    )
     SELECT
       s.campaign_id,
-      s.id AS session_id,
+      s.id           AS session_id,
       s.session_code,
-      GROUP_CONCAT(DISTINCT subj.name SEPARATOR ', ') AS subject_name,
-      COUNT(DISTINCT b.id) AS total_bags,
-      COALESCE(SUM(DISTINCT b.count_items), 0) AS total_capacity
+      subj.name AS subject_name,
+      COALESCE(uc.users_in_campaign, 0)  AS users_in_campaign,
+      COALESCE(us_count.users_in_session, 0) AS users_in_session,
+      CASE 
+        WHEN COALESCE(us_count.users_in_session, 0) = 0 THEN 'NOT_IMPORTED'
+        ELSE 'IMPORTED'
+      END AS import_status
     FROM sessions s
+    LEFT JOIN uc 
+      ON uc.campaign_id = s.campaign_id
+    LEFT JOIN us_count 
+      ON us_count.campaign_id = s.campaign_id
+    AND us_count.session_id  = s.id
     LEFT JOIN session_subjects sj
       ON sj.session_id = s.id
     LEFT JOIN subjects subj
       ON subj.id = sj.subject_id
-    LEFT JOIN bags b
-      ON b.session_id = s.id
     WHERE s.campaign_id = ?
-    GROUP BY s.campaign_id, s.id, s.session_code
-    ORDER BY s.exam_date, s.session_code;
+    ORDER BY s.exam_date, s.session_code;`;
+
+    const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return row;
+  }
+
+  async getIsEncrypted(campaign_id: number) {
+    const sql = `SELECT
+      s.campaign_id,
+      s.id AS session_id,
+      s.session_code,
+
+      COUNT(us.id) AS total_users_in_session,
+      SUM(CASE WHEN us.qr_payload IS NOT NULL THEN 1 ELSE 0 END) AS encrypted_users,
+      SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) AS pending_users,
+
+      COUNT(DISTINCT ss.subject_id) AS subject_count,
+
+      CASE
+        WHEN COUNT(DISTINCT ss.subject_id) = 0 THEN 'NO_SESSION_SUBJECT'
+        WHEN COUNT(us.id) = 0 THEN 'NO_USERS'
+        WHEN SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) = 0 THEN 'ENCRYPTED_ALL'
+        ELSE 'PARTIAL'
+      END AS encryption_status
+
+    FROM sessions s
+    LEFT JOIN session_subjects ss
+      ON ss.session_id = s.id
+    LEFT JOIN user_sessions us
+      ON us.session_id = s.id
+    AND us.campaign_id = s.campaign_id
+
+    WHERE s.campaign_id = ?
+
+    GROUP BY
+      s.campaign_id, s.id, s.session_code
+
+    ORDER BY
+      s.exam_date, s.session_code;`;
+
+    const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return row;
+  }
+
+  async getBagCountsPerSession(campaign_id: number) {
+    const sql = `
+      SELECT
+        s.campaign_id,
+        s.id AS session_id,
+        s.session_code,
+        GROUP_CONCAT(DISTINCT subj.name SEPARATOR ', ') AS subject_name,
+        COUNT(DISTINCT b.id) AS total_bags,
+        COALESCE(SUM(DISTINCT b.count_items), 0) AS total_capacity
+      FROM sessions s
+      LEFT JOIN session_subjects sj
+        ON sj.session_id = s.id
+      LEFT JOIN subjects subj
+        ON subj.id = sj.subject_id
+      LEFT JOIN bags b
+        ON b.session_id = s.id
+      WHERE s.campaign_id = ?
+      GROUP BY s.campaign_id, s.id, s.session_code
+      ORDER BY s.exam_date, s.session_code;
     `;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
     return rows;
   }
 
-  /**  จำนวนผู้ตรวจในแต่ละ campaign */
   async getGradersCount(campaign_id: number) {
     const sql = `
       SELECT
         campaign_id,
-        COUNT(*)          AS total_graders,
+        COUNT(*) AS total_graders,
         COUNT(DISTINCT account_id) AS graders_with_login
       FROM graders
       WHERE campaign_id = ?
@@ -174,7 +162,6 @@ ORDER BY
     return rows[0] ?? null;
   }
 
-  /**  จำนวนคีย์ใน campaign (รวม active / all) */
   async getKeyCounts(campaign_id: number) {
     const sql = `
       SELECT
@@ -189,299 +176,151 @@ ORDER BY
     return rows[0] ?? null;
   }
 
-  async getAverageScorePerQuestion(
-    campaignId: number
-  ): Promise<{ question_no: number; avg_score: number }[]> {
-    const pool = DB.getInstance();
-
+  async getAverageScorePerQuestion(campaignId: number): Promise<{ question_no: number; avg_score: number }[]> {
     const sql = `
-    SELECT
-      s.question_no,
-      AVG(gs.score) AS avg_score
-    FROM grading_scores gs
-    JOIN grading_slots s
-      ON gs.slot_id = s.id
-    JOIN booklets b
-      ON s.booklet_id = b.id
-    JOIN bags bg
-      ON b.bag_id = bg.id
-    JOIN sessions se
-      ON bg.session_id = se.id
-    WHERE se.campaign_id = ?
-    GROUP BY s.question_no
-    ORDER BY s.question_no;
-  `;
-
-    const [rows] = await pool.query<scoreAverage[]>(sql, [campaignId]);
+      SELECT
+        s.question_no,
+        AVG(gs.score) AS avg_score
+      FROM grading_scores gs
+      JOIN grading_slots s
+        ON gs.slot_id = s.id
+      JOIN booklets b
+        ON s.booklet_id = b.id
+      JOIN sessions se
+        ON b.session_id = se.id
+      WHERE se.campaign_id = ?
+      GROUP BY s.question_no
+      ORDER BY s.question_no;
+    `;
+    const [rows] = await this.pool.query<scoreAverage[]>(sql, [campaignId]);
     return rows;
   }
 
-  /**  คะแนนเฉลี่ยในแต่ละหัวข้อ (subject_questions) จากผู้ตรวจ 2 คน (เฉลี่ย 2 แล้วค่อย avg อีกที) */
-
-  // async getAverageScorePerQuestion(campaign_id: number) {
-  //     const sql = `
-  //   SELECT
-  //     s.campaign_id,
-  //     sub.id          AS subject_id,
-  //     sub.code        AS subject_code,
-  //     sub.name        AS subject_name,
-  //     sq.id           AS subject_question_id,
-  //     sq.question_no,
-  //     sq.label        AS question_label,
-  //     AVG( (gs1.score + gs2.score) / 2 ) AS avg_score
-  //   FROM grading_slots sl1
-  //   JOIN grading_slots sl2
-  //     ON sl1.booklet_id  = sl2.booklet_id
-  //    AND sl1.subject_id  = sl2.subject_id
-  //    AND sl1.question_no = sl2.question_no
-  //    AND sl1.grader_order = 1
-  //    AND sl2.grader_order = 2
-  //   JOIN grading_scores gs1
-  //     ON gs1.slot_id = sl1.id
-  //   JOIN grading_scores gs2
-  //     ON gs2.slot_id = sl2.id
-  //   JOIN booklets b
-  //     ON b.id = sl1.booklet_id
-  //   JOIN sessions s
-  //     ON s.id = b.session_id
-  //   JOIN subjects sub
-  //     ON sub.id = sl1.subject_id
-  //   JOIN subject_questions sq
-  //     ON sq.subject_id = sub.id
-  //    AND sq.question_no = sl1.question_no
-  //   WHERE s.campaign_id = ?
-  //   GROUP BY
-  //     s.campaign_id,
-  //     sub.id,
-  //     sub.code,
-  //     sub.name,
-  //     sq.id,
-  //     sq.question_no,
-  //     sq.label
-  //   ORDER BY sub.code, sq.question_no;
-  // `;
-  //     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-  //     return rows;
-  // }
-
-  /**  ช่วงคะแนน (เอาไว้ทำ chart) จาก user_campaigns.final_score */
-  //  async getScoreDistribution(campaignId: number) {
-  //   const pool = this.pool;
-
-  //   // CTE พื้นฐาน คำนวณ total_score ต่อ user ใน campaign นี้
-  //   const userTotalCTE = `
-  //     WITH user_total AS (
-  //       SELECT
-  //         uc.id AS user_campaign_id,
-  //         uc.user_id,
-  //         SUM(gs.score) AS total_score
-  //       FROM grading_scores gs
-  //       JOIN grading_slots s
-  //         ON gs.slot_id = s.id
-  //       JOIN booklets b
-  //         ON s.booklet_id = b.id
-  //       JOIN bags bg
-  //         ON b.bag_id = bg.id
-  //       JOIN sessions se
-  //         ON bg.session_id = se.id
-  //       JOIN user_sessions us
-  //         ON b.user_session_id = us.id
-  //       JOIN user_campaigns uc
-  //         ON us.user_campaign_id = uc.id
-  //       WHERE se.campaign_id = ?
-  //       GROUP BY uc.id, uc.user_id
-  //     )
-  //   `;
-
-  //   // 1) summary: นับจำนวนคนทั้งหมด + คนที่ไม่มีคะแนน
-  //   const summarySql = `
-  //     ${userTotalCTE}
-  //     SELECT
-  //       COUNT(*) AS total_users,
-  //       SUM(CASE WHEN total_score IS NULL THEN 1 ELSE 0 END) AS no_score
-  //     FROM user_total;
-  //   `;
-
-  //   const [summaryRows] = await pool.query<ScoreDistributionSummary[]>(summarySql, [campaignId]);
-  //   const summary = summaryRows[0] ?? { total_users: 0, no_score: 0 };
-
-  //   // 2) buckets: แบ่งเป็นช่วง 0–4, 5–9, ..., 95–100 (step = 5)
-  //   const bucketsSql = `
-  //     ${userTotalCTE}
-  //     SELECT
-  //       CASE
-  //         WHEN total_score IS NULL THEN NULL
-  //         WHEN total_score < 0 THEN 0
-  //         WHEN total_score >= 100 THEN 19       -- 0..19 = 20 bucket
-  //         ELSE FLOOR(total_score / 5)
-  //       END AS bucket_index,
-  //       COUNT(*) AS count
-  //     FROM user_total
-  //     WHERE total_score IS NOT NULL
-  //     GROUP BY bucket_index
-  //     ORDER BY bucket_index;
-  //   `;
-
-  //   const [bucketRows] = await pool.query<ScoreBucketRow[]>(bucketsSql, [campaignId]);
-
-  //   // แปลง bucket_index → label "0-4", "5-9", ..., "95-100"
-  //   const buckets = bucketRows.map((r) => {
-  //     const idx = r.bucket_index; // 0..19
-  //     const min = idx * 5;
-  //     const max = idx === 19 ? 100 : idx * 5 + 4;
-  //     return {
-  //       label: `${min}-${max}`,
-  //       count: r.count,
-  //     };
-  //   });
-
-  //   return {
-  //     total_users: summary.total_users ?? 0,
-  //     no_score: summary.no_score ?? 0,
-  //     buckets,
-  //   };
-  // }
-  // dashboard.repo.ts
-
-
-  async getScoreDistribution(campaign_id: number) {
-    // แก้ไข SQL: คำนวณ Avg รายข้อก่อน แล้วค่อย Sum ทีหลัง
-    const sql = `
-    WITH question_scores AS (
-      SELECT
-        uc.user_id,
-        gs1.subject_id,
-        gs1.question_no,
-        -- สูตรเฉลี่ย: (คะแนนคน1 + คะแนนคน2) / 2
-        -- ถ้าต้องการ: ต้องมีครบ 2 คนถึงจะคิดคะแนน (INNER JOIN grading_scores ทั้งคู่)
-        (sc1.score + sc2.score) / 2 AS question_avg
-      FROM booklets b
-      JOIN bags bg ON b.bag_id = bg.id
-      JOIN sessions se ON bg.session_id = se.id
-      JOIN user_sessions us ON b.user_session_id = us.id
-      JOIN user_campaigns uc ON us.user_campaign_id = uc.id
-      
-      -- Join Grader 1
-      JOIN grading_slots gs1 
-        ON gs1.booklet_id = b.id 
-        AND gs1.grader_order = 1
-      JOIN grading_scores sc1 
-        ON sc1.slot_id = gs1.id
-
-      -- Join Grader 2
-      JOIN grading_slots gs2 
-        ON gs2.booklet_id = b.id 
-        AND gs2.grader_order = 2
-        AND gs2.subject_id = gs1.subject_id
-        AND gs2.question_no = gs1.question_no
-      JOIN grading_scores sc2 
-        ON sc2.slot_id = gs2.id
-
-      WHERE se.campaign_id = ?
-    ),
-    user_total AS (
-      SELECT
-        user_id,
-        SUM(question_avg) AS total_score
-      FROM question_scores
-      GROUP BY user_id
-    )
-    SELECT total_score
-    FROM user_total;
-  `;
-
-    const [rows] = await this.pool.execute<ScoreTotalRow[]>(sql, [campaign_id]);
-
-    // ---------- ส่วน Config Bucket (Logic เดิม ใช้ต่อได้เลย) ----------
+  /**
+   * ✅ NEW: score distribution bucketed in SQL (ไม่ดึง total_score ทั้งหมดขึ้น Node)
+   * หมายเหตุ: ใช้ logic เดิมของคุณ: "คิด avg รายข้อ (2 คน) ก่อน แล้ว sum"
+   */
+  async getScoreDistributionBucketed(campaign_id: number) {
     const bucketSize = 5;
     const minScore = 1;
     const maxScore = 150;
 
-    let totalUsers = 0;
-    let noScore = 0;
+    // จำนวน bucket = 1..150 step 5 => 30 bucket (index 0..29)
+    const maxBucketIndex = Math.floor((maxScore - minScore) / bucketSize);
 
+    const sql = `
+WITH slot_scores AS (
+  SELECT
+    b.user_session_id,
+    gs.subject_id,
+    gs.question_no,
+    SUM(gsc.score) / 2 AS question_avg,
+    COUNT(gsc.score) AS score_count
+  FROM booklets b
+  JOIN sessions se ON se.id = b.session_id
+  JOIN grading_slots gs ON gs.booklet_id = b.id AND gs.grader_order IN (1, 2)
+  JOIN grading_scores gsc ON gsc.slot_id = gs.id
+  WHERE se.campaign_id = ?
+  GROUP BY b.user_session_id, gs.subject_id, gs.question_no
+  HAVING score_count = 2
+),
+user_total AS (
+  SELECT
+    us.user_campaign_id,
+    SUM(ss.question_avg) AS total_score
+  FROM slot_scores ss
+  JOIN user_sessions us ON us.id = ss.user_session_id
+  GROUP BY us.user_campaign_id
+),
+summary AS (
+  SELECT
+    COUNT(*) AS total_users,
+    SUM(CASE WHEN total_score IS NULL THEN 1 ELSE 0 END) AS no_score
+  FROM user_total
+),
+bucketed AS (
+  SELECT
+    LEAST(
+      ${maxBucketIndex},
+      GREATEST(
+        0,
+        FLOOR((LEAST(${maxScore}, GREATEST(${minScore}, total_score)) - ${minScore}) / ${bucketSize})
+      )
+    ) AS bucket_index,
+    COUNT(*) AS count
+  FROM user_total
+  WHERE total_score IS NOT NULL
+  GROUP BY bucket_index
+)
+SELECT
+  s.total_users,
+  s.no_score,
+  b.bucket_index,
+  b.count
+FROM summary s
+LEFT JOIN bucketed b ON 1=1
+ORDER BY b.bucket_index;
+    `;
+
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+
+    const total_users = Number(rows[0]?.total_users ?? 0);
+    const no_score = Number(rows[0]?.no_score ?? 0);
+
+    // map bucket_index -> count
     const bucketMap = new Map<number, number>();
-
-    for (const row of rows) {
-      const score = row.total_score;
-
-      if (score == null) {
-        noScore++;
-        continue;
-      }
-
-      totalUsers++;
-
-      let s = Number(score);
-
-      // clamp
-      if (s < minScore) s = minScore;
-      if (s > maxScore) s = maxScore;
-
-      const bucketIndex = Math.floor((s - minScore) / bucketSize);
-      bucketMap.set(bucketIndex, (bucketMap.get(bucketIndex) ?? 0) + 1);
+    for (const r of rows) {
+      if (r.bucket_index == null) continue;
+      bucketMap.set(Number(r.bucket_index), Number(r.count ?? 0));
     }
 
     const buckets: { label: string; count: number }[] = [];
-    const maxBucketIndex = Math.floor((maxScore - minScore) / bucketSize);
-
     for (let idx = 0; idx <= maxBucketIndex; idx++) {
       const from = minScore + idx * bucketSize;
       let to = from + bucketSize - 1;
       if (to > maxScore) to = maxScore;
-
-      const label = `${from}-${to}`;
-      const count = bucketMap.get(idx) ?? 0;
-
-      buckets.push({ label, count });
+      buckets.push({ label: `${from}-${to}`, count: bucketMap.get(idx) ?? 0 });
     }
 
-    return {
-      total_users: totalUsers,
-      no_score: noScore,
-      buckets,
-    };
+    return { total_users, no_score, buckets };
   }
-  async getSubjectQuestionsByCampaign(
-    campaign_id: number
-  ): Promise<SubjectQuestionRow[]> {
+
+  async getSubjectQuestionsByCampaign(campaign_id: number): Promise<SubjectQuestionRow[]> {
     const sql = `
-SELECT
-  se.campaign_id,
-  se.id           AS session_id,
-  se.session_code,
-  se.exam_date,
-  ss.start_at,
-  ss.end_at,
+      SELECT
+        se.campaign_id,
+        se.id           AS session_id,
+        se.session_code,
+        se.exam_date,
+        ss.start_at,
+        ss.end_at,
 
-  sub.id          AS subject_id,
-  sub.code        AS subject_code,
-  sub.name        AS subject_name,
+        sub.id          AS subject_id,
+        sub.code        AS subject_code,
+        sub.name        AS subject_name,
 
-  sq.id           AS subject_question_id,
-  sq.question_no,
-  sq.label        AS question_label,
-  sq.max_score
-FROM sessions se
-JOIN session_subjects ss
-  ON ss.session_id = se.id
-JOIN subjects sub
-  ON sub.id = ss.subject_id
-LEFT JOIN subject_questions sq
-  ON sq.subject_id = sub.id
-WHERE se.campaign_id = ?
-ORDER BY se.exam_date, se.session_code, sub.code, sq.question_no;
-
+        sq.id           AS subject_question_id,
+        sq.question_no,
+        sq.label        AS question_label,
+        sq.max_score
+      FROM sessions se
+      JOIN session_subjects ss
+        ON ss.session_id = se.id
+      JOIN subjects sub
+        ON sub.id = ss.subject_id
+      LEFT JOIN subject_questions sq
+        ON sq.subject_id = sub.id
+      WHERE se.campaign_id = ?
+      ORDER BY se.exam_date, se.session_code, sub.code, sq.question_no;
     `;
-
     const [rows] = await this.pool.execute<SubjectQuestionRow[]>(sql, [campaign_id]);
     return rows;
   }
 
-  async getStatus(
-    campaignId: number,
-    conn: Pool | PoolConnection = this.pool
-  ): Promise<any[]> {
+  /**
+   * (เดิม) heavy coverage → ใช้กับ debug endpoint หรือ cache นาน
+   */
+  async getStatus(campaignId: number, conn: Pool | PoolConnection = this.pool): Promise<any[]> {
     const slotCoverageSql = `
 WITH booklets_in_campaign AS (
   SELECT b.id AS booklet_id, b.session_id
@@ -489,28 +328,18 @@ WITH booklets_in_campaign AS (
   JOIN user_sessions us ON us.id = b.user_session_id
   WHERE us.campaign_id = ?
 ),
-
 booklet_counts AS (
   SELECT session_id, COUNT(*) AS booklet_count
   FROM booklets_in_campaign
   GROUP BY session_id
 ),
-
 question_counts AS (
   SELECT
     ss.session_id,
     ss.subject_id,
-
-    -- ✅ ยึด subject_questions ก่อน ถ้ามี, ถ้าไม่มีค่อยใช้ ss.question_count
-    COALESCE(
-      NULLIF(COUNT(DISTINCT sq.question_no), 0),
-      ss.question_count
-    ) AS question_count_effective,
-
-    -- เอาไว้ตรวจ mismatch เฉย ๆ
+    COALESCE(NULLIF(COUNT(DISTINCT sq.question_no), 0), ss.question_count) AS question_count_effective,
     COUNT(DISTINCT sq.question_no) AS question_count_sq,
     ss.question_count AS question_count_ss,
-
     (COUNT(DISTINCT sq.question_no) <> ss.question_count) AS mismatch_question_count
   FROM session_subjects ss
   JOIN sessions se ON se.id = ss.session_id
@@ -519,7 +348,6 @@ question_counts AS (
   WHERE se.campaign_id = ?
   GROUP BY ss.session_id, ss.subject_id, ss.question_count
 ),
-
 expected AS (
   SELECT
     qc.session_id,
@@ -527,29 +355,27 @@ expected AS (
     bc.booklet_count,
     qc.question_count_effective AS question_count,
     (bc.booklet_count * qc.question_count_effective * 2) AS expected_slots,
-
     qc.question_count_sq,
     qc.question_count_ss,
     qc.mismatch_question_count
   FROM question_counts qc
   JOIN booklet_counts bc ON bc.session_id = qc.session_id
 ),
-
 actual AS (
   SELECT
-    bic.session_id,
+    b.session_id,
     gs.subject_id,
     COUNT(*) AS actual_slots,
-    SUM(gs.grader_id IS NOT NULL) AS assigned_slots,
-    SUM(gs.status = 'COMPLETED') AS completed_slots,
-    SUM(gs.status = 'DISPUTED') AS disputed_slots,
-    SUM(gs.status IN ('OPEN','ASSIGNED','DISPUTED')) AS pending_slots
+    SUM(CASE WHEN gs.grader_id IS NOT NULL THEN 1 ELSE 0 END) AS assigned_slots,
+    SUM(CASE WHEN gs.status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_slots,
+    SUM(CASE WHEN gs.status = 'DISPUTED' THEN 1 ELSE 0 END) AS disputed_slots,
+    SUM(CASE WHEN gs.status IN ('OPEN','ASSIGNED','DISPUTED') THEN 1 ELSE 0 END) AS pending_slots
   FROM grading_slots gs
-  JOIN booklets_in_campaign bic ON bic.booklet_id = gs.booklet_id
-  WHERE gs.grader_order IN (1,2)
-  GROUP BY bic.session_id, gs.subject_id
+  JOIN booklets b ON b.id = gs.booklet_id
+  JOIN sessions se ON se.id = b.session_id
+  WHERE se.campaign_id = ? AND gs.grader_order IN (1,2)
+  GROUP BY b.session_id, gs.subject_id
 )
-
 SELECT
   e.session_id,
   e.subject_id,
@@ -563,10 +389,8 @@ SELECT
   COALESCE(a.disputed_slots,0)   AS disputed_slots,
   COALESCE(a.pending_slots,0)    AS pending_slots,
 
-  -- ✅ สรุป “ขาด slot” ชัด ๆ
   GREATEST(e.expected_slots - COALESCE(a.actual_slots,0), 0) AS missing_slots,
 
-  -- ✅ เอาไว้ debug mismatch
   e.question_count_sq,
   e.question_count_ss,
   e.mismatch_question_count
@@ -576,157 +400,108 @@ LEFT JOIN actual a
   ON a.session_id = e.session_id
  AND a.subject_id = e.subject_id
 ORDER BY e.session_id, e.subject_id;
-
     `;
 
-    const [slotCoverage] = await conn.query<any[]>(slotCoverageSql, [campaignId, campaignId]);
-    console.log(slotCoverage)
+    const [slotCoverage] = await conn.query<any[]>(slotCoverageSql, [campaignId, campaignId, campaignId]);
     return slotCoverage;
   }
+
   async getCountBookets(campaign_id: number): Promise<number> {
-    const sql = `SELECT COUNT(b.id) AS count FROM booklets b JOIN sessions s ON s.id = b.session_id WHERE s.campaign_id = ?`
+    const sql = `
+      SELECT COUNT(b.id) AS count
+      FROM booklets b
+      JOIN sessions s ON s.id = b.session_id
+      WHERE s.campaign_id = ?
+    `;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-    return rows[0]?.count ?? 0;
-  }
-  async getCountBookletsBySession(campaign_id: number): Promise<{ session_id: number, session_code: string, subject_name: string, count: number }[]> {
-    const sql = `SELECT 
-	sess.id as session_id,
-    s.name as subject_name,
-    sess.session_code,
-    COUNT(DISTINCT b.id) AS count
-FROM subjects s
-JOIN session_subjects ss 
-    ON s.id = ss.subject_id
-JOIN sessions sess 
-    ON sess.id = ss.session_id 
-    AND sess.campaign_id = ?
-LEFT JOIN booklets b 
-    ON b.session_id = sess.id
-GROUP BY s.name, sess.day_no , sess.id
-ORDER BY sess.day_no;`
-    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-    // console.log(rows)
-    return rows.map(row => ({ session_id: row.session_id, session_code: row.session_code, subject_name: row.subject_name, count: row.count }));
+    return Number(rows[0]?.count ?? 0);
   }
 
-  async getSeatAssignedStatus(campaign_id: number): Promise<number> {
-    const sql = `SELECT COUNT(b.id) AS count FROM booklets b  JOIN sessions s ON s.id = b.session_id WHERE s.campaign_id = ?`
+  async getCountBookletsBySession(campaign_id: number): Promise<{ session_id: number; session_code: string; subject_name: string; count: number }[]> {
+    const sql = `
+      SELECT 
+        sess.id as session_id,
+        s.name as subject_name,
+        sess.session_code,
+        COUNT(DISTINCT b.id) AS count
+      FROM subjects s
+      JOIN session_subjects ss 
+        ON s.id = ss.subject_id
+      JOIN sessions sess 
+        ON sess.id = ss.session_id 
+       AND sess.campaign_id = ?
+      LEFT JOIN booklets b 
+        ON b.session_id = sess.id
+      GROUP BY s.name, sess.day_no , sess.id
+      ORDER BY sess.day_no;
+    `;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-    return rows[0]?.count ?? 0;
+    return rows.map((row) => ({
+      session_id: Number(row.session_id),
+      session_code: row.session_code,
+      subject_name: row.subject_name,
+      count: Number(row.count ?? 0),
+    }));
   }
+
   async isAssigned(campaign_id: number): Promise<any> {
     const sql = `
-SELECT 
-  r.room_code,
-  COUNT(uc.user_id) AS count_user,
-  r.capacity
-FROM exam_rooms r
-LEFT JOIN user_campaigns uc
-  ON uc.room_code = r.room_code
- AND uc.campaign_id = r.campaign_id
-WHERE r.campaign_id = ?
-GROUP BY r.room_code, r.capacity;
-  `
-
-    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
-    return rows
+      SELECT 
+        r.room_code,
+        COUNT(uc.user_id) AS count_user,
+        r.capacity
+      FROM exam_rooms r
+      LEFT JOIN user_campaigns uc
+        ON uc.room_code = r.room_code
+      AND uc.campaign_id = r.campaign_id
+      WHERE r.campaign_id = ?
+      GROUP BY r.room_code, r.capacity;
+    `;
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows;
   }
 
-
-
-
-
-  async AverageQuestionScore(campaign_id: number): Promise<any> {
+  /**
+   * ✅ NEW: optimized average question score (no pivot, no group_concat)
+   */
+  async getAverageQuestionScoreOptimized(campaign_id: number): Promise<any[]> {
     const sql = `
-   WITH per_booklet_question AS (
-  SELECT
-    b.session_id,
-    s.subject_id,
-    s.question_no,
-    sq.label,
-    sq.note AS category,
+      SELECT
+        b.session_id,
+        gs.subject_id,
+        gs.question_no,
+        sq.label,
+        sq.note AS category,
 
-    -- คะแนนผู้ตรวจ 1/2 ต่อ "เล่ม+ข้อ"
-    MAX(CASE WHEN s.grader_order = 1 THEN gs.score END) AS grader1_score,
-    MAX(CASE WHEN s.grader_order = 2 THEN gs.score END) AS grader2_score,
+        AVG(CASE WHEN gs.grader_order = 1 THEN gsc.score END) AS grader1_avg,
+        AVG(CASE WHEN gs.grader_order = 2 THEN gsc.score END) AS grader2_avg,
+        AVG(CASE WHEN gs.grader_order IN (1,2) THEN gsc.score END) AS final_avg,
 
-    -- รายชื่อผู้ตรวจที่เคยให้คะแนน (อิงจาก grading_scores.entered_by)
-    GROUP_CONCAT(DISTINCT CASE WHEN s.grader_order = 1 THEN a.full_name END
-      ORDER BY a.full_name SEPARATOR ', ') AS grader1_names,
-    GROUP_CONCAT(DISTINCT CASE WHEN s.grader_order = 2 THEN a.full_name END
-      ORDER BY a.full_name SEPARATOR ', ') AS grader2_names
+        SUM(CASE WHEN gs.grader_order = 1 THEN 1 ELSE 0 END) AS n1,
+        SUM(CASE WHEN gs.grader_order = 2 THEN 1 ELSE 0 END) AS n2
 
-  FROM booklets b
-  JOIN user_sessions us ON us.id = b.user_session_id
-  JOIN grading_slots s ON s.booklet_id = b.id
-  JOIN grading_scores gs ON gs.slot_id = s.id
+      FROM grading_scores gsc
+      JOIN grading_slots gs
+        ON gs.id = gsc.slot_id
+       AND gs.grader_order IN (1,2)
+      JOIN booklets b
+        ON b.id = gs.booklet_id
+      JOIN sessions se
+        ON se.id = b.session_id
+       AND se.campaign_id = ?
+      LEFT JOIN subject_questions sq
+        ON sq.subject_id = gs.subject_id
+       AND sq.question_no = gs.question_no
 
-  LEFT JOIN subject_questions sq
-    ON sq.subject_id = s.subject_id
-   AND sq.question_no = s.question_no
-
-  LEFT JOIN graders g ON g.id = gs.entered_by
-  LEFT JOIN accounts a ON a.id = g.account_id
-
-  WHERE us.campaign_id = ?          -- campaignId
-    AND s.grader_order IN (1,2)     -- เอาแค่ผู้ตรวจ 1/2
-  GROUP BY
-    b.session_id, s.subject_id, s.question_no, sq.label, sq.note, b.id
-),
-
-per_booklet_question_final AS (
-  SELECT
-    session_id,
-    subject_id,
-    question_no,
-    label,
-    category,
-    grader1_names,
-    grader2_names,
-    grader1_score,
-    grader2_score,
-
-    -- ✅ final ต่อเล่มต่อข้อ: ถ้าขาดคนใดคนนึง ให้เป็น NULL (กันค่าเพี้ยน)
-    CASE
-      WHEN grader1_score IS NOT NULL AND grader2_score IS NOT NULL
-        THEN (grader1_score + grader2_score) / 2
-      ELSE NULL
-    END AS final_pair_score
-  FROM per_booklet_question
-)
-
-SELECT
-  session_id,
-  subject_id,
-  question_no,
-  label,
-  category,
-
-  AVG(grader1_score) AS grader1_avg,
-  AVG(grader2_score) AS grader2_avg,
-
-  -- ✅ final เฉลี่ยทั้ง session โดยให้ผู้ตรวจ 1/2 น้ำหนักเท่ากันจริง ๆ
-  AVG(final_pair_score) AS final_avg,
-
-  -- debug: นับจำนวน "เล่ม+ข้อ" ที่ครบ 2 คน
-  SUM(final_pair_score IS NOT NULL) AS pairs_completed,
-
-  -- รายชื่อรวม (ถ้าจะให้คงแบบแยก 1/2 ก็เอา MIN/MAX ก็ได้)
-  GROUP_CONCAT(DISTINCT grader1_names SEPARATOR ' | ') AS grader1_names_all,
-  GROUP_CONCAT(DISTINCT grader2_names SEPARATOR ' | ') AS grader2_names_all
-
-FROM per_booklet_question_final
-GROUP BY
-  session_id, subject_id, question_no, label, category
-ORDER BY
-  session_id, question_no;`
-        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
-        return rows;
-  } 
-
-
+      GROUP BY
+        b.session_id, gs.subject_id, gs.question_no, sq.label, sq.note
+      ORDER BY
+        b.session_id, gs.question_no;
+    `;
+    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    return rows;
+  }
 }
 
-
-const dashboardRepo = new DashboardRepo()
-export default dashboardRepo
+const dashboardRepo = new DashboardRepo();
+export default dashboardRepo;
