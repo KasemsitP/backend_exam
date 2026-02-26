@@ -91,7 +91,7 @@ authservice.getAllAccounts = () => __awaiter(void 0, void 0, void 0, function* (
 });
 authservice.getAllGradersAccounts = (campaign) => __awaiter(void 0, void 0, void 0, function* () {
     const rows = yield auth_repo_1.default.findAllAccountsGraderByCampaign(Number(campaign));
-    return rows.map(row => (Object.assign(Object.assign({}, row), { active: !!row.active })));
+    return rows.map(row => (Object.assign(Object.assign({}, row), { username: row.username.split("_").slice(1).join("_") || row.username, active: !!row.active })));
 });
 authservice.getAllRoles = () => __awaiter(void 0, void 0, void 0, function* () {
     return yield auth_repo_1.default.findAllRoles();

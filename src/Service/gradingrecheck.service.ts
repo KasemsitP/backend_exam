@@ -100,7 +100,7 @@ export class gradingRecheckService {
     const minScore = Math.min(...numericScores);
     const diff = maxScore - minScore;
 
-    if (diff >= diffThreshold) {
+    if (diff > diffThreshold) {
       // mark ทุก slot ของข้อนี้เป็น DISPUTED
       for (const row of scores) {
         await gradingscoreRepo.updateSlotStatus(conn, row.slotId, "DISPUTED");

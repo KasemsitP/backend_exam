@@ -26,6 +26,7 @@ class RankingReportRepo {
             if (opts.subjectIds.length === 0)
                 return [];
             const placeholders = opts.subjectIds.map(() => "?").join(",");
+            console.log("Executing getRankingRawRows with subjectIds:", opts.subjectIds, "and campaignId:", opts.campaignId);
             const [rows] = yield this.pool.query(`
       SELECT 
         b.id AS booklet_id,

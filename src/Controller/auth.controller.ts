@@ -148,6 +148,10 @@ export class authcontroller {
         console.error("Failed to map account_id to session:", dbErr);
       }
 
+      const new_username = result.username.split("_").slice(1).join("_") // ถ้าเป็น grader ให้ตัด campaignId ออก
+      result.username = new_username || result.username // กันกรณีที่ไม่มี underscore หรือไม่ใช่ grader ให้ใช้ username เดิม
+
+      console.log("Login result:", result);
       return res.status(200).json({
         message: "เข้าสู่ระบบสำเร็จ",
         user: result,
@@ -175,6 +179,10 @@ export class authcontroller {
       }
 
       const roleCode = (row.role_code || "staff").toLowerCase();
+
+
+      const new_username = row.username.split("_").slice(1).join("_") // ถ้าเป็น grader ให้ตัด campaignId ออก
+      row.username = new_username || row.username // กันกรณีที่ไม่มี underscore หรือไม่ใช่ grader ให้ใช้ username เดิม
 
       return res.status(200).json({
         id: String(row.id),
@@ -214,6 +222,7 @@ export class authcontroller {
     const campaign_id = parseInt(req.params.id, 10)
     try {
       const accounts = await authservice.getAllGradersAccounts(Number(campaign_id));
+      console.log("Graders for campaign", campaign_id, accounts) // เพิ่ม log เพื่อตรวจสอบข้อมูลที่ได้จาก service
       res.status(200).json(accounts);
     } catch (error: any) {
       res.status(500).send({ message: error.message });

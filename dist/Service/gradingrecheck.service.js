@@ -74,7 +74,7 @@ class gradingRecheckService {
             const maxScore = Math.max(...numericScores);
             const minScore = Math.min(...numericScores);
             const diff = maxScore - minScore;
-            if (diff >= diffThreshold) {
+            if (diff > diffThreshold) {
                 // mark ทุก slot ของข้อนี้เป็น DISPUTED
                 for (const row of scores) {
                     yield gradingscore_repo_1.default.updateSlotStatus(conn, row.slotId, "DISPUTED");

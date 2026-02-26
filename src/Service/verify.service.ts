@@ -84,7 +84,7 @@ export class verifyService {
                                 throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
                         }
 
-                        const decryptedPayload = await keyService.keyService.decryptQrPayload(
+                        const decryptedPayload = await keyService.keyService.decryptQrPayloadNoLocks(
                                 qr_payload,
                                 campaignIdNumeric,
                         );

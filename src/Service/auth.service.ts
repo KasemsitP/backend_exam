@@ -82,6 +82,7 @@ export class authservice {
         const rows = await authrepo.findAllAccountsGraderByCampaign(Number(campaign));
         return rows.map(row => ({
             ...row,
+            username: row.username.split("_").slice(1).join("_") || row.username, // ถ้าเป็น grader ให้ตัด campaignId ออก
             active: !!row.active
         }));
     }

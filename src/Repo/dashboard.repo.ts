@@ -101,24 +101,36 @@ ORDER BY s.exam_date, s.session_code;`
   async getIsEncrypted(campaign_id: number) {
     const sql = `SELECT
   s.campaign_id,
-  s.id            AS session_id,
+  s.id AS session_id,
   s.session_code,
+
   COUNT(us.id) AS total_users_in_session,
   SUM(CASE WHEN us.qr_payload IS NOT NULL THEN 1 ELSE 0 END) AS encrypted_users,
-  SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END)     AS pending_users,
+  SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) AS pending_users,
+
+  COUNT(DISTINCT ss.subject_id) AS subject_count,
+
   CASE
+    WHEN COUNT(DISTINCT ss.subject_id) = 0 THEN 'NO_SESSION_SUBJECT'
     WHEN COUNT(us.id) = 0 THEN 'NO_USERS'
-    WHEN SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) = 0 
-      THEN 'ENCRYPTED_ALL'
+    WHEN SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) = 0 THEN 'ENCRYPTED_ALL'
     ELSE 'PARTIAL'
   END AS encryption_status
+
 FROM sessions s
+LEFT JOIN session_subjects ss
+  ON ss.session_id = s.id
 LEFT JOIN user_sessions us
   ON us.session_id = s.id
  AND us.campaign_id = s.campaign_id
-WHERE s.campaign_id = ?   -- campaign ที่กำลังดู
-GROUP BY s.campaign_id, s.id, s.session_code
-ORDER BY s.exam_date, s.session_code;`
+
+WHERE s.campaign_id = ?
+
+GROUP BY
+  s.campaign_id, s.id, s.session_code
+
+ORDER BY
+  s.exam_date, s.session_code;`
 
     const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
     return row;
@@ -619,6 +631,98 @@ GROUP BY r.room_code, r.capacity;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id])
     return rows
   }
+
+
+
+
+
+  async AverageQuestionScore(campaign_id: number): Promise<any> {
+    const sql = `
+   WITH per_booklet_question AS (
+  SELECT
+    b.session_id,
+    s.subject_id,
+    s.question_no,
+    sq.label,
+    sq.note AS category,
+
+    -- คะแนนผู้ตรวจ 1/2 ต่อ "เล่ม+ข้อ"
+    MAX(CASE WHEN s.grader_order = 1 THEN gs.score END) AS grader1_score,
+    MAX(CASE WHEN s.grader_order = 2 THEN gs.score END) AS grader2_score,
+
+    -- รายชื่อผู้ตรวจที่เคยให้คะแนน (อิงจาก grading_scores.entered_by)
+    GROUP_CONCAT(DISTINCT CASE WHEN s.grader_order = 1 THEN a.full_name END
+      ORDER BY a.full_name SEPARATOR ', ') AS grader1_names,
+    GROUP_CONCAT(DISTINCT CASE WHEN s.grader_order = 2 THEN a.full_name END
+      ORDER BY a.full_name SEPARATOR ', ') AS grader2_names
+
+  FROM booklets b
+  JOIN user_sessions us ON us.id = b.user_session_id
+  JOIN grading_slots s ON s.booklet_id = b.id
+  JOIN grading_scores gs ON gs.slot_id = s.id
+
+  LEFT JOIN subject_questions sq
+    ON sq.subject_id = s.subject_id
+   AND sq.question_no = s.question_no
+
+  LEFT JOIN graders g ON g.id = gs.entered_by
+  LEFT JOIN accounts a ON a.id = g.account_id
+
+  WHERE us.campaign_id = ?          -- campaignId
+    AND s.grader_order IN (1,2)     -- เอาแค่ผู้ตรวจ 1/2
+  GROUP BY
+    b.session_id, s.subject_id, s.question_no, sq.label, sq.note, b.id
+),
+
+per_booklet_question_final AS (
+  SELECT
+    session_id,
+    subject_id,
+    question_no,
+    label,
+    category,
+    grader1_names,
+    grader2_names,
+    grader1_score,
+    grader2_score,
+
+    -- ✅ final ต่อเล่มต่อข้อ: ถ้าขาดคนใดคนนึง ให้เป็น NULL (กันค่าเพี้ยน)
+    CASE
+      WHEN grader1_score IS NOT NULL AND grader2_score IS NOT NULL
+        THEN (grader1_score + grader2_score) / 2
+      ELSE NULL
+    END AS final_pair_score
+  FROM per_booklet_question
+)
+
+SELECT
+  session_id,
+  subject_id,
+  question_no,
+  label,
+  category,
+
+  AVG(grader1_score) AS grader1_avg,
+  AVG(grader2_score) AS grader2_avg,
+
+  -- ✅ final เฉลี่ยทั้ง session โดยให้ผู้ตรวจ 1/2 น้ำหนักเท่ากันจริง ๆ
+  AVG(final_pair_score) AS final_avg,
+
+  -- debug: นับจำนวน "เล่ม+ข้อ" ที่ครบ 2 คน
+  SUM(final_pair_score IS NOT NULL) AS pairs_completed,
+
+  -- รายชื่อรวม (ถ้าจะให้คงแบบแยก 1/2 ก็เอา MIN/MAX ก็ได้)
+  GROUP_CONCAT(DISTINCT grader1_names SEPARATOR ' | ') AS grader1_names_all,
+  GROUP_CONCAT(DISTINCT grader2_names SEPARATOR ' | ') AS grader2_names_all
+
+FROM per_booklet_question_final
+GROUP BY
+  session_id, subject_id, question_no, label, category
+ORDER BY
+  session_id, question_no;`
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+        return rows;
+  } 
 
 
 }

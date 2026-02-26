@@ -21,7 +21,7 @@ class DashboardService {
             var _a, _b, _c, _d, _e, _f, _g;
             const [rawBasicCounts, rawBagCounts, rawGradersCount, rawKeyCounts, rawImportStatus, rawEncryptedStatus, rawAvgScorePerQuestion, rawScoreDistribution, rawSubjectQuestions, // ✨ เพิ่มบรรทัดนี้
             rawStatus, rawDisputedQuestions, // ✨ เพิ่มบรรทัดนี้
-            rawBookletsCount, rawBookletsBySession, rawSeatAssignmentStatus] = yield Promise.all([
+            rawBookletsCount, rawBookletsBySession, rawSeatAssignmentStatus, rawAverageQuestionScore] = yield Promise.all([
                 dashboard_repo_1.default.getCampaignBasicCounts(campaignId),
                 dashboard_repo_1.default.getBagCountsPerSession(campaignId),
                 dashboard_repo_1.default.getGradersCount(campaignId),
@@ -35,7 +35,8 @@ class DashboardService {
                 gradingscore_repo_1.default.findDisputedQuestionsForDashboard(campaignId, 4),
                 dashboard_repo_1.default.getCountBookets(campaignId),
                 dashboard_repo_1.default.getCountBookletsBySession(campaignId),
-                dashboard_repo_1.default.isAssigned(campaignId)
+                dashboard_repo_1.default.isAssigned(campaignId),
+                dashboard_repo_1.default.AverageQuestionScore(campaignId)
             ]);
             console.log("rawStatus:", rawStatus);
             const basicCounts = rawBasicCounts !== null && rawBasicCounts !== void 0 ? rawBasicCounts : {
@@ -113,6 +114,17 @@ class DashboardService {
                     maxScore: row.max_score,
                 });
             });
+            const grouped = rawAverageQuestionScore.reduce((acc, item) => {
+                if (!acc[item.session_id]) {
+                    acc[item.session_id] = [];
+                }
+                acc[item.session_id].push({
+                    question_no: item.question_no,
+                    label: item.label,
+                    final_avg: Number(item.final_avg),
+                });
+                return acc;
+            }, {});
             return {
                 summary: {
                     campaignId: basicCounts.campaign_id,
@@ -146,7 +158,8 @@ class DashboardService {
                 rawDisputedQuestions,
                 rawBookletsCount,
                 rawBookletsBySession,
-                seatAssignmentStatus: rawSeatAssignmentStatus
+                seatAssignmentStatus: rawSeatAssignmentStatus,
+                rawAverageQuestionScore: grouped
             };
         });
     }

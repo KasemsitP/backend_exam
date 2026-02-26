@@ -19,7 +19,9 @@ export class DashboardService {
       rawDisputedQuestions,       // ✨ เพิ่มบรรทัดนี้
       rawBookletsCount,
       rawBookletsBySession,
-      rawSeatAssignmentStatus
+      rawSeatAssignmentStatus,
+      rawAverageQuestionScore
+
     ] = await Promise.all([
       dashboardRepo.getCampaignBasicCounts(campaignId),
       dashboardRepo.getBagCountsPerSession(campaignId),
@@ -34,7 +36,8 @@ export class DashboardService {
       gradingscoreRepo.findDisputedQuestionsForDashboard(campaignId, 4),
       dashboardRepo.getCountBookets(campaignId),
       dashboardRepo.getCountBookletsBySession(campaignId),
-      dashboardRepo.isAssigned(campaignId)
+      dashboardRepo.isAssigned(campaignId),
+      dashboardRepo.AverageQuestionScore(campaignId)
     ]);
     console.log("rawStatus:", rawStatus);
 
@@ -131,6 +134,20 @@ export class DashboardService {
       });
     });
 
+    const grouped = rawAverageQuestionScore.reduce((acc : any, item : any) => {
+      if (!acc[item.session_id]) {
+        acc[item.session_id] = [];
+      }
+
+      acc[item.session_id].push({
+        question_no: item.question_no,
+        label: item.label,
+        final_avg: Number(item.final_avg),
+      });
+
+      return acc;
+    }, {});
+
     return {
       summary: {
         campaignId: basicCounts.campaign_id,
@@ -165,7 +182,8 @@ export class DashboardService {
       rawDisputedQuestions,
       rawBookletsCount,
       rawBookletsBySession,
-      seatAssignmentStatus: rawSeatAssignmentStatus
+      seatAssignmentStatus: rawSeatAssignmentStatus,
+      rawAverageQuestionScore : grouped
     };
   }
 }

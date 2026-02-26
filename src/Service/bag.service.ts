@@ -239,7 +239,7 @@ export class bagService {
             if (payload.length !== datetime.length) throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
 
             // 1️⃣ Parallel Decode
-            const decodedPromises = payload.map(qr => keyService.decryptQrPayload(qr, campaign_id));
+            const decodedPromises = payload.map(qr => keyService.decryptQrPayloadBags(qr, campaign_id));
             const decodedResults = await Promise.all(decodedPromises);
 
             let sessionId: number | null = null;
@@ -357,7 +357,7 @@ export class bagService {
             }
 
             // 1️⃣ Parallel Decode
-            const decodedPromises = payload.map(qr => keyService.decryptQrPayload(qr, campaign_id));
+            const decodedPromises = payload.map(qr => keyService.decryptQrPayloadBags(qr, campaign_id));
             const decodedResults = await Promise.all(decodedPromises);
 
             let sessionId: number | null = null;

@@ -400,6 +400,139 @@ export class keyService {
         }
     };
 
+     static decryptQrPayloadNoLocks = async (
+        ciphertext: string,
+        campaignId: number
+    ) => {
+        let flag_qr_inactive = false
+        try {
+            const isActiveCamp = await campaignRepo.IscampaignActive(campaignId);
+            if (!isActiveCamp) {
+                flag_qr_inactive = true;
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน");
+            }
+            // 1. ดึงคีย์ (เหมือนเดิม)
+            const keys = await keyRepo.findAllByCampaignId(campaignId);
+            if (keys.length !== 2) {
+                throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากรอบสอบนี้ต้องมีคีย์ทั้งหมด 2 คีย์");
+            }
+
+            const [key1, key2] = keys;
+
+            // 2.  FIX: แปลง "Key" (16 ตัวอักษร) เป็น Buffer (16 ไบต์)
+            // const key1Buffer = Buffer.from(key1.key, PAYLOAD_ENCODING);
+            // const key2Buffer = Buffer.from(key2.key, PAYLOAD_ENCODING);
+
+            //  FIX: ใช้ Static IVs
+            const iv1Buffer = STATIC_IV_BUFFER;
+            const iv2Buffer = STATIC_IV_BUFFER;
+
+            const decryptedKey1Buffer = aesDecrypt(Buffer.from(key1.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey2Buffer = aesDecrypt(Buffer.from(key2.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const key1Buffer = Buffer.from(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+            const key2Buffer = Buffer.from(decryptedKey2Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+
+            console.log(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), decryptedKey2Buffer.toString(PAYLOAD_ENCODING))
+            // 3.  FIX: แปลง Ciphertext (ไม่ต้องแยก IV)
+            const cipherBuffer = Buffer.from(ciphertext, CIPHER_ENCODING);
+
+            // 4.  DOUBLE DECRYPTION (ใช้ Static IVs)
+
+            // 4.1 Decrypt Layer 2
+            const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
+
+            // 4.2 Decrypt Layer 1
+            const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
+
+            // 5. แปลงกลับเป็น String และ JSON
+            const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
+
+            // 6. ตรวจสอบและคืนค่า
+            const payload = JSON.parse(plainTextJsonString);
+
+            return payload;
+        } catch (error: any) {
+            console.error("Service Error (Decryption):", error);
+
+            if (flag_qr_inactive) {
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+
+            }
+
+            throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
+        }
+    };
+
+    static decryptQrPayloadBags = async (
+        ciphertext: string,
+        campaignId: number
+    ) => {
+        let flag_qr_inactive = false
+        try {
+            const isActiveCamp = await campaignRepo.IscampaignActive(campaignId);
+            if (!isActiveCamp) {
+                flag_qr_inactive = true;
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน");
+            }
+
+            // // const isQrActive = await settingsRepo.QRStatus(campaignId);
+            // // if (!isQrActive) {
+            // //     flag_qr_inactive = true;
+            // //     throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+            // // }
+            // console.log("QR Status:", isQrActive);
+            // 1. ดึงคีย์ (เหมือนเดิม)
+            const keys = await keyRepo.findAllByCampaignId(campaignId);
+            if (keys.length !== 2) {
+                throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากรอบสอบนี้ต้องมีคีย์ทั้งหมด 2 คีย์");
+            }
+
+            const [key1, key2] = keys;
+
+            // 2.  FIX: แปลง "Key" (16 ตัวอักษร) เป็น Buffer (16 ไบต์)
+            // const key1Buffer = Buffer.from(key1.key, PAYLOAD_ENCODING);
+            // const key2Buffer = Buffer.from(key2.key, PAYLOAD_ENCODING);
+
+            //  FIX: ใช้ Static IVs
+            const iv1Buffer = STATIC_IV_BUFFER;
+            const iv2Buffer = STATIC_IV_BUFFER;
+
+            const decryptedKey1Buffer = aesDecrypt(Buffer.from(key1.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey2Buffer = aesDecrypt(Buffer.from(key2.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const key1Buffer = Buffer.from(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+            const key2Buffer = Buffer.from(decryptedKey2Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+
+            console.log(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), decryptedKey2Buffer.toString(PAYLOAD_ENCODING))
+            // 3.  FIX: แปลง Ciphertext (ไม่ต้องแยก IV)
+            const cipherBuffer = Buffer.from(ciphertext, CIPHER_ENCODING);
+
+            // 4.  DOUBLE DECRYPTION (ใช้ Static IVs)
+
+            // 4.1 Decrypt Layer 2
+            const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
+
+            // 4.2 Decrypt Layer 1
+            const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
+
+            // 5. แปลงกลับเป็น String และ JSON
+            const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
+
+            // 6. ตรวจสอบและคืนค่า
+            const payload = JSON.parse(plainTextJsonString);
+
+            return payload;
+        } catch (error: any) {
+            console.error("Service Error (Decryption):", error);
+
+            if (flag_qr_inactive) {
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+
+            }
+
+            throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
+        }
+    };
+
     static decrypteKeyForUnlock = async (campaignId: number, connection: PoolConnection) => {
         try {
             const activeCamp = await campaignRepo.IscampaignActive(campaignId, connection);

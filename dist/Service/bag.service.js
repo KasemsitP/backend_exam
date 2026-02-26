@@ -225,7 +225,7 @@ bagService.CreateBagAndInsertBooklets = (campaign_id, payload, datetime, expecte
         if (payload.length !== datetime.length)
             throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
         // 1️⃣ Parallel Decode
-        const decodedPromises = payload.map(qr => key_service_1.keyService.decryptQrPayload(qr, campaign_id));
+        const decodedPromises = payload.map(qr => key_service_1.keyService.decryptQrPayloadBags(qr, campaign_id));
         const decodedResults = yield Promise.all(decodedPromises);
         let sessionId = null;
         const decodedList = [];
@@ -323,7 +323,7 @@ bagService.CheckbookletsSubjects = (campaign_id, payload, datetime) => __awaiter
             throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
         }
         // 1️⃣ Parallel Decode
-        const decodedPromises = payload.map(qr => key_service_1.keyService.decryptQrPayload(qr, campaign_id));
+        const decodedPromises = payload.map(qr => key_service_1.keyService.decryptQrPayloadBags(qr, campaign_id));
         const decodedResults = yield Promise.all(decodedPromises);
         let sessionId = null;
         for (const decoded of decodedResults) {

@@ -43,7 +43,7 @@ export class gradingService {
       await connection.beginTransaction();
 
       // 1) ถอด QR
-      const decoded = await keyService.decryptQrPayload(qrPayload, campaignId);
+      const decoded = await keyService.decryptQrPayloadNoLocks(qrPayload, campaignId);
       // decoded: { cid, sid, uid, ... }
       const { cid, sid, uid } = decoded;
       console.log(decoded)
@@ -85,7 +85,7 @@ export class gradingService {
      
 
       if (!question) {
-        throw new Error("ข้อที่เลือกไม่ได้อยู่ใน assignment ของผู้ตรวจ");
+        throw new Error("ข้อที่เลือกไม่ได้ถูกมอบหมายให้คุณ");
       }
        console.log("question", question)
       // 3) หาเล่มของผู้เข้าสอบ (จาก user_code / uid ใน QR)

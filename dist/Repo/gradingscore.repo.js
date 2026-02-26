@@ -360,7 +360,7 @@ JOIN (
 
 WHERE
   gc.gradersCount >= 2
-  AND (t.maxScore - t.minScore) >= ?
+  AND (t.maxScore - t.minScore) > ?
 
 GROUP BY
   t.random_num,

@@ -399,6 +399,7 @@ async function buildPassListPdf(options: any, writeStream: fs.WriteStream) {
 async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
   const examInfo = await rankingRepo.getExamInfo(options.campaignId);
   const rawData = await rankingRepo.getRankingRawRows({ campaignId: options.campaignId, subjectIds: options.subjectIds });
+  //console.log(`Raw data rows: ${rawData}`);
 
   const usersMap = new Map<string, any>();
   for (const row of rawData) {
@@ -425,6 +426,7 @@ async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
   }
 
   let rankingList = Array.from(usersMap.values());
+  rankingList = rankingList.filter(u => u.totalScore >= 50);
   if (options.onlyCompleted) rankingList = rankingList.filter((u) => u.isCompleted);
 
   const sortBy = (options.sortBy || "TOTAL_DESC") as SortBy;
@@ -447,10 +449,26 @@ async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
   const doc = new PDFDocument({ size: "A4", margins: { top: 40, bottom: 40, left: 40, right: 40 }, autoFirstPage: true, bufferPages: false });
   doc.pipe(writeStream);
 
-  const drawHeaderInfo = () => {
-    doc.font(FONT_BOLD).fontSize(16).text("บัญชีรายชื่อเรียงลำดับคะแนน", { align: "center" });
-    doc.font(FONT_NORMAL).fontSize(12).text(`สนามสอบ: ${examInfo.site} (${examInfo.campaign_size} ${examInfo.year_be})`, { align: "center" }).moveDown(0.5);
-  };
+const drawHeaderInfo = () => {
+  let headerY = 40;
+
+  doc.font(FONT_BOLD)
+     .fontSize(16)
+     .text("บัญชีรายชื่อเรียงลำดับคะแนน", 40, headerY, { align: "center" });
+
+  headerY += 22;
+
+  doc.font(FONT_NORMAL)
+     .fontSize(12)
+     .text(
+       `สนามสอบ: ${examInfo.site} (${examInfo.campaign_size} ${examInfo.year_be})`,
+       40,
+       headerY,
+       { align: "center" }
+     );
+
+  return headerY + 20; // คืนค่า y ถัดไป
+};
   drawHeaderInfo();
 
   const pageWidth = doc.page.width - 80;

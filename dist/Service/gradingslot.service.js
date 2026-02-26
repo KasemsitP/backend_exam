@@ -25,7 +25,7 @@ class gradingService {
             try {
                 yield connection.beginTransaction();
                 // 1) ถอด QR
-                const decoded = yield key_service_1.keyService.decryptQrPayload(qrPayload, campaignId);
+                const decoded = yield key_service_1.keyService.decryptQrPayloadNoLocks(qrPayload, campaignId);
                 // decoded: { cid, sid, uid, ... }
                 const { cid, sid, uid } = decoded;
                 console.log(decoded);
@@ -50,7 +50,7 @@ class gradingService {
                 const qNo = Number(questionNo);
                 const question = assignment.find(a => a.question_no === qNo);
                 if (!question) {
-                    throw new Error("ข้อที่เลือกไม่ได้อยู่ใน assignment ของผู้ตรวจ");
+                    throw new Error("ข้อที่เลือกไม่ได้ถูกมอบหมายให้คุณ");
                 }
                 console.log("question", question);
                 // 3) หาเล่มของผู้เข้าสอบ (จาก user_code / uid ใน QR)

@@ -156,7 +156,7 @@ exports.app.use((0, express_session_1.default)({
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        maxAge: 1000 * 60 * 30,
+        maxAge: 1000 * 60 * 60,
     },
 }));
 exports.app.use((req, res, next) => {

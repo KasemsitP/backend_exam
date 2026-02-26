@@ -108,7 +108,7 @@ verifyService.checkBookletsOrders = (campaign_id, qr_payload, booklets_id) => __
         if (!isActiveCamp) {
             throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
         }
-        const decryptedPayload = yield keyService.keyService.decryptQrPayload(qr_payload, campaignIdNumeric);
+        const decryptedPayload = yield keyService.keyService.decryptQrPayloadNoLocks(qr_payload, campaignIdNumeric);
         console.log(decryptedPayload);
         if (!decryptedPayload || !decryptedPayload.uid || !decryptedPayload.sid) {
             throw new Error(`QR Code ไม่ถูกต้อง หรือถอดรหัสล้มเหลว`);

@@ -367,6 +367,7 @@ function buildRankingPdf(options, writeStream) {
     return __awaiter(this, void 0, void 0, function* () {
         const examInfo = yield ranking_report_repo_1.default.getExamInfo(options.campaignId);
         const rawData = yield ranking_report_repo_1.default.getRankingRawRows({ campaignId: options.campaignId, subjectIds: options.subjectIds });
+        //console.log(`Raw data rows: ${rawData}`);
         const usersMap = new Map();
         for (const row of rawData) {
             if (!usersMap.has(row.user_code)) {
@@ -393,6 +394,7 @@ function buildRankingPdf(options, writeStream) {
             });
         }
         let rankingList = Array.from(usersMap.values());
+        rankingList = rankingList.filter(u => u.totalScore >= 50);
         if (options.onlyCompleted)
             rankingList = rankingList.filter((u) => u.isCompleted);
         const sortBy = (options.sortBy || "TOTAL_DESC");
@@ -419,8 +421,15 @@ function buildRankingPdf(options, writeStream) {
         const doc = new pdfkit_1.default({ size: "A4", margins: { top: 40, bottom: 40, left: 40, right: 40 }, autoFirstPage: true, bufferPages: false });
         doc.pipe(writeStream);
         const drawHeaderInfo = () => {
-            doc.font(FONT_BOLD).fontSize(16).text("บัญชีรายชื่อเรียงลำดับคะแนน", { align: "center" });
-            doc.font(FONT_NORMAL).fontSize(12).text(`สนามสอบ: ${examInfo.site} (${examInfo.campaign_size} ${examInfo.year_be})`, { align: "center" }).moveDown(0.5);
+            let headerY = 40;
+            doc.font(FONT_BOLD)
+                .fontSize(16)
+                .text("บัญชีรายชื่อเรียงลำดับคะแนน", 40, headerY, { align: "center" });
+            headerY += 22;
+            doc.font(FONT_NORMAL)
+                .fontSize(12)
+                .text(`สนามสอบ: ${examInfo.site} (${examInfo.campaign_size} ${examInfo.year_be})`, 40, headerY, { align: "center" });
+            return headerY + 20; // คืนค่า y ถัดไป
         };
         drawHeaderInfo();
         const pageWidth = doc.page.width - 80;
