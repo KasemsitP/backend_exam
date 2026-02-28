@@ -225,9 +225,9 @@ export class bagService {
     };
 
 
-    static CreateBagAndInsertBooklets = async (
+   static CreateBagAndUpdateBooklets = async ( // เปลี่ยนชื่อจาก Insert เป็น Update
         campaign_id: number,
-        payload: string[],
+        payload: string[], // array ของ QR payload ดิบๆ ที่สแกนได้
         datetime: Date[],
         expected_bag_no: number,
     ) => {
@@ -237,28 +237,37 @@ export class bagService {
             await connection.beginTransaction();
 
             if (payload.length !== datetime.length) throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
+            if (payload.length === 0) throw new Error("ไม่มีข้อมูล QR Code");
 
-            // 1️⃣ Parallel Decode
+            // 1️⃣ Parallel Decode (ยังเก็บไว้เพื่อ Validate ว่า QR ของถุงนี้เป็นของ Campaign/Session เดียวกันจริงๆ)
             const decodedPromises = payload.map(qr => keyService.decryptQrPayloadBags(qr, campaign_id));
             const decodedResults = await Promise.all(decodedPromises);
 
             let sessionId: number | null = null;
-            const decodedList = [];
-            const userCodesToFetch: string[] = [];
-
             for (let i = 0; i < decodedResults.length; i++) {
                 const decoded = decodedResults[i];
                 if (decoded.cid !== campaign_id) throw new Error(`QR ไม่ตรง campaign`);
                 if (sessionId === null) sessionId = decoded.sid;
-                else if (decoded.sid !== sessionId) throw new Error(`QR ต่าง session`);
-
-                decodedList.push(decoded);
-                userCodesToFetch.push(decoded.uid);
+                else if (decoded.sid !== sessionId) throw new Error(`QR ต่าง session กันในถุงเดียว`);
             }
             if (!sessionId) throw new Error("ไม่พบ session");
 
             // ==========================================
-            // 2️⃣ หาเลขถุงที่แหว่งไป อีกครั้ง! (ป้องกันคนแย่ง)
+            // 2️⃣ ตรวจสอบว่า QR ทั้งหมดมีอยู่ในระบบ และยังไม่เคยถูกจัดลงถุง
+            // ==========================================
+            const existingBooklets = await bookletsRepo.findByPayloads(connection, payload);
+            
+            if (existingBooklets.length !== payload.length) {
+                throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือยังไม่ได้สร้าง)");
+            }
+
+            const alreadyBagged = existingBooklets.filter(b => b.bag_id !== null);
+            if (alreadyBagged.length > 0) {
+                throw new Error("มีเล่มข้อสอบบางเล่มถูกจัดลงถุงอื่นไปแล้ว โปรดตรวจสอบอีกครั้ง");
+            }
+
+            // ==========================================
+            // 3️⃣ หาเลขถุงที่แหว่งไป และสร้างถุงใหม่ (Logic เดิมของคุณ)
             // ==========================================
             const existingBagNos = await bagRepo.getAllBagNumbersForSession(sessionId, connection);
             let targetBagNo = 1;
@@ -272,18 +281,12 @@ export class bagService {
                 throw new Error(`มีผู้ใช้สร้างหมายเลขถุง ${expected_bag_no} ไปแล้ว กรุณากดยืนยันอีกครั้งเพื่อรับหมายเลขถุงใหม่`);
             }
 
-
             const bagResult = await bagRepo.CreateBagByConnection(sessionId, targetBagNo, connection);
             const bagId = bagResult.insertId;
 
             // ==========================================
-            // 4️⃣ Bulk Insert Booklets
+            // 4️⃣ Update Booklets (จับยัดลงถุง + รัน Random Num)
             // ==========================================
-            const userSessions = await userSessionsRepo.findUserSessionsBatch(
-                connection, campaign_id, sessionId, userCodesToFetch
-            );
-            const userSessionMap = new Map(userSessions.map(us => [us.user_code, us]));
-
             const day_no_payload = await bookletsRepo.getDayno(connection, sessionId);
             const dataNo = day_no_payload?.day_no || 0;
             if (dataNo === 0) throw new Error("ไม่พบวันที่สอบ");
@@ -291,55 +294,45 @@ export class bagService {
             const latestRecord = await bookletsRepo.getLatestRandomNumForUpdate(connection, sessionId);
             let currentRunningNumber = latestRecord?.random_num ? parseInt(latestRecord.random_num.slice(-4), 10) : 0;
 
-            const bookletsToInsert = [];
+            // วนลูปสร้าง Promise สำหรับอัปเดตทีละเล่ม (เพื่อให้ seq_in_bag เรียงตามลำดับการสแกน)
+            const updatePromises = [];
 
-            for (let i = 0; i < decodedList.length; i++) {
-                const decoded = decodedList[i];
-                const scannedAt = datetime[i];
-                const userSession = userSessionMap.get(decoded.uid);
-                if (!userSession) throw new Error(`ไม่พบ user_session สำหรับ user: ${decoded.uid}`);
-
+            for (let i = 0; i < payload.length; i++) {
+                const rawQrPayload = payload[i];
                 currentRunningNumber++;
                 const paddedRunning = String(currentRunningNumber).padStart(4, '0');
                 const nextRandomNum = `${dataNo}${paddedRunning}`;
                 const seq = i + 1;
+                
+                // สถานะอาจจะเปลี่ยนจาก PRINTED เป็น PACKAGED หรือ SCANNED ตามที่คุณออกแบบไว้
+                const status = 'PACKAGED'; 
 
-                bookletsToInsert.push([
-                    sessionId,
-                    userSession.id,
-                    bagId, // ใส่ ID ที่เพิ่งสร้างสำเร็จ
-                    seq,
-                    "CREATED", // หรือ status ตามที่ตาราง booklet ใช้
-                    scannedAt,
-                    nextRandomNum
-                ]);
+                updatePromises.push(
+                    bookletsRepo.updateBagInfoByPayload(
+                        connection, 
+                        rawQrPayload, 
+                        bagId, 
+                        seq, 
+                        status, 
+                        nextRandomNum
+                    )
+                );
             }
 
-            if (bookletsToInsert.length > 0) {
-                await bookletsRepo.insertMany(connection, bookletsToInsert);
-            }
+            // สั่งรัน Update พร้อมกันทั้งหมด
+            await Promise.all(updatePromises);
 
             await connection.commit();
 
             return {
                 bagId,
                 campaign_id,
-                bagNo: targetBagNo, // ส่งกลับให้ Frontend แสดงผล
+                bagNo: targetBagNo,
             };
 
         } catch (error: any) {
             await connection.rollback();
-
-            if (error?.code === 'ER_DUP_ENTRY') {
-
-                if (error.message.includes('booklets.user_session_id')) {
-                    throw new Error('มีเล่มข้อสอบที่เคยถูกสแกนเข้าระบบแล้ว โปรดตรวจสอบอีกครั้ง');
-                }
-
-                throw new Error('ข้อมูลซ้ำในระบบ');
-            }
-
-            throw error;
+            throw error; // ไม่ต้องดัก ER_DUP_ENTRY แล้ว เพราะเราใช้การเช็ค Validation แทนการ Insert
         } finally {
             connection.release();
         }

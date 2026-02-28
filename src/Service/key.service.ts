@@ -7,6 +7,7 @@ import dashboardRepo from "../Repo/dashboard.repo";
 import settingsRepo from "../Repo/settings.repo";
 import campaignRepo from "../Repo/campaign.repo";
 import { authservice } from "./auth.service";
+import bookletsRepo from "../Repo/booklets.repo";
 
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 
@@ -206,6 +207,42 @@ export class keyService {
         };
     };
 
+    static decryptQrPayloadWithKeys = async (
+        qrPayload: string, 
+        FirstKey: string, 
+        SecondKey: string
+    ) => {
+        try {
+         
+            const key1Buffer = Buffer.from(FirstKey, PAYLOAD_ENCODING);
+            const key2Buffer = Buffer.from(SecondKey, PAYLOAD_ENCODING);
+
+   
+            const iv1Buffer = STATIC_IV_BUFFER;
+            const iv2Buffer = STATIC_IV_BUFFER;
+
+
+            const cipherBuffer = Buffer.from(qrPayload, CIPHER_ENCODING);
+
+
+            const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
+
+   
+            const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
+
+    
+            const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
+            const payload = JSON.parse(plainTextJsonString);
+
+
+            return payload; 
+
+        } catch (error: any) {
+            console.error("Service Error (decryptQrPayloadWithKeys):", error);
+            // ถ้าคีย์ผิด หรือ QR พัง มันจะเด้งเข้า catch ทันที 
+            throw new Error("คีย์ที่กรอกไม่ถูกต้อง หรือข้อมูล QR Code เสียหาย ไม่สามารถถอดรหัสได้");
+        }
+    };
     static runBulkEncryptionForSession = async (
         campaignId: number,
     ) => {
@@ -219,6 +256,7 @@ export class keyService {
         if (countkeys < 1) {
             throw new Error("ไม่สามารถทำการเข้ารหัสได้เนื่องจากรอบสอบนี้มีคีย์ไม่ครบ 2 คีย์");
         }
+
         const is_imported = await userImportRepo.IsImported(campaignId);
         if (!is_imported) {
             throw new Error("ไม่สามารถเข้ารหัสคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่มีการนำเข้าข้อมูลมาก่อน ");
@@ -228,7 +266,6 @@ export class keyService {
         let usersEncrypted = 0;
         try {
             await connection.beginTransaction();
-
 
             const sessionRows = await keyRepo.selectSessionIdByCampaign(
                 campaignId,
@@ -247,28 +284,31 @@ export class keyService {
             const keyFirst = keys.find(k => k.order_num === 1);
             const keySecond = keys.find(k => k.order_num === 2);
 
-            console.log(keyFirst, keySecond)
-
             if (!keyFirst || !keySecond) {
                 throw new Error("คีย์สำหรับรอบสอบนี้ไม่ครบ 2 คีย์");
             }
+
             const decryptedKey1Buffer = aesDecrypt(Buffer.from(keyFirst.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
             const decryptedKey1 = decryptedKey1Buffer.toString(PAYLOAD_ENCODING);
-            console.log("Decrypted Key 1 for verification:", decryptedKey1);
 
             const decryptedKey2Buffer = aesDecrypt(Buffer.from(keySecond.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
             const decryptedKey2 = decryptedKey2Buffer.toString(PAYLOAD_ENCODING);
-            console.log("Decrypted Key 2 for verification:", decryptedKey2);
 
-            console.log(campaignId)
-            // const [key1, key2] = keys;
             const key1Buffer = Buffer.from(decryptedKey1, PAYLOAD_ENCODING);
             const key2Buffer = Buffer.from(decryptedKey2, PAYLOAD_ENCODING);
 
             // Static IV Buffer ที่กำหนดไว้
             const iv1Buffer = STATIC_IV_BUFFER;
-            const iv2Buffer = STATIC_IV_BUFFER; // (ใช้ตัวเดียวกันสำหรับ Layer 2 ตามโค้ด Demo)
+            const iv2Buffer = STATIC_IV_BUFFER;
+
             for (const sessionId of sessionIds) {
+                const isAlreadyGenerated = await bookletsRepo.checkIfSessionEncrypted(sessionId, connection);
+                if (isAlreadyGenerated) {
+                    console.warn(`Session ${sessionId} already has booklets generated. Skipping.`);
+                    continue; // ข้ามไปทำ Session ถัดไป หรือจะ Throw Error ก็ได้ตาม Business Logic
+                }
+
+                // ดึงรายชื่อคนที่มีสิทธิ์สอบใน Session นี้
                 const allUserLinks = await userImportRepo.findAllUserLinksForSession(
                     sessionId,
                     connection
@@ -280,19 +320,21 @@ export class keyService {
                 }
                 console.log(`Encrypting ${allUserLinks.length} users for session ${sessionId}`);
 
-                // 🚀 OPTIMIZATION: แบ่งข้อมูลเป็นก้อน (Chunking) เพื่อ Bulk Update
-                const CHUNK_SIZE = 500; // อัปเดตทีละ 500 แถวต่อ 1 Query
+                // 🚀 OPTIMIZATION: แบ่งข้อมูลเป็นก้อน (Chunking) เพื่อ Bulk Insert
+                const CHUNK_SIZE = 500;
 
                 for (let i = 0; i < allUserLinks.length; i += CHUNK_SIZE) {
                     const chunk = allUserLinks.slice(i, i + CHUNK_SIZE);
-                    const updatesPayload: { id: number; payload: string }[] = [];
 
-                    // 1. เข้ารหัสข้อมูลสำหรับ 500 คนใน Memory (ตรงนี้ทำงานเร็วมาก)
+                    // 🛑 เปลี่ยนจาก array ของ {id, payload} เป็นรูปแบบสำหรับ Insert
+                    const bookletsToInsert: { session_id: number; qr_payload: string }[] = [];
+
+                    // 1. เข้ารหัสข้อมูลสำหรับ 500 คนใน Memory
                     for (const userLink of chunk) {
                         const payload = {
                             cid: campaignId,
                             sid: sessionId,
-                            uid: userLink.user_id,
+                            uid: userLink.user_id, // เก็บแค่ user_id
                         };
 
                         const plainTextBuffer = Buffer.from(
@@ -304,17 +346,19 @@ export class keyService {
                         const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
                         const finalCiphertext = step2.toString(CIPHER_ENCODING);
 
-                        // เก็บผลลัพธ์ลง Array เตรียมส่งอัปเดต
-                        updatesPayload.push({
-                            id: userLink.user_session_id,
-                            payload: finalCiphertext
+                        // 🛑 เตรียม Data สำหรับ Insert ลง booklets
+                        bookletsToInsert.push({
+                            session_id: sessionId,
+                            qr_payload: finalCiphertext
                         });
 
                         usersEncrypted++;
                     }
 
-                    // 2. ส่งข้อมูล 500 รายการไปอัปเดตใน Database ภายใน 1 Query
-                    await userImportRepo.bulkUpdateQrPayload(updatesPayload, connection);
+
+
+                    // 2. 🛑 ส่งข้อมูล 500 รายการไป Insert ลงตาราง booklets ใน 1 Query
+                    await bookletsRepo.bulkInsertBooklets(bookletsToInsert, connection);
                 }
             }
 
@@ -328,7 +372,6 @@ export class keyService {
             connection.release();
         }
     };
-
 
     static decryptQrPayload = async (
         ciphertext: string,
@@ -400,7 +443,8 @@ export class keyService {
         }
     };
 
-     static decryptQrPayloadNoLocks = async (
+
+    static decryptPayloadStaff = async (
         ciphertext: string,
         campaignId: number
     ) => {
@@ -411,6 +455,7 @@ export class keyService {
                 flag_qr_inactive = true;
                 throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน");
             }
+
             // 1. ดึงคีย์ (เหมือนเดิม)
             const keys = await keyRepo.findAllByCampaignId(campaignId);
             if (keys.length !== 2) {
@@ -448,6 +493,64 @@ export class keyService {
             const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
 
             // 6. ตรวจสอบและคืนค่า
+            const payload = JSON.parse(plainTextJsonString);
+
+            return payload;
+        } catch (error: any) {
+            console.error("Service Error (Decryption):", error);
+
+            if (flag_qr_inactive) {
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+
+            }
+
+            throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
+        }
+    };
+
+    static decryptQrPayloadNoLocks = async (
+        ciphertext: string,
+        campaignId: number
+    ) => {
+        let flag_qr_inactive = false
+        try {
+            const isActiveCamp = await campaignRepo.IscampaignActive(campaignId);
+            if (!isActiveCamp) {
+                flag_qr_inactive = true;
+                throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน");
+            }
+
+            const keys = await keyRepo.findAllByCampaignId(campaignId);
+            if (keys.length !== 2) {
+                throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากรอบสอบนี้ต้องมีคีย์ทั้งหมด 2 คีย์");
+            }
+
+            const [key1, key2] = keys;
+
+
+            const iv1Buffer = STATIC_IV_BUFFER;
+            const iv2Buffer = STATIC_IV_BUFFER;
+
+            const decryptedKey1Buffer = aesDecrypt(Buffer.from(key1.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const decryptedKey2Buffer = aesDecrypt(Buffer.from(key2.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY!, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+            const key1Buffer = Buffer.from(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+            const key2Buffer = Buffer.from(decryptedKey2Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+
+            console.log(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), decryptedKey2Buffer.toString(PAYLOAD_ENCODING))
+         
+            const cipherBuffer = Buffer.from(ciphertext, CIPHER_ENCODING);
+
+       
+
+            const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
+
+
+            const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
+
+ 
+            const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
+
+ 
             const payload = JSON.parse(plainTextJsonString);
 
             return payload;
@@ -638,6 +741,13 @@ export class keyService {
         const subjectsQuestions = await dashboardRepo.getSubjectQuestionsByCampaign(Number(campaign_id));
         const sessionDates = await keyRepo.GetSessionDate(Number(campaign_id)); // << ควรมี session_id + session_code
         const keyStatus = await keyRepo.KeyStatus(Number(campaign_id));
+        console.log("Dashboard Data Retrieved:", {
+            importStatus,
+            encryptedStatus,
+            subjectsQuestions,
+            sessionDates,
+            keyStatus,
+        });
 
         // --- helper ---
         const toNumber = (v: any, fallback = 0) => {
@@ -707,9 +817,9 @@ export class keyService {
             importStatus,
             encryptedStatus,
             keyStatus,
-            sessionDates,       // จะคงไว้ก็ได้
-            subjectsQuestions,  // จะคงไว้ก็ได้ (ไว้ debug)
-            sessions,           // ✅ ตัวใหม่ที่ UI ใช้ง่ายสุด
+            sessionDates,   
+            subjectsQuestions, 
+            sessions,           
         };
     };
 

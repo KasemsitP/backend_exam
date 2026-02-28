@@ -201,17 +201,10 @@ export class DashboardService {
         });
         return acc;
       }, {});
-
+      console.log( rawScoreDistribution)
       return {
         avgScorePerQuestion: rawAvgScorePerQuestion ?? [],
-        scoreDistribution: {
-          totalUsers: Number(rawScoreDistribution?.total_users ?? 0),
-          noScore: Number(rawScoreDistribution?.no_score ?? 0),
-          buckets: (rawScoreDistribution?.buckets ?? []).map((b: any) => ({
-            label: b.label,
-            count: Number(b.count ?? 0),
-          })),
-        },
+     scoreDistribution: rawScoreDistribution, //
         rawDisputedQuestions: rawDisputedQuestions ?? [],
         rawAverageQuestionScore: grouped,
       };

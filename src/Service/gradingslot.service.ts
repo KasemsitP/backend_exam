@@ -1,6 +1,7 @@
 // src/Service/gradingslot.service.ts
 import { DB } from "../model/DB";
 import gradingslotRepo from "../Repo/gradingslot.repo";
+import bookletsRepo from "../Repo/booklets.repo"; // 👈 เพิ่ม import นี้เพื่อหาข้อมูลเล่มข้อสอบ
 import { keyService } from "./key.service";
 import { PoolConnection } from "mysql2/promise";
 
@@ -11,14 +12,12 @@ interface CreateSlotFromQrPayload {
   questionNo: number;
 }
 
-
 interface AllocateSlotParams {
   bookletId: number;
   subjectId: number;
   questionNo: number;
   graderId: number;
 }
-
 
 export class gradingService {
   static async createSlotFromQr(
@@ -28,8 +27,7 @@ export class gradingService {
     graderOrder: number;
     status: string;
     bookletId: number;
-    userId: number;
-    userCode: string;
+    examCode: string; 
     subjectId: number;
     questionNo: number;
     bagId : number;
@@ -42,71 +40,47 @@ export class gradingService {
     try {
       await connection.beginTransaction();
 
-      // 1) ถอด QR
-      const decoded = await keyService.decryptQrPayloadNoLocks(qrPayload, campaignId);
-      // decoded: { cid, sid, uid, ... }
-      const { cid, sid, uid } = decoded;
-      console.log(decoded)
+      const bookletRow = await bookletsRepo.findBookletsbyQRpayload(connection, qrPayload);
 
-      if (cid !== campaignId) {
-        throw new Error("QR ไม่ตรงกับแคมเปญที่กำลังตรวจ");
+      if (!bookletRow) {
+        throw new Error("ไม่พบเล่มข้อสอบนี้ในระบบ หรืออาจสแกนผิด");
       }
+      if(bookletRow.bag_no === null || bookletRow.bag_id === null){
+        throw new Error("เล่มข้อสอบนี้ยังไม่ถูกจัดลงถุง ไม่สามารถสแกนได้");
+       }
 
-      // 2) ดูว่า grader คนนี้ใน session นี้ ถูก assign ข้ออะไร
+      // 2)  ได้ session_id มาจากตัวกระดาษคำตอบเลย
+      const sid = bookletRow.session_id;
+
+      // 3) ดูว่า grader คนนี้ใน session นี้ ถูก assign ข้ออะไร
       const assignment =
         await gradingslotRepo.findAssignmentForGraderInSession(
           connection,
           graderId,
           sid
         );
-      const questions = assignment.map(a => ({
-        subjectId: a.subject_id,
-        questionId: a.subject_question_id,
-        questionNo: a.question_no,
-        label: a.question_label
-      }));
-
-      console.log(assignment)
-      if (!assignment) {
+      
+      if (!assignment || assignment.length === 0) {
         throw new Error(
-          "ผู้ตรวจคนนี้ไม่ได้ถูกมอบหมายให้ตรวจในรอบสอบนี้ (หรือยังไม่ได้เซ็ต assignment)"
+          "ผู้ตรวจคนนี้ไม่ได้ถูกมอบหมายให้ตรวจข้อสอบในรอบนี้"
         );
       }
 
-      // const subjectId = assignment.subject_id;
-      // const questionNo = assignment.question_no;
-      // const subjectQuestionId = assignment.subject_question_id;
       const qNo = Number(questionNo);
-
       const question = assignment.find(
         a => a.question_no === qNo
       );
 
-     
-
       if (!question) {
-        throw new Error("ข้อที่เลือกไม่ได้ถูกมอบหมายให้คุณ");
-      }
-       console.log("question", question)
-      // 3) หาเล่มของผู้เข้าสอบ (จาก user_code / uid ใน QR)
-      const bookletRow = await gradingslotRepo.findBookletForUser(
-        connection,
-        campaignId,
-        sid,
-        uid // user_code
-      );
-
-      if (!bookletRow) {
-        throw new Error("ไม่พบเล่มข้อสอบของผู้เข้าสอบรายนี้ใน session นี้");
+        throw new Error("ข้อที่เลือกไม่ได้ถูกมอบหมายให้คุณตรวจ");
       }
 
       // 4) จอง slot ตามวิชากับข้อที่ assign ไว้
       const slot = await gradingService.allocateSlotForQuestion(
         {
-          bookletId: bookletRow.booklet_id,
+          bookletId: bookletRow.id, // ใช้ id จาก booklets
           subjectId :  question.subject_id,
           questionNo: question.question_no,
-          // หรือใช้ subjectQuestionId ถ้า grading_slots เก็บอ้างถึง subject_questions โดยตรง
           graderId,
         },
         connection
@@ -118,13 +92,12 @@ export class gradingService {
         slotId: slot.slotId,
         graderOrder: slot.graderOrder,
         status: slot.status,
-        bookletId: bookletRow.booklet_id,
-        userId: bookletRow.user_id,
-        userCode: bookletRow.user_code,
+        bookletId: bookletRow.id,
+        examCode: bookletRow.random_num , // ส่งเลขสุ่มกลับไป
         subjectId : question.subject_id,
         questionNo,
-        bagId : bookletRow.bag_id,
-        bagNo : bookletRow.bag_no
+        bagId : bookletRow.bag_id ,
+        bagNo : bookletRow.bag_no ,
       };
     } catch (err) {
       await connection.rollback();
@@ -133,8 +106,6 @@ export class gradingService {
       connection.release();
     }
   }
-
-
   /**
    * core logic: 1 ข้อ = 2 slot, ห้ามคนเดิมซ้ำ
    * แยกออกมาเผื่ออยาก reuse ในกรณีที่ไม่ได้มาจาก QR
@@ -154,6 +125,7 @@ export class gradingService {
     }
 
     try {
+      console.log(bookletId, subjectId, questionNo, graderId);
       const unscoredSlot = await gradingslotRepo.findUnscoredSlotForGrader(
         connection,
         bookletId,
@@ -161,6 +133,7 @@ export class gradingService {
         questionNo,
         graderId
       );
+      console.log("Unscored Slot Check:", unscoredSlot);
 
       if (unscoredSlot) {
         // เคส: สแกนซ้ำ / หน้าเด้ง แต่ยังไม่เคยบันทึก score
@@ -186,9 +159,9 @@ export class gradingService {
       const alreadyHasThisGrader = existingSlots.some(
         (s) => s.grader_id === graderId
       );
-      console.log(alreadyHasThisGrader, existingSlots)
+      console.log("Existing Slots for this Question:", existingSlots);
       if (alreadyHasThisGrader) {
-        throw new Error("ผู้ตรวจคนนี้ได้รับมอบหมายให้ตรวจข้อนี้อยู่แล้ว");
+        throw new Error("คุณเคยตรวจข้อสอบเล่มนี้แล้ว! ไม่สามารถตรวจซ้ำได้");
       }
 
       if (existingSlots.length >= 2) {

@@ -29,7 +29,7 @@ export class verifyService {
                         if (!isActiveCamp) {
                                 throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
                         }
-                        console.log("TEST CAM",isActiveCamp)
+                        console.log("TEST CAM", isActiveCamp)
 
 
                         const decryptedPayload = await keyService.keyService.decryptQrPayload(
@@ -42,7 +42,7 @@ export class verifyService {
                                 throw new Error(`QR Code ไม่ถูกต้อง หรือถอดรหัสล้มเหลว`);
                         }
                         console.log(decryptedPayload)
-                        
+
                         if (decryptedPayload.cid !== campaignIdNumeric) {
                                 throw new Error(`สมุดเล่มนี้อยู่คนละรอบสอบปัจจุบัน กรุณาติดต่อเจ้าหน้าที่`);
                         }
@@ -84,54 +84,50 @@ export class verifyService {
                                 throw new Error(`รอบสอบนี้ยังไม่เปิดใช้งาน`);
                         }
 
-                        const decryptedPayload = await keyService.keyService.decryptQrPayloadNoLocks(
-                                qr_payload,
-                                campaignIdNumeric,
-                        );
+                        const decryptedPayload = await bookletsRepo.findBookletsbyQRpayloadandBookletsID(connection, qr_payload, booklets_id);
                         console.log(decryptedPayload)
 
-                        if (!decryptedPayload || !decryptedPayload.uid || !decryptedPayload.sid) {
-                                throw new Error(`QR Code ไม่ถูกต้อง หรือถอดรหัสล้มเหลว`);
-                        }
-                        if (decryptedPayload.cid !== campaignIdNumeric) {
-                                throw new Error(`เกิดข้อผิดพลาดรอบสอบนี้ไม่ตรงกับรอบสอบใน QR Code`);
+
+                        if (!decryptedPayload) {
+                                throw new Error(`สมุดเล่มนี้ไม่ใช่สมุดที่มีคะแนนเกิน 4 คะแนน`);
                         }
 
                         console.log(decryptedPayload)
 
                         // 3. ดึงข้อมูลผู้สอบ (ใช้ฟังก์ชันใน Canvas)
-                        const userSession = await userSessionsRepo.findByUserCodeAndSessionIdForQRcode(
-                                decryptedPayload.uid,
-                                decryptedPayload.sid,
-                                connection
-                        );
-                        console.log(userSession)
-                        if (!userSession) {
-                                throw new Error(`ไม่พบข้อมูลผู้สอบ (UserCode: ${decryptedPayload.uid})`);
-                        }
+                        // const userSession = await userSessionsRepo.findByUserCodeAndSessionIdForQRcode(
+                        //         decryptedPayload.uid,
+                        //         decryptedPayload.sid,
+                        //         connection
+                        // );
+                        // console.log(userSession)
+                        // if (!userSession) {
+                        //         throw new Error(`ไม่พบข้อมูลผู้สอบ (UserCode: ${decryptedPayload.uid})`);
+                        // }
 
-                        const booklets = await bookletsRepo.findBookletsbyQRpayload(
-                                connection,
-                                decryptedPayload.cid,
-                                decryptedPayload.sid,
-                                decryptedPayload.uid
-                        );                      
-                        if (!booklets || booklets.length === 0) {
-                                throw new Error(`ไม่พบสมุดคำตอบที่ตรงกับคิวอาร์โค้ดนี้`);
-                        }
-                        const bookletsQR_id = booklets.booklet_id 
-                        if(bookletsQR_id !== booklets_id) {
-                                throw new Error(`สมุดคำตอบนี้ไม่ตรงกับคิวอาร์โค้ดนี้`);
-                        }
-                
+                        // const booklets = await bookletsRepo.findBookletsbyQRpayload(
+                        //         connection,
+                        //         decryptedPayload.cid,
+                        //         decryptedPayload.sid,
+                        //         decryptedPayload.uid
+                        // );        
+                        // const booklets = [ {}]             
+                        // if (!booklets || booklets.length === 0) {
+                        //         throw new Error(`ไม่พบสมุดคำตอบที่ตรงกับคิวอาร์โค้ดนี้`);
+                        // }
+                        // const bookletsQR_id = booklets.booklet_id 
+                        // if(bookletsQR_id !== booklets_id) {
+                        //         throw new Error(`สมุดคำตอบนี้ไม่ตรงกับคิวอาร์โค้ดนี้`);
+                        // }
+
                         const userSessionWithExtra = {
-                                booklets_id: bookletsQR_id,
-                                subject_name : userSession.subjectName,
-                                bag_no : booklets.bag_no,
+                                booklets_id: decryptedPayload.random_num,
+                                subject_name: decryptedPayload.subject_name,
+                                bag_no: decryptedPayload.bag_no,
                         };
 
-                        console.log(userSessionWithExtra)
-                        return { success: true,  data: { ...userSessionWithExtra } }
+                         console.log(userSessionWithExtra)
+                        return { success: true, data: userSessionWithExtra }
 
                 } catch (error) {
                         console.error("Service Error (Verify QR):", error);

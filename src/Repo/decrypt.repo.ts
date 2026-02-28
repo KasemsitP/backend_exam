@@ -40,13 +40,14 @@ interface SlotCoverageRow extends RowDataPacket {
   disputed_slots: number;
   ss_question_count: number;
   mismatch_question_count: number;   // 0/1
+
 }
 
 export interface UnlockPrereqResult {
   ok: boolean;
   issues: { code: UnlockIssueCode; message: string; meta?: any }[];
   counts: {
-    keyCount: number;
+  //  keyCount: number;
     ucCount: number;
     missingSeat: number;
     pendingSlots: number;
@@ -55,6 +56,8 @@ export interface UnlockPrereqResult {
     missingSlotsTotal: number;
     notCompletedTotal: number;
     mismatchCountTotal: number;
+    missingScoreSlots: number;
+    
   };
   details: {
     slotCoverage: SlotCoverageRow[];
@@ -63,7 +66,7 @@ export interface UnlockPrereqResult {
 
 
 class DecryptRepo {
-  async checkUnlockPrerequisites(
+async checkUnlockPrerequisites(
     campaignId: number,
     conn: PoolConnection
   ): Promise<UnlockPrereqResult> {
@@ -95,7 +98,22 @@ class DecryptRepo {
        JOIN booklets b ON b.id = gs.booklet_id
        JOIN sessions s ON s.id = b.session_id
        WHERE s.campaign_id = ?
+         AND b.bag_id IS NOT NULL 
          AND gs.status IN ('OPEN','ASSIGNED','DISPUTED')`,
+      [campaignId]
+    );
+
+    //  NEW CASE: ตรวจสอบความผิดปกติ (สถานะเสร็จแล้ว แต่ไม่มีคะแนนจริงๆ)
+    const [[{ missing_score_slots }]] = await conn.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS missing_score_slots
+       FROM grading_slots gs
+       JOIN booklets b ON b.id = gs.booklet_id
+       JOIN sessions s ON s.id = b.session_id
+       LEFT JOIN grading_scores gsc ON gsc.slot_id = gs.id --  LEFT JOIN หาคะแนน
+       WHERE s.campaign_id = ?
+         AND b.bag_id IS NOT NULL 
+         AND gs.status = 'COMPLETED'
+         AND gsc.id IS NULL`, 
       [campaignId]
     );
 
@@ -113,8 +131,9 @@ class DecryptRepo {
 WITH booklets_in_campaign AS (
   SELECT b.id AS booklet_id, b.session_id
   FROM booklets b
-  JOIN user_sessions us ON us.id = b.user_session_id
-  WHERE us.campaign_id = ?
+  JOIN sessions s ON s.id = b.session_id 
+  WHERE s.campaign_id = ?
+    AND b.bag_id IS NOT NULL
 ),
 
 booklet_counts AS (
@@ -128,13 +147,11 @@ question_counts AS (
     ss.session_id,
     ss.subject_id,
 
-    -- ✅ ยึด subject_questions ก่อน ถ้ามี, ถ้าไม่มีค่อยใช้ ss.question_count
     COALESCE(
       NULLIF(COUNT(DISTINCT sq.question_no), 0),
       ss.question_count
     ) AS question_count_effective,
 
-    -- เอาไว้ตรวจ mismatch เฉย ๆ
     COUNT(DISTINCT sq.question_no) AS question_count_sq,
     ss.question_count AS question_count_ss,
 
@@ -151,15 +168,15 @@ expected AS (
   SELECT
     qc.session_id,
     qc.subject_id,
-    bc.booklet_count,
+    COALESCE(bc.booklet_count, 0) AS booklet_count,
     qc.question_count_effective AS question_count,
-    (bc.booklet_count * qc.question_count_effective * 2) AS expected_slots,
+    (COALESCE(bc.booklet_count, 0) * qc.question_count_effective * 2) AS expected_slots,
 
     qc.question_count_sq,
     qc.question_count_ss,
     qc.mismatch_question_count
   FROM question_counts qc
-  JOIN booklet_counts bc ON bc.session_id = qc.session_id
+  LEFT JOIN booklet_counts bc ON bc.session_id = qc.session_id
 ),
 
 actual AS (
@@ -190,10 +207,8 @@ SELECT
   COALESCE(a.disputed_slots,0)   AS disputed_slots,
   COALESCE(a.pending_slots,0)    AS pending_slots,
 
-  -- ✅ สรุป “ขาด slot” ชัด ๆ
   GREATEST(e.expected_slots - COALESCE(a.actual_slots,0), 0) AS missing_slots,
 
-  -- ✅ เอาไว้ debug mismatch
   e.question_count_sq,
   e.question_count_ss,
   e.mismatch_question_count
@@ -203,13 +218,12 @@ LEFT JOIN actual a
   ON a.session_id = e.session_id
  AND a.subject_id = e.subject_id
 ORDER BY e.session_id, e.subject_id;
-
     `;
 
-    const [slotCoverage] = await conn.query<SlotCoverageRow[]>(
+    // @ts-ignore
+    const [slotCoverage] = await conn.query<any[]>(
       slotCoverageSql,
       [campaignId , campaignId]
-      
     );
 
     // totals
@@ -225,19 +239,21 @@ ORDER BY e.session_id, e.subject_id;
       if (Number(r.mismatch_question_count) === 1) mismatchCountTotal += 1;
     }
 
-    // build issues list (เรียงความสำคัญ)
-    const issues: UnlockPrereqResult["issues"] = [];
+    // build issues list
+    const issues: any[] = []; 
 
     const keyCount = Number(key_count);
     const ucCount = Number(uc_count);
     const missingSeat = Number(missing_seat);
     const pendingSlots = Number(pending_slots);
     const unbaggedCount = Number(unbagged);
+    const missingScoreSlots = Number(missing_score_slots); // 👈 แปลงค่าตัวแปรใหม่
 
     if (keyCount === 0) {
       issues.push({ code: "NO_KEYS", message: "ยังไม่ได้สร้างคีย์สำหรับแคมเปญนี้" });
-    } else if (keyCount < 2) {
-      issues.push({ code: "NOT_ENOUGH_KEYS", message: "คีย์ยังไม่ครบ 2 ดอก", meta: { keyCount } });
+    // } else if (keyCount < 2) {
+    //   issues.push({ code: "NOT_ENOUGH_KEYS", message: "คีย์ยังไม่ครบ 2 ดอก", meta: { keyCount } });
+    // }
     }
 
     if (ucCount === 0) {
@@ -263,24 +279,31 @@ ORDER BY e.session_id, e.subject_id;
     if (missingSlotsTotal > 0) {
       issues.push({
         code: "SLOT_MISSING",
-        message: "ระบบยังสร้าง grading slots ไม่ครบตามจำนวนที่ควรมี",
+        message: "ระบบยังสร้าง grading slots ไม่ครบตามจำนวนที่ควรมี (อิงจากเล่มที่อยู่ในถุง)",
         meta: { missingSlotsTotal }
       });
     }
 
-    // pendingSlots ของคุณคือ OPEN/ASSIGNED/DISPUTED ทั้งหมด -> ถ้ามีคือยังไม่พร้อมปลดล็อก
     if (pendingSlots > 0) {
       issues.push({
         code: "SLOT_NOT_COMPLETED",
-        message: "ยังมีช่องตรวจที่ยังไม่เสร็จ (OPEN/ASSIGNED/DISPUTED)",
+        message: "ยังมีช่องตรวจที่ยังไม่เสร็จ (OPEN/ASSIGNED/DISPUTED) สำหรับข้อสอบในถุง",
         meta: { pendingSlots }
       });
     } else if (notCompletedTotal > 0) {
-      // เผื่อกรณี status ไม่อยู่ในชุด pending แต่ completed ยังไม่ครบ expected
       issues.push({
         code: "SLOT_NOT_COMPLETED",
-        message: "คะแนนยังไม่ครบทุกช่องตาม expected",
+        message: "คะแนนยังไม่ครบทุกช่องตามจำนวนเล่มในถุงที่คำนวณไว้",
         meta: { notCompletedTotal }
+      });
+    }
+
+    // 🚀 NEW CASE: Push Error ถ้ามีข้อมูลคะแนนแหว่งหายไป
+    if (missingScoreSlots > 0) {
+      issues.push({
+        code: "COMPLETED_BUT_NO_SCORE",
+        message: `พบข้อมูลผิดปกติ: มีช่องตรวจจำนวน ${missingScoreSlots} ช่อง ที่สถานะเสร็จสิ้นแล้ว แต่ไม่พบข้อมูลคะแนนในระบบ (คะแนนอาจสูญหาย)`,
+        meta: { missingScoreSlots }
       });
     }
 
@@ -290,7 +313,6 @@ ORDER BY e.session_id, e.subject_id;
       ok,
       issues,
       counts: {
-        keyCount,
         ucCount,
         missingSeat,
         pendingSlots,
@@ -298,11 +320,11 @@ ORDER BY e.session_id, e.subject_id;
         missingSlotsTotal,
         notCompletedTotal,
         mismatchCountTotal,
+        missingScoreSlots, // 👈 ส่งค่ากลับไปให้เผื่อเอาไปทำ Log หรือ Debug ต่อได้
       },
       details: { slotCoverage },
     };
   }
-
   async getCampaignIdUnlock(campaignId: number, conn: PoolConnection): Promise<CampaignUnlockRow | null> {
     const sql = `
       SELECT id, is_unlock

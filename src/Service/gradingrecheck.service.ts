@@ -6,7 +6,6 @@ import gradingscoreRepo, {
 } from "../Repo/gradingscore.repo";
 import gradingslotRepo from "../Repo/gradingslot.repo";
 import { gradingService } from "./gradingslot.service";
-import { keyService } from "./key.service";
 
 interface ScanDisputedFromQrPayload {
   qrPayload: string;
@@ -24,54 +23,7 @@ interface ResetRecheckParams {
 }
 
 export class gradingRecheckService {
-  /**
-   * ใช้ตอน "บันทึกคะแนน" เพื่อเช็คว่าคะแนน 2 คนต่างกันเกิน threshold มั้ย
-   * - ถ้าใช่ → เซ็ต status ของ slot ทั้งคู่เป็น DISPUTED
-   * NOTE: ใช้ connection ที่ส่งมาจาก transaction เดิม (ห้าม commit/rollback เอง)
-   */
-  static async scanDisputedFromQr(payload: ScanDisputedFromQrPayload) {
-    const { qrPayload, campaignId } = payload;
 
-    const conn = await DB.getInstance().getConnection();
-    try {
-      // 1) ถอด QR
-      const decoded = await keyService.decryptQrPayload(qrPayload, campaignId);
-      const { cid, sid, uid } = decoded; // สมมติ structure เดิม { cid, sid, uid, ... }
-
-      if (cid !== campaignId) {
-        throw new Error("QR ไม่ตรงกับแคมเปญที่เลือก");
-      }
-
-      // 2) หาเล่มของคนนี้ใน session นี้
-      const bookletRow = await gradingslotRepo.findBookletForUser(
-        conn,
-        campaignId,
-        sid,
-        uid
-      );
-      if (!bookletRow) {
-        throw new Error("ไม่พบเล่มข้อสอบของผู้เข้าสอบรายนี้ใน session นี้");
-      }
-
-      // 3) ดึงทุก slot ที่ DISPUTED ในเล่มนี้
-      const disputedSlots = await gradingscoreRepo.findDisputedByBooklet(
-        conn,
-        bookletRow.booklet_id
-      );
-
-      return {
-        campaignId,
-        sessionId: sid,
-        userCode: bookletRow.user_code,
-        userId: bookletRow.user_id,
-        bookletId: bookletRow.booklet_id,
-        hasDispute: disputedSlots.length > 0,
-        disputedSlots,
-      };
-    } finally {
-      conn.release();
-    }
-  }
   static async checkAndMarkDisputedIfNeeded(
     conn: PoolConnection,
     slotId: number,

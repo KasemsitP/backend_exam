@@ -87,7 +87,7 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
   let y = top;
   doc.font(FONT_BOLD).fontSize(16).text(`เอกสารคะแนนการทดสอบเพื่อบรรจุเป็นข้าราชการอัยการในตำแหน่งอัยการผู้ช่วย พ.ศ.${info?.year_be} (${info?.campaign_size})`, left, y, { width: contentWidth, align: "center" });
   doc.font(FONT_NORMAL).fontSize(30).text(`ถุงที่ ${info?.bag_no}`, left, y, { width: contentWidth, align: "right" });
-  
+
   y += 24;
   doc.font(FONT_NORMAL).fontSize(14).text(`วิชา${info?.subject_name}`, left, y, { width: contentWidth, align: "center" });
   y = doc.y + 10;
@@ -113,7 +113,7 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
   let x = startX;
   doc.lineWidth(0.5).strokeColor("black");
   doc.font(FONT_BOLD).fontSize(fontHeaderSize);
-  
+
   // รวบเส้น Header ชั้นบน
   let p = doc.rect(x, y, cwCode, rowH1 + rowH2);
   doc.text(title_code, x, y + 6 * scale, { width: cwCode, align: "center" });
@@ -150,7 +150,7 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
   for (let i = 0; i < totalRows; i++) {
     const bk = booklets[i];
     x = startX;
-    
+
     // ⚡ รวบเส้น Body แถวนี้ทั้งหมด
     let pathRow = doc.rect(x, y, cwCode, rowH);
     if (bk) doc.text(bk.examCode ?? "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), { width: cwCode - 4 * scale, align: "left", ellipsis: true });
@@ -164,7 +164,7 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
       const diff = s1 != null && s2 != null ? Math.abs(Number(s1) - Number(s2)) : null;
       const avg = s1 != null && s2 != null ? (Number(s1) + Number(s2)) / 2 : qRow?.finalScore ?? null;
       const vals = [s1, s2, diff, avg];
-      
+
       vals.forEach((val) => {
         pathRow = pathRow.rect(x, y, cwScore, rowH);
         doc.text(val == null ? "" : Number(val).toFixed(1), x, y + 3 * scale, { width: cwScore, align: "center", ellipsis: true });
@@ -223,7 +223,7 @@ async function buildCampaignBagScoresPdf(options: { campaignId: number }, writeS
   try {
     const bagRows = await getAllBags(conn, options.campaignId);
     const unlockData = await getCampaignUnlock(conn, options.campaignId);
-   const unlock = unlockData ?? 0;
+    const unlock = unlockData ?? 0;
 
     if (!bagRows.length) throw new Error("ไม่พบถุงใด ๆ ในแคมเปญนี้");
 
@@ -292,16 +292,15 @@ async function buildGraderBagSummaryPdf(options: { bagId: number, graderId: numb
     const drawHeader = () => {
       doc.font(FONT_BOLD).fontSize(12).lineWidth(0.5).strokeColor("black");
       doc.rect(startX, y, colNoWidth, rowHeight)
-         .rect(startX + colNoWidth, y, colQrWidth, rowHeight)
-         .rect(startX + colNoWidth + colQrWidth, y, colScoreWidth, rowHeight).stroke();
-      
+        .rect(startX + colNoWidth, y, colQrWidth, rowHeight)
+        .rect(startX + colNoWidth + colQrWidth, y, colScoreWidth, rowHeight).stroke();
+
       doc.text("ลำดับ", startX, y + 4, { width: colNoWidth, align: "center" });
-      doc.text("QR Payload", startX + colNoWidth, y + 4, { width: colQrWidth, align: "center" });
+      doc.text("รหัสข้อสอบ", startX + colNoWidth, y + 4, { width: colQrWidth, align: "center" }); // 👈 แก้ตรงนี้
       doc.text("คะแนน", startX + colNoWidth + colQrWidth, y + 4, { width: colScoreWidth, align: "center" });
       y += rowHeight;
       doc.font(FONT_NORMAL).fontSize(11);
     };
-
     drawHeader();
 
     for (let idx = 0; idx < rows.length; idx++) {
@@ -316,11 +315,11 @@ async function buildGraderBagSummaryPdf(options: { bagId: number, graderId: numb
       const xNo = startX, xQr = startX + colNoWidth, xScore = xQr + colQrWidth;
       // ⚡ รวบเส้น
       doc.rect(xNo, y, colNoWidth, rowHeight)
-         .rect(xQr, y, colQrWidth, rowHeight)
-         .rect(xScore, y, colScoreWidth, rowHeight).stroke();
+        .rect(xQr, y, colQrWidth, rowHeight)
+        .rect(xScore, y, colScoreWidth, rowHeight).stroke();
 
       doc.text(String(idx + 1), xNo, y + 4, { width: colNoWidth, align: "center" });
-      doc.text(row.qr_payload ?? "-", xQr + 2, y + 4, { width: colQrWidth - 4, align: "left" });
+      doc.text(row.exam_code ?? "-", xQr + 2, y + 4, { width: colQrWidth - 4, align: "left" }); // 👈 แก้ตรงนี้
       doc.text(row.total_score != null ? Number(row.total_score).toFixed(0) : "", xScore, y + 4, { width: colScoreWidth, align: "center" });
 
       y += rowHeight;
@@ -353,7 +352,7 @@ async function buildPassListPdf(options: any, writeStream: fs.WriteStream) {
   const startX = doc.page.margins.left;
   let y = doc.y;
   const headerH = 20, rowH = 18;
-  const x1 = startX, x2 = x1 + colW[0], x3 = x2 + colW[1], x4 = x3 + colW[2]; 
+  const x1 = startX, x2 = x1 + colW[0], x3 = x2 + colW[1], x4 = x3 + colW[2];
 
   const drawHeader = () => {
     doc.lineWidth(0.7).strokeColor("black");
@@ -386,7 +385,7 @@ async function buildPassListPdf(options: any, writeStream: fs.WriteStream) {
     doc.text(r.userCode, x2, ty, { width: colW[1], align: "center" });
     doc.text(`${r.title ?? ""}${r.title ? " " : ""}${r.fullName}`, x3 + 6, ty, { width: colW[2] - 12, align: "left" });
     if (includeScore) doc.text(r.finalScore == null ? "-" : Number(r.finalScore).toFixed(2), x4, ty, { width: colW[3], align: "center" });
-    
+
     y += rowH;
     if (idx % 200 === 0) await new Promise(resolve => setTimeout(resolve, 0));
   }
@@ -449,39 +448,39 @@ async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
   const doc = new PDFDocument({ size: "A4", margins: { top: 40, bottom: 40, left: 40, right: 40 }, autoFirstPage: true, bufferPages: false });
   doc.pipe(writeStream);
 
-const drawHeaderInfo = () => {
-  let headerY = 40;
+  const drawHeaderInfo = () => {
+    let headerY = 40;
 
-  doc.font(FONT_BOLD)
-     .fontSize(16)
-     .text("บัญชีรายชื่อเรียงลำดับคะแนน", 40, headerY, { align: "center" });
+    doc.font(FONT_BOLD)
+      .fontSize(16)
+      .text("บัญชีรายชื่อเรียงลำดับคะแนน", 40, headerY, { align: "center" });
 
-  headerY += 22;
+    headerY += 22;
 
-  doc.font(FONT_NORMAL)
-     .fontSize(12)
-     .text(
-       `สนามสอบ: ${examInfo.site} (${examInfo.campaign_size} ${examInfo.year_be})`,
-       40,
-       headerY,
-       { align: "center" }
-     );
+    doc.font(FONT_NORMAL)
+      .fontSize(12)
+      .text(
+        `สนามสอบ: ${examInfo.site} (${examInfo.campaign_size} ${examInfo.year_be})`,
+        40,
+        headerY,
+        { align: "center" }
+      );
 
-  return headerY + 20; // คืนค่า y ถัดไป
-};
+    return headerY + 20; // คืนค่า y ถัดไป
+  };
   drawHeaderInfo();
 
   const pageWidth = doc.page.width - 80;
-  const colWidths = [pageWidth * 0.1, pageWidth * 0.2, pageWidth * 0.55, pageWidth * 0.15]; 
+  const colWidths = [pageWidth * 0.1, pageWidth * 0.2, pageWidth * 0.55, pageWidth * 0.15];
   const drawTableHeader = (currentY: number) => {
     doc.font(FONT_BOLD).fontSize(12).lineWidth(0.5)
-       .rect(40, currentY, pageWidth, 20)
-       .moveTo(40 + colWidths[0], currentY).lineTo(40 + colWidths[0], currentY + 20)
-       .moveTo(40 + colWidths[0] + colWidths[1], currentY).lineTo(40 + colWidths[0] + colWidths[1], currentY + 20)
-       .moveTo(40 + colWidths[0] + colWidths[1] + colWidths[2], currentY).lineTo(40 + colWidths[0] + colWidths[1] + colWidths[2], currentY + 20)
-       .stroke();
+      .rect(40, currentY, pageWidth, 20)
+      .moveTo(40 + colWidths[0], currentY).lineTo(40 + colWidths[0], currentY + 20)
+      .moveTo(40 + colWidths[0] + colWidths[1], currentY).lineTo(40 + colWidths[0] + colWidths[1], currentY + 20)
+      .moveTo(40 + colWidths[0] + colWidths[1] + colWidths[2], currentY).lineTo(40 + colWidths[0] + colWidths[1] + colWidths[2], currentY + 20)
+      .stroke();
     ["ลำดับ", "รหัสประจำตัว", "ชื่อ-สกุล", "คะแนนรวม"].forEach((h, i) => {
-      doc.text(h, 40 + colWidths.slice(0, i).reduce((a,b)=>a+b,0), currentY + 5, { width: colWidths[i], align: "center" });
+      doc.text(h, 40 + colWidths.slice(0, i).reduce((a, b) => a + b, 0), currentY + 5, { width: colWidths[i], align: "center" });
     });
   };
 
@@ -494,9 +493,9 @@ const drawHeaderInfo = () => {
     }
 
     doc.rect(40, y, pageWidth, 20)
-       .moveTo(40 + colWidths[0], y).lineTo(40 + colWidths[0], y + 20)
-       .moveTo(40 + colWidths[0] + colWidths[1], y).lineTo(40 + colWidths[0] + colWidths[1], y + 20)
-       .moveTo(40 + colWidths[0] + colWidths[1] + colWidths[2], y).lineTo(40 + colWidths[0] + colWidths[1] + colWidths[2], y + 20).stroke();
+      .moveTo(40 + colWidths[0], y).lineTo(40 + colWidths[0], y + 20)
+      .moveTo(40 + colWidths[0] + colWidths[1], y).lineTo(40 + colWidths[0] + colWidths[1], y + 20)
+      .moveTo(40 + colWidths[0] + colWidths[1] + colWidths[2], y).lineTo(40 + colWidths[0] + colWidths[1] + colWidths[2], y + 20).stroke();
 
     let x = 40;
     doc.text(String(idx + 1), x, y + 4, { width: colWidths[0], align: "center" }); x += colWidths[0];

@@ -44,27 +44,6 @@ export class GradingRecheckController {
         .json({ message: err.message || "Internal Server Error" });
     }
   }
-    static async scanDisputed(req: Request, res: Response) {
-    try {
-      const { qrPayload, campaignId } = req.body;
-
-      if (!qrPayload || !campaignId) {
-        return res.status(400).json({ message: "ข้อมูลไม่ครบ" });
-      }
-
-      const result = await gradingRecheckService.scanDisputedFromQr({
-        qrPayload,
-        campaignId: Number(campaignId),
-      });
-
-      return res.json(result);
-    } catch (err: any) {
-      console.error(err);
-      return res
-        .status(400)
-        .json({ message: err.message ?? "เกิดข้อผิดพลาด" });
-    }
-  }
     static async listDisputed(req: Request, res: Response) {
     try {
       const {campaign_id} = req.params

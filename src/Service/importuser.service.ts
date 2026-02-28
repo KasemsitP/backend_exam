@@ -3,6 +3,7 @@ import userImportRepo from "../Repo/importuser.repo";
 import sessionRepo from "../Repo/session.repo";
 import shuffle from "lodash.shuffle";
 import { chunk } from "lodash";
+import { RowDataPacket } from "mysql2";
 
 interface ImportResponse {
   totalUsersCreated: number;
@@ -203,6 +204,7 @@ export class userImportService {
       // Phase 1: เตรียมข้อมูลทั้งหมดไว้ใน Memory
       // ------------------------------------------------------------------
       const processedData = [];
+      const seenNationalIdsInFile = new Set<string>();
 
       for (const row of rows) { //      for (const row of shuffledRows) {
         const firstName = row.firstname ?? row.first_name ?? row.firstName ?? row["ชื่อ"] ?? row["first name"];
@@ -223,6 +225,13 @@ export class userImportService {
         generatedRunning++;
 
         const nationalId = row.national_id ?? row["national_id"] ?? row["citizen_id"] ?? row["เลขบัตรประชาชน"] ?? row["เลขประจำตัวประชาชน"] ?? row["id_card"] ?? null;
+        if (nationalId) {
+          const cleanNationalId = String(nationalId).trim();
+          if (seenNationalIdsInFile.has(cleanNationalId)) {
+            throw new Error(`พบข้อมูลซ้ำซ้อนในไฟล์ที่อัปโหลด: เลขบัตรประชาชน ${cleanNationalId} (ชื่อ: ${fullName}) มีมากกว่า 1 รายการ กรุณาตรวจสอบไฟล์ของท่าน`);
+          }
+          seenNationalIdsInFile.add(cleanNationalId);
+        }
         const birthDateRaw = row.dateofbirth ?? row.birth_date ?? row["birth date"] ?? row["วันเกิด"] ?? row["วัน/เดือน/ปีเกิด"] ?? null;
         const birthDate = normalizeDate(birthDateRaw);
 
@@ -235,6 +244,33 @@ export class userImportService {
           nationalId,
           birthDate,
         });
+      }
+      const nationalIdsToCheck = Array.from(seenNationalIdsInFile);
+      
+      if (nationalIdsToCheck.length > 0) {
+        // หั่นทีละ 1000 เผื่อไฟล์ใหญ่มาก จะได้ไม่เกิน Limit ของ SQL 'IN' clause
+        const checkChunks = chunk(nationalIdsToCheck, 1000); 
+        
+        for (const nIdChunk of checkChunks) {
+          const placeholders = nIdChunk.map(() => "?").join(",");
+          const sqlCheck = `
+            SELECT u.national_id, u.full_name
+            FROM users u
+            JOIN user_campaigns uc ON u.id = uc.user_id
+            WHERE uc.campaign_id = ? 
+              AND u.national_id IN (${placeholders})
+          `;
+          
+          const [existingUsers] = await connection.query<RowDataPacket[]>(sqlCheck, [campaignId, ...nIdChunk]);
+          
+          if (existingUsers && existingUsers.length > 0) {
+            // ถ้าเจอว่ามีในระบบแล้ว ดึงรายชื่อมาโชว์ใน Error
+            const duplicateNames = existingUsers.slice(0, 3).map(u => `${u.full_name} (${u.national_id})`).join(", ");
+            const moreCount = existingUsers.length > 3 ? ` และอื่นๆ อีก ${existingUsers.length - 3} รายการ` : "";
+            
+            throw new Error(`ไม่สามารถนำเข้าได้ เนื่องจากพบผู้เข้าสอบที่ถูกนำเข้าในรอบสอบนี้ไปแล้ว: ${duplicateNames}${moreCount}`);
+          }
+        }
       }
 
       // ------------------------------------------------------------------

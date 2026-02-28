@@ -1,5 +1,6 @@
 // src/Repo/booklets.repo.ts
-import { PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/promise";
+import { PoolConnection, RowDataPacket, ResultSetHeader, Pool } from "mysql2/promise";
+import { DB } from "../model/DB";
 
 export interface DbBookletRow extends RowDataPacket {
   id: number;
@@ -26,8 +27,16 @@ interface SessionRow extends RowDataPacket {
   day_no: number;
 }
 
+interface QrPayloadRow extends RowDataPacket {
+  qr_payload: string;
+}
+
 
 class BookletsRepo {
+  private pool: Pool;
+  constructor() {
+    this.pool = DB.getInstance();
+  }
   // หาค่า seq_in_bag สูงสุดในถุงนี้ (เผื่อมีของเก่าแล้ว จะต่อจากเลขเดิม)
   async getMaxSeqInBag(
     conn: PoolConnection,
@@ -103,34 +112,28 @@ class BookletsRepo {
     campaignId: number,
     sessionId: number,
     bagNo: number
-  ): Promise<DbBookletInBagRow[]> {
+  ): Promise<any[]> { // แนะนำให้ใช้ Type ที่เอา user_code กับ full_name ออกแล้ว
     const sql = `
-SELECT
+      SELECT
         bk.id          AS booklet_id,
         bk.session_id,
         bk.bag_id,
         bk.seq_in_bag,
         bk.status,
         bk.random_num,
-        us.qr_payload  AS qr_payload,
-        u.user_code,
-        u.full_name,
-        bk.created_at
+        bk.qr_payload,
+        bk.created_at,
+        b.bag_no
       FROM booklets bk
-      join bags b on b.id = bk.bag_id
-      JOIN user_sessions us
-        ON bk.user_session_id = us.id
-      JOIN user_campaigns uc
-        ON us.user_campaign_id = uc.id
-      JOIN users u
-        ON uc.user_id = u.id
-      WHERE us.campaign_id = ?
+      JOIN bags b ON b.id = bk.bag_id
+      JOIN sessions s ON bk.session_id = s.id
+      WHERE s.campaign_id = ?
         AND bk.session_id = ?
         AND b.bag_no   = ?
       ORDER BY bk.seq_in_bag ASC, bk.id ASC;
     `;
 
-    const [rows] = await conn.execute<DbBookletInBagRow[]>(sql, [
+    const [rows] = await conn.execute<any[]>(sql, [
       campaignId,
       sessionId,
       bagNo,
@@ -138,50 +141,64 @@ SELECT
     return rows;
   }
 
-
+  // 4. หา Booklet ด้วย QR Payload
   async findBookletsbyQRpayload(
     conn: PoolConnection,
-    campaignId: number,
-    sessionId: number,
-    user_code: string,
-  ): Promise<DbBookletInBagRow | null> {
+    qrPayload: string
+  ): Promise<DbBookletRow | null> {
     const sql = `
-SELECT
-        bk.id          AS booklet_id,
-        bk.session_id,
-        bk.bag_id,
-        bk.seq_in_bag,
-        bk.status,
-        us.qr_payload  AS qr_payload,
-        u.user_code,
-        u.full_name,
-        b.bag_no,
-        bk.created_at
+      SELECT 
+        bk.id, 
+        bk.session_id, 
+        bk.bag_id, 
+        bk.seq_in_bag, 
+        bk.status, 
+        bk.qr_payload, 
+        bk.random_num, 
+        bk.created_at,
+        b.bag_no
       FROM booklets bk
-      join bags b on b.id = bk.bag_id
-      JOIN user_sessions us
-        ON bk.user_session_id = us.id
-      JOIN user_campaigns uc
-        ON us.user_campaign_id = uc.id
-      JOIN users u
-        ON uc.user_id = u.id
-      WHERE us.campaign_id = ?
-        AND bk.session_id = ?
-        AND u.user_code = ?
-      ORDER BY bk.seq_in_bag ASC, bk.id ASC;
+      JOIN bags b ON b.id = bk.bag_id
+      WHERE qr_payload = ?
+      LIMIT 1;
     `;
-
-    const [rows] = await conn.execute<DbBookletInBagRow[]>(sql, [
-      campaignId,
-      sessionId,
-      user_code,
-    ]);
+    const [rows] = await conn.execute<any[]>(sql, [qrPayload]);
     return rows[0] || null;
   }
 
+  async findBookletsbyQRpayloadandBookletsID(
+    conn: PoolConnection,
+    qrPayload: string,
+    bookletsId: number
+  ): Promise<DbBookletRow | null> {
+    const sql = `
+SELECT 
+        bk.id, 
+        bk.session_id, 
+        bk.bag_id, 
+        bk.seq_in_bag, 
+        bk.status, 
+        bk.qr_payload, 
+        bk.random_num, 
+        bk.created_at,
+        b.bag_no,
+        s.name AS subject_name 
+      FROM booklets bk
+      JOIN bags b ON b.id = bk.bag_id
+      JOIN session_subjects ss ON ss.session_id = bk.session_id
+      JOIN subjects s ON ss.subject_id = s.id
+      WHERE bk.qr_payload = ? 
+        AND bk.id = ?
+      LIMIT 1;
+    `;
+    const [rows] = await conn.execute<any[]>(sql, [qrPayload, bookletsId]);
+    return rows[0] || null;
+  }
+
+
   async getDayno(
     conn: PoolConnection,
-    sessionId : number
+    sessionId: number
   ): Promise<SessionRow | null> {
 
     const sql = `
@@ -195,7 +212,7 @@ SELECT
     return rows[0] || null;
   }
 
-async getLatestRandomNumForUpdate(connection: any, sessionId: string | number) {
+  async getLatestRandomNumForUpdate(connection: any, sessionId: string | number) {
     const query = `
         SELECT random_num 
         FROM booklets 
@@ -204,29 +221,157 @@ async getLatestRandomNumForUpdate(connection: any, sessionId: string | number) {
         LIMIT 1 
         FOR UPDATE
     `;
-    
+
     const [rows] = await connection.query(query, [sessionId]);
-    
+
     return rows.length > 0 ? rows[0] : null;
-}
-async insertMany(conn: PoolConnection, values: any[][]): Promise<void> {
+  }
+  async insertMany(conn: PoolConnection, values: any[][]): Promise<void> {
     const sql = `
         INSERT INTO booklets 
         (session_id, user_session_id, bag_id, seq_in_bag, status, created_at, random_num) 
         VALUES ?
     `;
     // สังเกตการใช้ [values] เป็น array ซ้อน array สำหรับ mysql2 bulk insert
-    await conn.query(sql, [values]); 
-}
+    await conn.query(sql, [values]);
+  }
 
-async deleteByBagId(conn: PoolConnection, bagId: number): Promise<void> {
+  async deleteByBagId(conn: PoolConnection, bagId: number): Promise<void> {
     const sql = `
         DELETE FROM booklets
         WHERE bag_id = ?
     `;
     // สังเกตการใช้ [values] เป็น array ซ้อน array สำหรับ mysql2 bulk insert
-    await conn.query(sql, [bagId]); 
-}
+    await conn.query(sql, [bagId]);
+  }
+  async bulkInsertBooklets(
+    data: { session_id: number; qr_payload: string }[],
+    connection: PoolConnection
+  ) {
+    if (data.length === 0) return;
+
+    // แปลง Object Array เป็น Array ของ Array สำหรับ mysql2
+    const values = data.map(item => [
+      item.session_id,
+      item.qr_payload,
+      'CREATED' // สถานะเริ่มต้นของ Booklet
+    ]);
+
+    const sql = `
+        INSERT INTO booklets (session_id, qr_payload, status) 
+        VALUES ?
+    `;
+
+    await connection.query(sql, [values]);
+  };
+  async checkIfSessionEncrypted(
+    sessionId: number,
+    connection: any // เปลี่ยน type ให้ตรงกับที่คุณใช้ (เช่น mysql.PoolConnection)
+  ): Promise<boolean> {
+    // ใช้ SELECT 1 และ LIMIT 1 เพื่อให้ Database ทำงานเร็วที่สุด แค่เจอ record เดียวก็หยุดหา
+    const sql = `SELECT 1 FROM booklets WHERE session_id = ? LIMIT 1`;
+    const [rows]: any = await connection.query(sql, [sessionId]);
+
+    // ถ้ามีความยาวมากกว่า 0 แปลว่าเคยสร้างไปแล้ว คืนค่า true
+    return rows.length > 0;
+  };
+  async findByPayloads(
+    connection: PoolConnection,
+    payloads: string[]
+  ): Promise<DbBookletRow[]> {
+    if (payloads.length === 0) return [];
+
+    const sql = `SELECT id, session_id, bag_id, seq_in_bag, status, qr_payload, random_num, created_at FROM booklets WHERE qr_payload IN (?)`;
+    const [rows] = await connection.query(sql, [payloads]);
+    return rows as DbBookletRow[];
+  }
+
+  // 11. อัปเดตข้อมูล Booklet เมื่อถูกจัดลงถุง
+  async updateBagInfoByPayload(
+    connection: PoolConnection,
+    qr_payload: string,
+    bag_id: number,
+    seq_in_bag: number,
+    status: string,
+    random_num: string
+  ): Promise<void> {
+    const sql = `
+        UPDATE booklets 
+        SET bag_id = ?, seq_in_bag = ?, status = ?, random_num = ?
+        WHERE qr_payload = ?
+    `;
+    await connection.query(sql, [bag_id, seq_in_bag, status, random_num, qr_payload]);
+  }
+  async findPayloadsBySessionId(
+    connection: PoolConnection,
+    sessionId: number,
+  ): Promise<QrPayloadRow[]> {
+
+    const sql = `
+    SELECT qr_payload
+    FROM booklets
+    WHERE session_id = ?
+  `;
+
+    const [rows] = await connection.execute<QrPayloadRow[]>(
+      sql,
+      [sessionId]
+    );
+
+    return rows;
+  }
+
+  async findBlindBookletsByCampaign(
+    conn: PoolConnection,
+    campaignId: number
+  ): Promise<{ id: number; qr_payload: string , session_id : number }[]> {
+    const sql = `
+      SELECT b.id, b.qr_payload, b.session_id
+      FROM booklets b
+      JOIN sessions s ON b.session_id = s.id
+      WHERE s.campaign_id = ? 
+        AND b.user_id IS NULL 
+        AND b.qr_payload IS NOT NULL
+    `;
+    const [rows] = await conn.query(sql, [campaignId]);
+    return rows as { id: number; qr_payload: string, session_id: number }[];
+  }
+
+  // อัปเดตข้อมูลการ Unblind แบบ 1 Query (แก้ไขลำดับ Parameters)
+async bulkUpdateUnblindBooklets(
+    conn: PoolConnection,
+    updates: { bookletId: number; campaignId: number; userCode: string }[]
+  ): Promise<void> {
+    if (updates.length === 0) return;
+
+    let sql = `UPDATE booklets SET `;
+    
+    let campaignCases = `campaign_id = CASE id `;
+    let codeCases = `user_code = CASE id `;
+    
+    const ids: number[] = [];
+    const campaignParams: any[] = [];
+    const codeParams: any[] = [];
+
+    for (const u of updates) {
+      campaignCases += `WHEN ${u.bookletId} THEN ? `;
+      codeCases += `WHEN ${u.bookletId} THEN ? `;
+      
+      campaignParams.push(u.campaignId);
+      codeParams.push(u.userCode);
+      ids.push(u.bookletId);
+    }
+
+    campaignCases += `END, `;
+    codeCases += `END `;
+
+    sql += `${campaignCases} ${codeCases} WHERE id IN (${ids.join(",")})`;
+
+    const finalParams = [...campaignParams, ...codeParams];
+
+    await conn.query(sql, finalParams);
+  }
+
 }
 
 

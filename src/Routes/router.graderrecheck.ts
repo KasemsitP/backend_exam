@@ -22,9 +22,5 @@ gradingRecheckRouter.post(
   "/recheck/reset/:slotId",
   GradingRecheckController.resetRecheck
 );
-gradingRecheckRouter.post(
-  "/grading/recheck/scan-disputed",
-  GradingRecheckController.scanDisputed
-);
 
 export default gradingRecheckRouter;

@@ -4,6 +4,9 @@ import path from "path";
 import PDFDocument from "pdfkit";
 import signSheetRepo from "../Repo/signsheet.repo";
 import fs from "fs"; // เพิ่มบรรทัดนี้
+import { DB } from "../model/DB";
+import bookletsRepo from "../Repo/booklets.repo";
+import { keyService } from "./key.service";
 
 
 // --- Interface & Helper ---
@@ -87,6 +90,7 @@ static async generateSignSheetPdf(options: any): Promise<Buffer> {
       });
     });
   }
+  
   static async getRowsForSession(
     session_id: number,
     campaign_id: number
@@ -108,8 +112,7 @@ static async generateSignSheetPdf(options: any): Promise<Buffer> {
     }));
   }
 
-  //  ใหม่: สำหรับหน้าเว็บ (pagination)
-  static async getPaginatedUserSessions(options: {
+ static async getPaginatedUserSessions(options: {
     session_id: number;
     campaign_id: number;
     page: number;
@@ -118,13 +121,68 @@ static async generateSignSheetPdf(options: any): Promise<Buffer> {
   }) {
     const { session_id, campaign_id, page, limit, search } = options;
     console.log("Fetching paginated user sessions with options:", options);
-    return signSheetRepo.findUserSessionsWithPagination(
+
+    // 1. ดึงข้อมูล User จาก Repo (ตอนนี้จะยังไม่มี qr_payload)
+    const result = await signSheetRepo.findUserSessionsWithPagination(
       session_id,
       campaign_id,
       page,
       limit,
       search
     );
+
+    // ถ้าไม่มีข้อมูลเลย ให้รีเทิร์นกลับไปเลยเพื่อประหยัดเวลา
+    if (result.data.length === 0) {
+        return result;
+    }
+
+    // เซ็ตค่า qr_payload ตั้งต้นให้เป็น null ทุกคนเผื่อไว้ก่อน
+    result.data = result.data.map((row: any) => ({ ...row, qr_payload: null }));
+
+    // 2. ดึง QR ของ Session นี้มาถอดรหัสเพื่อหาเจ้าของ
+    let connection;
+    try {
+        connection = await DB.getInstance().getConnection();
+        const booklets = await bookletsRepo.findPayloadsBySessionId(connection, session_id);
+        
+        if (booklets && booklets.length > 0) {
+            const mappedBooklets = await Promise.all(
+                booklets.map(async (b) => {
+                    try {
+                        const decoded = await keyService.decryptQrPayloadBags(b.qr_payload, campaign_id);
+                        const uid = decoded?.uid || decoded?.user_id || null;
+                        return { qr_payload: b.qr_payload, uid: uid };
+                    } catch (e) {
+                        // ถ้าถอดรหัสไม่ได้ (เช่น คีย์ผิด/ไม่มีคีย์) ก็ให้ข้าม QR ดวงนี้ไปเลย
+                        return { qr_payload: b.qr_payload, uid: null };
+                    }
+                })
+            );
+
+            // สร้าง Map สำหรับค้นหา (ข้ามคนที่ uid เป็น null)
+            const qrMap = new Map(
+                mappedBooklets
+                    .filter(mb => mb.uid !== null)
+                    .map(mb => [String(mb.uid), mb.qr_payload])
+            );
+
+            // 3. นำ qr_payload ประกอบร่างเข้ากับข้อมูล User ทีละคน
+            result.data = result.data.map((row: any) => {
+                const uidString = String(row.user_id);
+                return {
+                    ...row,
+                    qr_payload: qrMap.get(uidString) || null
+                };
+            });
+        }
+    } catch (err: any) {
+        // หาก Database Error หรือไม่มีคีย์หลัก จะตกลงมาที่นี่
+        console.warn(` แจ้งเตือน: ข้ามการจับคู่ QR Code เนื่องจาก ${err.message}`);
+        // ไม่ต้อง throw error ออกไป ปล่อยให้มันไหลไป return result ที่มีแค่รายชื่อ
+    } finally {
+        if (connection) connection.release(); // คืน connection อย่างปลอดภัย
+    }
+    return result;
   }
 
 

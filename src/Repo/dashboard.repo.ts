@@ -87,38 +87,44 @@ class DashboardRepo {
   }
 
   async getIsEncrypted(campaign_id: number) {
-    const sql = `SELECT
-      s.campaign_id,
-      s.id AS session_id,
-      s.session_code,
+const sql = `
+      SELECT
+        session_stats.campaign_id,
+        session_stats.session_id,
+        session_stats.session_code,
+        
+        session_stats.total_users_in_session,
+        session_stats.encrypted_users,
+        GREATEST(session_stats.total_users_in_session - session_stats.encrypted_users, 0) AS pending_users,
+        
+        session_stats.subject_count,
+        
+        CASE
+          WHEN session_stats.subject_count = 0 THEN 'NO_SESSION_SUBJECT'
+          WHEN session_stats.total_users_in_session = 0 THEN 'NO_USERS'
+          WHEN session_stats.total_users_in_session <= session_stats.encrypted_users THEN 'ENCRYPTED_ALL'
+          ELSE 'PARTIAL'
+        END AS encryption_status
 
-      COUNT(us.id) AS total_users_in_session,
-      SUM(CASE WHEN us.qr_payload IS NOT NULL THEN 1 ELSE 0 END) AS encrypted_users,
-      SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) AS pending_users,
+      FROM (
+        SELECT
+          s.campaign_id,
+          s.id AS session_id,
+          s.session_code,
+          s.exam_date,
+          
+          (SELECT COUNT(id) FROM user_sessions us WHERE us.session_id = s.id) AS total_users_in_session,
+          (SELECT COUNT(id) FROM booklets b WHERE b.session_id = s.id) AS encrypted_users,
+          (SELECT COUNT(DISTINCT subject_id) FROM session_subjects ss WHERE ss.session_id = s.id) AS subject_count
+          
+        FROM sessions s
+        WHERE s.campaign_id = ?
+      ) AS session_stats
 
-      COUNT(DISTINCT ss.subject_id) AS subject_count,
-
-      CASE
-        WHEN COUNT(DISTINCT ss.subject_id) = 0 THEN 'NO_SESSION_SUBJECT'
-        WHEN COUNT(us.id) = 0 THEN 'NO_USERS'
-        WHEN SUM(CASE WHEN us.qr_payload IS NULL THEN 1 ELSE 0 END) = 0 THEN 'ENCRYPTED_ALL'
-        ELSE 'PARTIAL'
-      END AS encryption_status
-
-    FROM sessions s
-    LEFT JOIN session_subjects ss
-      ON ss.session_id = s.id
-    LEFT JOIN user_sessions us
-      ON us.session_id = s.id
-    AND us.campaign_id = s.campaign_id
-
-    WHERE s.campaign_id = ?
-
-    GROUP BY
-      s.campaign_id, s.id, s.session_code
-
-    ORDER BY
-      s.exam_date, s.session_code;`;
+      ORDER BY
+        session_stats.exam_date, 
+        session_stats.session_code;
+    `;
 
     const [row] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
     return row;
@@ -195,96 +201,138 @@ class DashboardRepo {
     const [rows] = await this.pool.query<scoreAverage[]>(sql, [campaignId]);
     return rows;
   }
+async getScoreDistributionBucketed(campaign_id: number) {
+    // 1. ดึงจำนวนผู้มีสิทธิ์สอบรวมทั้งแคมเปญ
+    const [[{ total_camp_users }]] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total_camp_users FROM user_campaigns WHERE campaign_id = ?`,
+      [campaign_id]
+    );
 
-  /**
-   * ✅ NEW: score distribution bucketed in SQL (ไม่ดึง total_score ทั้งหมดขึ้น Node)
-   * หมายเหตุ: ใช้ logic เดิมของคุณ: "คิด avg รายข้อ (2 คน) ก่อน แล้ว sum"
-   */
-  async getScoreDistributionBucketed(campaign_id: number) {
-    const bucketSize = 5;
-    const minScore = 1;
-    const maxScore = 150;
+    // 2. ดึงจำนวนผู้มีสิทธิ์สอบแยกตาม Session
+    const [sessionUsers] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT session_id, COUNT(*) AS count FROM user_sessions WHERE campaign_id = ? GROUP BY session_id`,
+      [campaign_id]
+    );
+    const sessionUserMap = new Map(sessionUsers.map((s: any) => [s.session_id, s.count]));
 
-    // จำนวน bucket = 1..150 step 5 => 30 bucket (index 0..29)
-    const maxBucketIndex = Math.floor((maxScore - minScore) / bucketSize);
+    // 3. 🌟 ดึง Max Score ของแต่ละ Session ตามที่กำหนดในโครงสร้างข้อสอบ
+    const [sessionMaxScoresRaw] = await this.pool.execute<RowDataPacket[]>(`
+      SELECT 
+        se.id AS session_id,
+        COALESCE(SUM(sq.max_score), 0) AS max_score
+      FROM sessions se
+      LEFT JOIN session_subjects ss ON ss.session_id = se.id
+      LEFT JOIN subject_questions sq ON sq.subject_id = ss.subject_id
+      WHERE se.campaign_id = ?
+      GROUP BY se.id
+    `, [campaign_id]);
 
+    const sessionMaxScoreMap = new Map<number, number>();
+    let campaignTotalMaxScore = 0; // คะแนนเต็มรวม 3 วัน
+    
+    sessionMaxScoresRaw.forEach((row: any) => {
+      const score = Number(row.max_score);
+      sessionMaxScoreMap.set(row.session_id, score);
+      campaignTotalMaxScore += score;
+    });
+
+    // 4. ดึงคะแนนรวมของแต่ละ "เล่ม" ที่ตรวจเสร็จสมบูรณ์แล้ว
     const sql = `
-WITH slot_scores AS (
-  SELECT
-    b.user_session_id,
-    gs.subject_id,
-    gs.question_no,
-    SUM(gsc.score) / 2 AS question_avg,
-    COUNT(gsc.score) AS score_count
-  FROM booklets b
-  JOIN sessions se ON se.id = b.session_id
-  JOIN grading_slots gs ON gs.booklet_id = b.id AND gs.grader_order IN (1, 2)
-  JOIN grading_scores gsc ON gsc.slot_id = gs.id
-  WHERE se.campaign_id = ?
-  GROUP BY b.user_session_id, gs.subject_id, gs.question_no
-  HAVING score_count = 2
-),
-user_total AS (
-  SELECT
-    us.user_campaign_id,
-    SUM(ss.question_avg) AS total_score
-  FROM slot_scores ss
-  JOIN user_sessions us ON us.id = ss.user_session_id
-  GROUP BY us.user_campaign_id
-),
-summary AS (
-  SELECT
-    COUNT(*) AS total_users,
-    SUM(CASE WHEN total_score IS NULL THEN 1 ELSE 0 END) AS no_score
-  FROM user_total
-),
-bucketed AS (
-  SELECT
-    LEAST(
-      ${maxBucketIndex},
-      GREATEST(
-        0,
-        FLOOR((LEAST(${maxScore}, GREATEST(${minScore}, total_score)) - ${minScore}) / ${bucketSize})
-      )
-    ) AS bucket_index,
-    COUNT(*) AS count
-  FROM user_total
-  WHERE total_score IS NOT NULL
-  GROUP BY bucket_index
-)
-SELECT
-  s.total_users,
-  s.no_score,
-  b.bucket_index,
-  b.count
-FROM summary s
-LEFT JOIN bucketed b ON 1=1
-ORDER BY b.bucket_index;
+      SELECT
+        t.booklet_id,
+        t.session_id,
+        s.session_code,
+        t.user_code,
+        SUM(t.q_avg) AS final_score
+      FROM (
+        SELECT
+          b.id AS booklet_id,
+          b.session_id,
+          b.user_code,
+          gs.subject_id,
+          gs.question_no,
+          SUM(gsc.score)/2 AS q_avg
+        FROM booklets b
+        JOIN grading_slots gs ON gs.booklet_id = b.id AND gs.grader_order IN (1,2)
+        JOIN grading_scores gsc ON gsc.slot_id = gs.id
+        JOIN sessions se ON se.id = b.session_id
+        WHERE se.campaign_id = ?
+        GROUP BY b.id, b.session_id, b.user_code, gs.subject_id, gs.question_no
+        HAVING COUNT(gsc.score) = 2
+      ) t
+      JOIN sessions s ON s.id = t.session_id
+      GROUP BY t.booklet_id, t.session_id, s.session_code, t.user_code
     `;
+    const [booklets] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
 
-    const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
+    // --- Helper: ฟังก์ชันจัดกลุ่มลงกราฟ โดยใช้เพดานคะแนน (exactMaxScore) อัตโนมัติ ---
+    const buildBuckets = (scores: number[], totalUsers: number, exactMaxScore: number) => {
+      const bucketSize = 5;
+      
+      // ดันเพดานกราฟให้เท่ากับคะแนนเต็ม (หรือถ้าบังเอิญมีคนได้คะแนนเกิน ก็ให้กราฟยืดตาม)
+      const chartMax = Math.max(exactMaxScore > 0 ? exactMaxScore : 50, ...scores); 
+      const maxBucketIndex = Math.floor((chartMax - 1) / bucketSize);
 
-    const total_users = Number(rows[0]?.total_users ?? 0);
-    const no_score = Number(rows[0]?.no_score ?? 0);
+      const bucketMap = new Map<number, number>();
+      scores.forEach(s => {
+        const idx = Math.max(0, Math.floor((s - 1) / bucketSize));
+        bucketMap.set(idx, (bucketMap.get(idx) || 0) + 1);
+      });
 
-    // map bucket_index -> count
-    const bucketMap = new Map<number, number>();
-    for (const r of rows) {
-      if (r.bucket_index == null) continue;
-      bucketMap.set(Number(r.bucket_index), Number(r.count ?? 0));
+      const buckets = [];
+      for (let idx = 0; idx <= maxBucketIndex; idx++) {
+        const from = 1 + idx * bucketSize;
+        const to = from + bucketSize - 1;
+        buckets.push({ label: `${from}-${to}`, count: bucketMap.get(idx) ?? 0 });
+      }
+      return {
+        totalUsers: Number(totalUsers),
+        noScore: Math.max(0, Number(totalUsers) - scores.length),
+        buckets
+      };
+    };
+
+    const sessionScores: Record<number, { sessionCode: string; scores: number[] }> = {};
+    let isUnlocked = false;
+
+    booklets.forEach((b: any) => {
+      if (b.user_code) isUnlocked = true;
+
+      if (!sessionScores[b.session_id]) {
+        sessionScores[b.session_id] = { sessionCode: b.session_code, scores: [] };
+      }
+      sessionScores[b.session_id].scores.push(Number(b.final_score));
+    });
+
+    // 5. สร้างข้อมูลกราฟราย Session (ส่ง Max Score เฉพาะ Session นั้นๆ ไปให้)
+    const sessionDistributions = Object.keys(sessionScores).map(sid => {
+      const numSid = Number(sid);
+      const data = sessionScores[numSid];
+      return {
+        sessionId: numSid,
+        sessionCode: data.sessionCode,
+        ...buildBuckets(data.scores, sessionUserMap.get(numSid) || 0, sessionMaxScoreMap.get(numSid) || 50) 
+      };
+    });
+
+    // 6. สร้างข้อมูลกราฟรวม (ส่ง Max Score แบบรวมทุก Session ไปให้)
+    let totalDistribution = null;
+    if (isUnlocked) {
+      const userTotalMap = new Map<string, number>();
+      booklets.forEach((b: any) => {
+        if (b.user_code) {
+          userTotalMap.set(b.user_code, (userTotalMap.get(b.user_code) || 0) + Number(b.final_score));
+        }
+      });
+      totalDistribution = buildBuckets(Array.from(userTotalMap.values()), total_camp_users, campaignTotalMaxScore);
     }
 
-    const buckets: { label: string; count: number }[] = [];
-    for (let idx = 0; idx <= maxBucketIndex; idx++) {
-      const from = minScore + idx * bucketSize;
-      let to = from + bucketSize - 1;
-      if (to > maxScore) to = maxScore;
-      buckets.push({ label: `${from}-${to}`, count: bucketMap.get(idx) ?? 0 });
-    }
-
-    return { total_users, no_score, buckets };
+    return {
+      isUnlocked,
+      totalDistribution,
+      sessionDistributions
+    };
   }
-
   async getSubjectQuestionsByCampaign(campaign_id: number): Promise<SubjectQuestionRow[]> {
     const sql = `
       SELECT
@@ -325,8 +373,8 @@ ORDER BY b.bucket_index;
 WITH booklets_in_campaign AS (
   SELECT b.id AS booklet_id, b.session_id
   FROM booklets b
-  JOIN user_sessions us ON us.id = b.user_session_id
-  WHERE us.campaign_id = ?
+  JOIN sessions s ON s.id = b.session_id -- ✅ แก้ไขการเชื่อมต่อเป็น sessions โดยตรง
+  WHERE s.campaign_id = ?
 ),
 booklet_counts AS (
   SELECT session_id, COUNT(*) AS booklet_count

@@ -49,7 +49,6 @@ export interface DisputedQuestionRow extends RowDataPacket {
   graderName2: string;
 }
 
-
 export interface GradingRecordAll extends RowDataPacket {
   score: number;
   slotId: number;
@@ -82,9 +81,6 @@ class GradingScoreRepo {
   private pool: Pool;
 
   constructor() {
-    // ถ้าใน DB class มี getPool() ก็ใช้แบบนี้
-    // this.pool = DB.getInstance().getPool();
-    // ถ้าของเดิมคุณใช้ DB.getInstance() เป็น pool อยู่แล้วก็ใช้แบบเดิมได้
     // @ts-ignore ปล่อยให้ตรงกับ implementation เดิมของคุณ
     this.pool = DB.getInstance() as unknown as Pool;
   }
@@ -99,16 +95,17 @@ class GradingScoreRepo {
   ): Promise<boolean> {
     const { slotId, campaignId, graderId } = params;
 
+    // ✅ แก้ไข: JOIN sessions แทน user_sessions เพื่อหา campaign_id
     const sql = `
       SELECT
         s.id AS slot_id
       FROM grading_slots s
       JOIN booklets b
         ON s.booklet_id = b.id
-      JOIN user_sessions us
-        ON b.user_session_id = us.id
+      JOIN sessions sess
+        ON b.session_id = sess.id
       WHERE s.id = ?
-        AND us.campaign_id = ?
+        AND sess.campaign_id = ?
         AND s.grader_id = ?
       LIMIT 1;
     `;
@@ -130,12 +127,16 @@ class GradingScoreRepo {
     const { slotId, question_no, graderId } = params;
 
     const sql = `
-SELECT sq.question_no , sq.label , sq.max_score from subject_questions sq JOIN subjects s ON s.id = sq.subject_id JOIN grading_slots gs ON gs.subject_id = s.id WHERE gs.id = ? AND sq.question_no = ? AND gs.grader_id = ?;
+      SELECT sq.question_no , sq.label , sq.max_score 
+      FROM subject_questions sq 
+      JOIN subjects s ON s.id = sq.subject_id 
+      JOIN grading_slots gs ON gs.subject_id = s.id 
+      WHERE gs.id = ? AND sq.question_no = ? AND gs.grader_id = ?;
     `;
 
     const paramsArr = [slotId, question_no, graderId];
 
-   const [rows] = await conn.execute<CheckScoreRow[]>(sql, paramsArr);
+    const [rows] = await conn.execute<CheckScoreRow[]>(sql, paramsArr);
     return rows[0] || null;
   }
 
@@ -186,7 +187,7 @@ SELECT sq.question_no , sq.label , sq.max_score from subject_questions sq JOIN s
     gradingScoreId: number
   ): Promise<DbGradingScoreRow | null> {
     const sql = `
-SELECT
+      SELECT
         gs.id         AS gradingscoreId,
         gs.slot_id    AS slotId,
         gs.score      AS score,
@@ -214,23 +215,22 @@ SELECT
   async FindAllRecord(
     grader_id: number
   ): Promise<GradingRecordAll[] | null> {
+    // ✅ แก้ไข: ดึง qr_payload จากตาราง booklets (b.qr_payload)
     const sql = `
-SELECT 
-  b.random_num ,
-  g.slot_id,
-  g.score,
-  g.entered_at AS enteredAT,
-  us.qr_payload
-FROM grading_scores g
-JOIN grading_slots gs 
-  ON gs.id = g.slot_id
-JOIN booklets b 
-  ON b.id = gs.booklet_id
-JOIN user_sessions us 
-  ON us.id = b.user_session_id
-WHERE g.entered_by = ?
-ORDER BY g.entered_at DESC
-LIMIT 25 OFFSET 0;
+      SELECT 
+        b.random_num,
+        g.slot_id,
+        g.score,
+        g.entered_at AS enteredAT,
+        b.qr_payload
+      FROM grading_scores g
+      JOIN grading_slots gs 
+        ON gs.id = g.slot_id
+      JOIN booklets b 
+        ON b.id = gs.booklet_id
+      WHERE g.entered_by = ?
+      ORDER BY g.entered_at DESC
+      LIMIT 25 OFFSET 0;
     `;
     const [rows] = await this.pool.execute<GradingRecordAll[]>(sql, [grader_id]);
     return rows.length ? rows : null;
@@ -325,7 +325,6 @@ LIMIT 25 OFFSET 0;
 
   /**
    * เซ็ต status ของ slot ทั้งหมดของเล่ม+วิชา+ข้อนี้กลับเป็น 'OPEN'
-   * (แล้วแต่ design คุณ ถ้าอยากใช้ 'DISPUTED' หรือ flag อื่นก็เปลี่ยนได้)
    */
   async resetSlotsStatusForQuestion(
     conn: PoolConnection,
@@ -343,6 +342,7 @@ LIMIT 25 OFFSET 0;
     `;
     await conn.query<ResultSetHeader>(sql, [bookletId, subjectId, questionNo]);
   }
+
   async findDisputedByBooklet(
     conn: PoolConnection,
     bookletId: number
@@ -377,243 +377,245 @@ LIMIT 25 OFFSET 0;
     const [rows] = await conn.query<DisputedSlotRow[]>(sql, [bookletId]);
     return rows;
   }
+
   async findDisputedQuestions(
     conn: Pool | PoolConnection = this.pool,
     campaign_id: number,
     thresholdDiff: number
   ): Promise<DisputedQuestionRow[]> {
+    // ✅ แก้ไข: JOIN sessions เพื่อเช็ค campaign_id แทน user_sessions
     const sql = `
-SELECT
-  t.booklet_id       AS bookletId,
-  t.bag_no           AS bagNo,
-  t.subject_id       AS subjectId,
-  t.subjectCode,
-  t.subjectName,
-  t.question_no      AS questionNo,
-  t.questionLabel,
-  t.random_num,
+      SELECT
+        t.booklet_id       AS bookletId,
+        t.bag_no           AS bagNo,
+        t.subject_id       AS subjectId,
+        t.subjectCode,
+        t.subjectName,
+        t.question_no      AS questionNo,
+        t.questionLabel,
+        t.random_num,
 
-  MIN(t.minScore) AS minScore,
-  MAX(t.maxScore) AS maxScore,
-  MAX(t.maxScore - t.minScore) AS diff,
+        MIN(t.minScore) AS minScore,
+        MAX(t.maxScore) AS maxScore,
+        MAX(t.maxScore - t.minScore) AS diff,
 
-  MAX(CASE WHEN t.rnAsc = 1 THEN t.slot_id    END) AS slotId1,
-  MAX(CASE WHEN t.rnAsc = 1 THEN t.score      END) AS score1,
-  MAX(CASE WHEN t.rnAsc = 1 THEN t.grader_id  END) AS graderId1,
-  MAX(CASE WHEN t.rnAsc = 1 THEN t.graderName END) AS graderName1,
+        MAX(CASE WHEN t.rnAsc = 1 THEN t.slot_id    END) AS slotId1,
+        MAX(CASE WHEN t.rnAsc = 1 THEN t.score      END) AS score1,
+        MAX(CASE WHEN t.rnAsc = 1 THEN t.grader_id  END) AS graderId1,
+        MAX(CASE WHEN t.rnAsc = 1 THEN t.graderName END) AS graderName1,
 
-  MAX(CASE WHEN t.rnDesc = 1 THEN t.slot_id    END) AS slotId2,
-  MAX(CASE WHEN t.rnDesc = 1 THEN t.score      END) AS score2,
-  MAX(CASE WHEN t.rnDesc = 1 THEN t.grader_id  END) AS graderId2,
-  MAX(CASE WHEN t.rnDesc = 1 THEN t.graderName END) AS graderName2
+        MAX(CASE WHEN t.rnDesc = 1 THEN t.slot_id    END) AS slotId2,
+        MAX(CASE WHEN t.rnDesc = 1 THEN t.score      END) AS score2,
+        MAX(CASE WHEN t.rnDesc = 1 THEN t.grader_id  END) AS graderId2,
+        MAX(CASE WHEN t.rnDesc = 1 THEN t.graderName END) AS graderName2
 
-FROM (
-  SELECT
-    sl.booklet_id,
-    bg.bag_no,
-    sl.subject_id,
-    subj.code AS subjectCode,
-    subj.name AS subjectName,
-    sl.question_no,
-    sq.label  AS questionLabel,
-    bk.random_num,
+      FROM (
+        SELECT
+          sl.booklet_id,
+          bg.bag_no,
+          sl.subject_id,
+          subj.code AS subjectCode,
+          subj.name AS subjectName,
+          sl.question_no,
+          sq.label  AS questionLabel,
+          bk.random_num,
 
-    sl.id     AS slot_id,
-    gs.score,
-    gs.entered_by AS grader_id,
-    COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) AS graderName,
+          sl.id     AS slot_id,
+          gs.score,
+          gs.entered_by AS grader_id,
+          COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) AS graderName,
 
-    ROW_NUMBER() OVER (
-      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-      ORDER BY gs.score ASC
-    ) AS rnAsc,
+          ROW_NUMBER() OVER (
+            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+            ORDER BY gs.score ASC
+          ) AS rnAsc,
 
-    ROW_NUMBER() OVER (
-      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-      ORDER BY gs.score DESC
-    ) AS rnDesc,
+          ROW_NUMBER() OVER (
+            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+            ORDER BY gs.score DESC
+          ) AS rnDesc,
 
-    MIN(gs.score) OVER (
-      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-    ) AS minScore,
+          MIN(gs.score) OVER (
+            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+          ) AS minScore,
 
-    MAX(gs.score) OVER (
-      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-    ) AS maxScore
+          MAX(gs.score) OVER (
+            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+          ) AS maxScore
 
-  FROM grading_slots sl
-  JOIN grading_scores gs
-    ON gs.slot_id = sl.id
-  JOIN booklets bk
-    ON bk.id = sl.booklet_id
-  JOIN user_sessions us
-    ON bk.user_session_id = us.id
-  LEFT JOIN bags bg
-    ON bk.bag_id = bg.id
-  JOIN subjects subj
-    ON subj.id = sl.subject_id
-  LEFT JOIN subject_questions sq
-    ON sq.subject_id = sl.subject_id
-   AND sq.question_no = sl.question_no
-  JOIN graders gr
-    ON gs.entered_by = gr.id
-  LEFT JOIN accounts acc
-    ON gr.account_id = acc.id
-  WHERE us.campaign_id = ?
-) t
-JOIN (
-  SELECT
-    sl.booklet_id,
-    sl.subject_id,
-    sl.question_no,
-    COUNT(DISTINCT gs.entered_by) AS gradersCount
-  FROM grading_slots sl
-  JOIN grading_scores gs
-    ON gs.slot_id = sl.id
-  GROUP BY
-    sl.booklet_id,
-    sl.subject_id,
-    sl.question_no
-) gc
-  ON gc.booklet_id = t.booklet_id
- AND gc.subject_id = t.subject_id
- AND gc.question_no = t.question_no
+        FROM grading_slots sl
+        JOIN grading_scores gs
+          ON gs.slot_id = sl.id
+        JOIN booklets bk
+          ON bk.id = sl.booklet_id
+        JOIN sessions sess
+          ON bk.session_id = sess.id
+        LEFT JOIN bags bg
+          ON bk.bag_id = bg.id
+        JOIN subjects subj
+          ON subj.id = sl.subject_id
+        LEFT JOIN subject_questions sq
+          ON sq.subject_id = sl.subject_id
+         AND sq.question_no = sl.question_no
+        JOIN graders gr
+          ON gs.entered_by = gr.id
+        LEFT JOIN accounts acc
+          ON gr.account_id = acc.id
+        WHERE sess.campaign_id = ?
+      ) t
+      JOIN (
+        SELECT
+          sl.booklet_id,
+          sl.subject_id,
+          sl.question_no,
+          COUNT(DISTINCT gs.entered_by) AS gradersCount
+        FROM grading_slots sl
+        JOIN grading_scores gs
+          ON gs.slot_id = sl.id
+        GROUP BY
+          sl.booklet_id,
+          sl.subject_id,
+          sl.question_no
+      ) gc
+        ON gc.booklet_id = t.booklet_id
+       AND gc.subject_id = t.subject_id
+       AND gc.question_no = t.question_no
 
-WHERE
-  gc.gradersCount >= 2
-  AND (t.maxScore - t.minScore) > ?
+      WHERE
+        gc.gradersCount >= 2
+        AND (t.maxScore - t.minScore) > ?
 
-GROUP BY
-  t.random_num,
-  t.booklet_id,
-  t.bag_no,
-  t.subject_id,
-  t.subjectCode,
-  t.subjectName,
-  t.question_no,
-  t.questionLabel
+      GROUP BY
+        t.random_num,
+        t.booklet_id,
+        t.bag_no,
+        t.subject_id,
+        t.subjectCode,
+        t.subjectName,
+        t.question_no,
+        t.questionLabel
 
-ORDER BY diff DESC;
+      ORDER BY diff DESC;
     `;
 
     const [rows] = await conn.query<DisputedQuestionRow[]>(sql, [campaign_id, thresholdDiff]);
     return rows;
   }
 
-
   async findDisputedQuestionsForDashboard(
     campaign_id: number,
     thresholdDiff: number
   ): Promise<number> {
+    // ✅ แก้ไข: JOIN sessions เพื่อเช็ค campaign_id แทน user_sessions เหมือนกับด้านบน
     const sql = `
-SELECT
-  t.booklet_id       AS bookletId,
-  t.bag_no           AS bagNo,
-  t.subject_id       AS subjectId,
-  t.subjectCode,
-  t.subjectName,
-  t.question_no      AS questionNo,
-  t.questionLabel,
+      SELECT
+        t.booklet_id       AS bookletId,
+        t.bag_no           AS bagNo,
+        t.subject_id       AS subjectId,
+        t.subjectCode,
+        t.subjectName,
+        t.question_no      AS questionNo,
+        t.questionLabel,
 
-  MIN(t.minScore) AS minScore,
-  MAX(t.maxScore) AS maxScore,
-  MAX(t.maxScore - t.minScore) AS diff,
+        MIN(t.minScore) AS minScore,
+        MAX(t.maxScore) AS maxScore,
+        MAX(t.maxScore - t.minScore) AS diff,
 
-  MAX(CASE WHEN t.rnAsc = 1 THEN t.slot_id    END) AS slotId1,
-  MAX(CASE WHEN t.rnAsc = 1 THEN t.score      END) AS score1,
-  MAX(CASE WHEN t.rnAsc = 1 THEN t.grader_id  END) AS graderId1,
-  MAX(CASE WHEN t.rnAsc = 1 THEN t.graderName END) AS graderName1,
+        MAX(CASE WHEN t.rnAsc = 1 THEN t.slot_id    END) AS slotId1,
+        MAX(CASE WHEN t.rnAsc = 1 THEN t.score      END) AS score1,
+        MAX(CASE WHEN t.rnAsc = 1 THEN t.grader_id  END) AS graderId1,
+        MAX(CASE WHEN t.rnAsc = 1 THEN t.graderName END) AS graderName1,
 
-  MAX(CASE WHEN t.rnDesc = 1 THEN t.slot_id    END) AS slotId2,
-  MAX(CASE WHEN t.rnDesc = 1 THEN t.score      END) AS score2,
-  MAX(CASE WHEN t.rnDesc = 1 THEN t.grader_id  END) AS graderId2,
-  MAX(CASE WHEN t.rnDesc = 1 THEN t.graderName END) AS graderName2
+        MAX(CASE WHEN t.rnDesc = 1 THEN t.slot_id    END) AS slotId2,
+        MAX(CASE WHEN t.rnDesc = 1 THEN t.score      END) AS score2,
+        MAX(CASE WHEN t.rnDesc = 1 THEN t.grader_id  END) AS graderId2,
+        MAX(CASE WHEN t.rnDesc = 1 THEN t.graderName END) AS graderName2
 
-FROM (
-  SELECT
-    sl.booklet_id,
-    bg.bag_no,
-    sl.subject_id,
-    subj.code AS subjectCode,
-    subj.name AS subjectName,
-    sl.question_no,
-    sq.label  AS questionLabel,
+      FROM (
+        SELECT
+          sl.booklet_id,
+          bg.bag_no,
+          sl.subject_id,
+          subj.code AS subjectCode,
+          subj.name AS subjectName,
+          sl.question_no,
+          sq.label  AS questionLabel,
 
-    sl.id     AS slot_id,
-    gs.score,
-    gs.entered_by AS grader_id,
-    COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) AS graderName,
+          sl.id     AS slot_id,
+          gs.score,
+          gs.entered_by AS grader_id,
+          COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) AS graderName,
 
-    ROW_NUMBER() OVER (
-      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-      ORDER BY gs.score ASC
-    ) AS rnAsc,
+          ROW_NUMBER() OVER (
+            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+            ORDER BY gs.score ASC
+          ) AS rnAsc,
 
-    ROW_NUMBER() OVER (
-      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-      ORDER BY gs.score DESC
-    ) AS rnDesc,
+          ROW_NUMBER() OVER (
+            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+            ORDER BY gs.score DESC
+          ) AS rnDesc,
 
-    MIN(gs.score) OVER (
-      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-    ) AS minScore,
+          MIN(gs.score) OVER (
+            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+          ) AS minScore,
 
-    MAX(gs.score) OVER (
-      PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-    ) AS maxScore
+          MAX(gs.score) OVER (
+            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+          ) AS maxScore
 
-  FROM grading_slots sl
-  JOIN grading_scores gs
-    ON gs.slot_id = sl.id
-  JOIN booklets bk
-    ON bk.id = sl.booklet_id
-  JOIN user_sessions us
-    ON bk.user_session_id = us.id
-  LEFT JOIN bags bg
-    ON bk.bag_id = bg.id
-  JOIN subjects subj
-    ON subj.id = sl.subject_id
-  LEFT JOIN subject_questions sq
-    ON sq.subject_id = sl.subject_id
-   AND sq.question_no = sl.question_no
-  JOIN graders gr
-    ON gs.entered_by = gr.id
-  LEFT JOIN accounts acc
-    ON gr.account_id = acc.id
-  WHERE us.campaign_id = ?
-) t
-JOIN (
-  SELECT
-    sl.booklet_id,
-    sl.subject_id,
-    sl.question_no,
-    COUNT(DISTINCT gs.entered_by) AS gradersCount
-  FROM grading_slots sl
-  JOIN grading_scores gs
-    ON gs.slot_id = sl.id
-  GROUP BY
-    sl.booklet_id,
-    sl.subject_id,
-    sl.question_no
-) gc
-  ON gc.booklet_id = t.booklet_id
- AND gc.subject_id = t.subject_id
- AND gc.question_no = t.question_no
+        FROM grading_slots sl
+        JOIN grading_scores gs
+          ON gs.slot_id = sl.id
+        JOIN booklets bk
+          ON bk.id = sl.booklet_id
+        JOIN sessions sess
+          ON bk.session_id = sess.id
+        LEFT JOIN bags bg
+          ON bk.bag_id = bg.id
+        JOIN subjects subj
+          ON subj.id = sl.subject_id
+        LEFT JOIN subject_questions sq
+          ON sq.subject_id = sl.subject_id
+         AND sq.question_no = sl.question_no
+        JOIN graders gr
+          ON gs.entered_by = gr.id
+        LEFT JOIN accounts acc
+          ON gr.account_id = acc.id
+        WHERE sess.campaign_id = ?
+      ) t
+      JOIN (
+        SELECT
+          sl.booklet_id,
+          sl.subject_id,
+          sl.question_no,
+          COUNT(DISTINCT gs.entered_by) AS gradersCount
+        FROM grading_slots sl
+        JOIN grading_scores gs
+          ON gs.slot_id = sl.id
+        GROUP BY
+          sl.booklet_id,
+          sl.subject_id,
+          sl.question_no
+      ) gc
+        ON gc.booklet_id = t.booklet_id
+       AND gc.subject_id = t.subject_id
+       AND gc.question_no = t.question_no
 
-WHERE
-  gc.gradersCount >= 2
-  AND (t.maxScore - t.minScore) > ?
+      WHERE
+        gc.gradersCount >= 2
+        AND (t.maxScore - t.minScore) > ?
 
-GROUP BY
-  t.booklet_id,
-  t.bag_no,
-  t.subject_id,
-  t.subjectCode,
-  t.subjectName,
-  t.question_no,
-  t.questionLabel
+      GROUP BY
+        t.booklet_id,
+        t.bag_no,
+        t.subject_id,
+        t.subjectCode,
+        t.subjectName,
+        t.question_no,
+        t.questionLabel
 
-ORDER BY diff DESC;
+      ORDER BY diff DESC;
     `;
 
     const [rows] = await this.pool.query<DisputedQuestionRow[]>(sql, [campaign_id, thresholdDiff]);

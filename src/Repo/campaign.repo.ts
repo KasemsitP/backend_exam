@@ -161,6 +161,19 @@ SELECT is_active
     const [rows] = await dbClient.execute<RowDataPacket[]>(sql, [campaign_id]);
     return rows[0].is_active === 1;
   }
+
+  async findUserCodesByIds(
+    conn: PoolConnection,
+    userIds: number[]
+  ): Promise<{ id: number; user_code: string }[]> {
+    if (userIds.length === 0) return [];
+    
+    const placeholders = userIds.map(() => '?').join(',');
+    const sql = `SELECT id, user_code FROM users WHERE id IN (${placeholders})`;
+    
+    const [rows] = await conn.query(sql, userIds);
+    return rows as { id: number; user_code: string }[];
+  }
 }
 
 const campaignRepo = new CampaignRepo();

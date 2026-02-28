@@ -29,7 +29,7 @@ export class bagController {
       }
 
       const dateTimes: Date[] = datetime.map((d: string) => new Date(d));
-      const result = await bagService.CreateBagAndInsertBooklets(campaignId, payload ,dateTimes,bagNo);
+      const result = await bagService.CreateBagAndUpdateBooklets(campaignId, payload ,dateTimes,bagNo);
       return res.status(200).json(result);
     } 
     catch (error: any) {

@@ -30,8 +30,7 @@ class SignSheetRepo {
                 ''             AS lastName,
                 uc.room_code   AS roomName,
                 uc.row_no,
-                uc.col_no,
-                us.qr_payload
+                uc.col_no
             FROM user_sessions us
             JOIN user_campaigns uc ON us.user_campaign_id = uc.id
             JOIN users u ON uc.user_id = u.id
@@ -71,7 +70,7 @@ class SignSheetRepo {
         page: number,
         limit: number,
         search: string = ""
-    ): Promise<PaginatedResult<any>> {
+    ): Promise<any> { // เปลี่ยน Type เป็น any ไปก่อน หรือใช้ Type ที่คุณกำหนดไว้
         const offset = (page - 1) * limit;
         const searchTerm = `%${search}%`;
 
@@ -98,10 +97,10 @@ class SignSheetRepo {
 
         // Query 1: Count Total
         const countSql = `SELECT COUNT(*) as total ${baseJoins} ${whereClause}`;
-        const [countRows] = await this.pool.execute<RowDataPacket[]>(countSql, searchParams);
+        const [countRows] = await this.pool.execute<any[]>(countSql, searchParams);
         const total = countRows[0].total;
 
-        // Query 2: Select Data
+        // Query 2: Select Data (🛑 ลบ us.qr_payload ออกแล้ว)
         const dataSql = `
             SELECT
                 us.id          AS user_session_id,
@@ -110,7 +109,6 @@ class SignSheetRepo {
                 u.full_name    AS firstName,
                 ''             AS lastName,
                 uc.room_code   AS roomName,
-                us.qr_payload,
                 uc.row_no,
                 uc.col_no
             ${baseJoins}
