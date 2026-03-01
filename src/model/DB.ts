@@ -22,8 +22,8 @@ export class DB {
       //   database: process.env.database,
       // });
 
-      // สำหรับ production (Render.com)
-      // console.log(process.env.DB_HOST, process.env.DB_USER, process.env.DB_PASS, process.env.DB_NAME, process.env.DB_PORT);
+      // // สำหรับ production (Render.com)
+      console.log(process.env.DB_HOST, process.env.DB_USER, process.env.DB_PASS, process.env.DB_NAME, process.env.DB_PORT);
       DB.instance = mysql.createPool({
         host: process.env.DB_HOST,    // จะดึงค่า 35.240.222.183 มาอัตโนมัติ
         user: process.env.DB_USER,
