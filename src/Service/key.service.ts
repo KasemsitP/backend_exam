@@ -183,7 +183,7 @@ export class keyService {
     /**
      * [ 3. Logic "Get" (เหมือนเดิม) ]
      */
-    static getAllForCampaign = async (campaignId: number) => {
+    static getAllForCampaign = async (campaignId: number ) => {
         try {
             return await keyRepo.findAllByCampaignId(campaignId);
         } catch (error) {

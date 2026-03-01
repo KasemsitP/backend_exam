@@ -29,8 +29,8 @@ class Authrepo {
     createAccount(userdata) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-    INSERT INTO accounts (username, password_hash, full_name, email, role_id, active)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO accounts (username, password_hash, full_name, email, role_id, active, manager_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
             const params = [
                 userdata.username,
@@ -39,6 +39,7 @@ class Authrepo {
                 userdata.email,
                 userdata.role,
                 1,
+                userdata.manager_order
             ];
             const [result] = yield this.pool.execute(sql, params);
             return result.insertId;
@@ -73,8 +74,7 @@ WHERE
     findMeById(ID) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-SELECT a.id, a.username, a.full_name, a.active, r.code AS role_code
-FROM accounts a
+SELECT a.id, a.username, a.full_name, a.active, r.code AS role_code, a.manager_order FROM accounts a
 LEFT JOIN roles r ON r.id = a.role_id
 WHERE a.id = ?
 LIMIT 1;

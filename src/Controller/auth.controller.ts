@@ -19,7 +19,7 @@ export class authcontroller {
     const conn = await DB.getInstance().getConnection();
 
     try {
-      const { username, password, full_name, email, role, campaignId } = req.body;
+      const { username, password, full_name, email, role, campaignId , manager_order} = req.body;
 
       await conn.beginTransaction();
 
@@ -45,7 +45,9 @@ export class authcontroller {
         password: hash,
         full_name,
         email,
-        role
+        role,
+        campaignId,
+        manager_order
       };
 
       // ... (โค้ดส่วนที่เหลือเหมือนเดิม) ...
@@ -189,6 +191,8 @@ export class authcontroller {
         name: row.full_name,
         username: row.username,
         roles: [roleCode],
+        manager_order: row.manager_order
+
       });
     } catch (e: any) {
       return res.status(500).json({ message: e.message });

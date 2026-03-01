@@ -27,7 +27,7 @@ authcontroller.register = (req, res) => __awaiter(void 0, void 0, void 0, functi
     var _b;
     const conn = yield DB_1.DB.getInstance().getConnection();
     try {
-        const { username, password, full_name, email, role, campaignId } = req.body;
+        const { username, password, full_name, email, role, campaignId, manager_order } = req.body;
         yield conn.beginTransaction();
         // 1. เช็ค Role ก่อนเป็นอันดับแรก
         const roleExists = yield auth_repo_1.default.checkRole(role);
@@ -48,7 +48,9 @@ authcontroller.register = (req, res) => __awaiter(void 0, void 0, void 0, functi
             password: hash,
             full_name,
             email,
-            role
+            role,
+            campaignId,
+            manager_order
         };
         // ... (โค้ดส่วนที่เหลือเหมือนเดิม) ...
         const insertId = yield auth_repo_1.default.createAccount(userData);
@@ -166,6 +168,7 @@ authcontroller.getMe = (req, res) => __awaiter(void 0, void 0, void 0, function*
             name: row.full_name,
             username: row.username,
             roles: [roleCode],
+            manager_order: row.manager_order
         });
     }
     catch (e) {

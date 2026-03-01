@@ -19,8 +19,9 @@ _a = keyController;
 keyController.getAllForCampaign = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const campaignId = parseInt(req.params.campaignId, 10);
-        if (isNaN(campaignId)) {
-            return res.status(400).send({ message: "Invalid Campaign ID" });
+        const accountId = parseInt(req.params.accountId, 10);
+        if (isNaN(campaignId) || isNaN(accountId)) {
+            return res.status(400).send({ message: "Invalid Campaign ID or Account ID" });
         }
         const keys = yield key_service_1.keyService.getAllForCampaign(campaignId);
         res.status(200).json(keys);

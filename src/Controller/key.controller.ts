@@ -7,15 +7,17 @@ export class keyController {
   static getAllForCampaign = async (req: Request, res: Response) => {
     try {
       const campaignId = parseInt(req.params.campaignId, 10);
-      if (isNaN(campaignId)) {
-        return res.status(400).send({ message: "Invalid Campaign ID" });
+      const accountId = parseInt(req.params.accountId, 10);
+      if (isNaN(campaignId) || isNaN(accountId)) {
+        return res.status(400).send({ message: "Invalid Campaign ID or Account ID" });
       }
-      const keys = await keyService.getAllForCampaign(campaignId);
+      const keys = await keyService.getAllForCampaign(campaignId );
       res.status(200).json(keys);
     } catch (error: any) {
       res.status(500).send({ message: error.message });
     }
   };
+
 
   static getAllForCampaignManager = async (req: Request, res: Response) => {
     try {

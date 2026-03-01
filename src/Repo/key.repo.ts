@@ -55,12 +55,16 @@ class KeyRepo {
     return rows;
   }
 
+
   async findAllByCampaignIdByManager(
     campaignId: number,
     AccountId: number,
     dbClient: DbClient = this.pool
   ): Promise<CampaignKey[]> {
-    const sql = "SELECT * FROM campaign_keys WHERE campaign_id = ? and account_id  = ?";
+    const sql = `
+    SELECT ck.id , ck.campaign_id , ck.account_id , a.full_name , ck.key , ck.active , ck.created_at , ck.order_num , a.manager_order 
+FROM campaign_keys ck JOIN accounts a on ck.account_id = a.id WHERE campaign_id = ? AND account_id = ?;
+    `
     const [rows] = await dbClient.execute<CampaignKey[]>(sql, [campaignId, AccountId]);
     return rows;
   }
