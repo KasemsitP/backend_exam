@@ -12,5 +12,6 @@ reportRouter.get("/campaigns/:campaignId/ranking/pdf", grading_report_controller
 // POST (แนะนำ)
 reportRouter.post("/campaigns/:campaignId/ranking/pdf", grading_report_controller_1.GradingReportController.exportRankingPdfPost);
 reportRouter.get("/reports/campaigns/:bagId/score/pdf", grading_report_controller_1.GradingReportController.exportBagGradersPdf);
+reportRouter.get("/reports/bags/:bagId/scores/pdf/unlocked/name", grading_report_controller_1.GradingReportController.ReportScoreUserIFUnlock);
 reportRouter.get("/reports/campaigns/:campaignId/bags/graders/pdf", grading_report_controller_1.GradingReportController.exportCampaignAllBagsGradersPdf);
 exports.default = reportRouter;

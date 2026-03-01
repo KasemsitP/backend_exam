@@ -138,7 +138,7 @@ keyController.testDecrypt = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!ciphertext || !campaignId) {
             return res.status(400).send({ message: "Missing ciphertext or campaignId" });
         }
-        const decrypted = yield key_service_1.keyService.decryptQrPayload(ciphertext, campaignId);
+        const decrypted = yield key_service_1.keyService.decryptPayloadStaff(ciphertext, campaignId);
         res.status(200).json(decrypted);
     }
     catch (error) {
@@ -168,6 +168,20 @@ keyController.forgetKey = (req, res) => __awaiter(void 0, void 0, void 0, functi
         }
         const result = yield key_service_1.keyService.getForgetKey(campaignId, keyId, accountId, password);
         console.log("Forget Key Result:", result);
+        res.status(200).send({ success: true, message: "กู้คีย์สำเร็จแล้ว", data: result });
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+        console.log("Error  controller:", error);
+    }
+});
+keyController.TestMask = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { payload } = req.body;
+        if (!payload) {
+            return res.status(400).send({ message: "Missing payload" });
+        }
+        const result = yield key_service_1.keyService.maskQrPayload(payload);
         res.status(200).send({ success: true, message: "กู้คีย์สำเร็จแล้ว", data: result });
     }
     catch (error) {

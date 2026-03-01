@@ -70,6 +70,45 @@ function buildBookletBlocks(raw: any[], questionCount: number, unlock: number) {
   return Array.from(byBooklet.values()).sort((a, b) => a.bookletId - b.bookletId);
 }
 
+
+function buildUnlockedBookletBlocks(raw: any[], questionCount: number) {
+  const byBooklet = new Map<number, any>();
+  for (const r of raw) {
+    let block = byBooklet.get(r.booklet_id);
+    if (!block) {
+      block = {
+        bookletId: r.booklet_id,
+        examCode: r.exam_code ?? String(r.random_num),
+        // ดึงชื่อมาด้วย (ต้องแน่ใจว่า SQL ใน Repo มีการ SELECT full_name หรือ title, first_name, last_name มาให้แล้ว)
+        fullName: r.full_name ?? (r.firstName ? `${r.firstName} ${r.lastName}` : ""),
+        questionCount: 0,
+        questions: [],
+      };
+      byBooklet.set(r.booklet_id, block);
+    }
+    block.questions.push({
+      questionNo: r.question_no, label: r.label ?? `ข้อ ${r.question_no}`,
+      category: r.category ?? null, grader1Score: r.grader1_score != null ? Number(r.grader1_score) : null,
+      grader1Name: r.grader1_names ?? null, grader2Score: r.grader2_score != null ? Number(r.grader2_score) : null,
+      grader2Name: r.grader2_names ?? null, finalScore: r.final_score != null ? Number(r.final_score) : null,
+    });
+  }
+
+  for (const block of byBooklet.values()) {
+    const map = new Map<number, any>();
+    for (const q of block.questions) map.set(q.questionNo, q);
+    const maxQ = questionCount && questionCount > 0 ? questionCount : Array.from(map.keys()).reduce((m, q) => Math.max(m, q), 0);
+    const filled: any[] = [];
+    for (let q = 1; q <= maxQ; q++) {
+      const s = map.get(q);
+      filled.push(s ?? { questionNo: q, label: `ข้อ ${q}`, category: null, grader1Score: null, grader1Name: null, grader2Score: null, grader2Name: null, finalScore: null });
+    }
+    block.questionCount = maxQ;
+    block.questions = filled;
+  }
+  return Array.from(byBooklet.values()).sort((a, b) => a.examCode.localeCompare(b.examCode, undefined, { numeric: true }));
+}
+
 const FONT_NORMAL = path.resolve(__dirname, "../../fonts/THSarabunNew.ttf");
 const FONT_BOLD = path.resolve(__dirname, "../../fonts/THSarabunNew-Bold.ttf");
 
@@ -183,7 +222,227 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
     y += rowH;
   }
 }
+function drawUnlockedBagScorePage(
+  doc: any,
+  info: any,
+  booklets: any[],
+  questionCount: number,
+  questionLabels: any[]
+) {
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
+  const { left, right, top, bottom } = doc.page.margins;
+  const contentWidth = pageWidth - left - right;
+  const labelMap = new Map(questionLabels.map((q) => [q.question_no, q.label]));
 
+  let y = top;
+  doc
+    .font(FONT_BOLD)
+    .fontSize(16)
+    .text(
+      `เอกสารคะแนนการทดสอบเพื่อบรรจุเป็นข้าราชการอัยการในตำแหน่งอัยการผู้ช่วย พ.ศ.${info?.year_be} (${info?.campaign_size})`,
+      left,
+      y,
+      { width: contentWidth, align: "center" }
+    );
+  doc
+    .font(FONT_NORMAL)
+    .fontSize(30)
+    .text(`ถุงที่ ${info?.bag_no}`, left, y, {
+      width: contentWidth,
+      align: "right",
+    });
+
+  y += 24;
+  doc
+    .font(FONT_NORMAL)
+    .fontSize(14)
+    .text(`วิชา${info?.subject_name}`, left, y, {
+      width: contentWidth,
+      align: "center",
+    });
+  y = doc.y + 10;
+
+  const totalRows = 30;
+
+  // ✅ เพิ่มคอลัมน์ชื่อ
+  const colCodeWidth = 50;
+  const colNameWidth = 100;
+  const colPerScoreWidth = 22;
+  const colsPerQuestion = 4;
+  const colSumWidth = 40;
+
+  const baseRowH1 = 42,
+    baseRowH2 = 18,
+    baseRowH = 16;
+
+  const totalQuestionCols = questionCount * colsPerQuestion;
+  const usedWidth =
+    colCodeWidth +
+    colNameWidth +
+    totalQuestionCols * colPerScoreWidth +
+    colSumWidth * 2;
+
+  const widthScale = usedWidth > contentWidth ? contentWidth / usedWidth : 1;
+  const availableTableHeight = pageHeight - bottom - y;
+  const needH = baseRowH1 + baseRowH2 + totalRows * baseRowH;
+  const heightScale =
+    needH > availableTableHeight ? availableTableHeight / needH : 1;
+
+  const scale = Math.min(widthScale, heightScale, 1);
+
+  const cwCode = colCodeWidth * scale;
+  const cwName = colNameWidth * scale;
+  const cwScore = colPerScoreWidth * scale;
+  const cwSum = colSumWidth * scale;
+
+  const rowH1 = baseRowH1 * scale;
+  const rowH2 = baseRowH2 * scale;
+  const rowH = baseRowH * scale;
+
+  const fontHeaderSize = Math.max(7, 10 * scale);
+  const fontBodySize = Math.max(6, 9 * scale);
+
+  const startX = left;
+
+  doc.lineWidth(0.5).strokeColor("black");
+
+  /* ---------------------------
+     Draw Header (รวบเส้นเหมือนกัน)
+  ----------------------------*/
+  let x = startX;
+  doc.font(FONT_BOLD).fontSize(fontHeaderSize);
+
+  // รวบเส้น header ชั้นบน
+  let p = doc.rect(x, y, cwCode, rowH1 + rowH2);
+  doc.text("รหัสประจำตัวสอบ", x, y + 6 * scale, {
+    width: cwCode,
+    align: "center",
+  });
+  x += cwCode;
+
+  p = p.rect(x, y, cwName, rowH1 + rowH2);
+  doc.text("ชื่อ-สกุล", x, y + 6 * scale, { width: cwName, align: "center" });
+  x += cwName;
+
+  for (let q = 1; q <= questionCount; q++) {
+    const groupW = colsPerQuestion * cwScore;
+    p = p.rect(x, y, groupW, rowH1);
+    doc.text(`ข้อ ${q}\n${labelMap.get(q) ?? ""}`, x, y + 4 * scale, {
+      width: groupW,
+      align: "center",
+      ellipsis: true,
+    });
+    x += groupW;
+  }
+
+  p = p.rect(x, y, cwSum, rowH1 + rowH2);
+  doc.text("รวม", x, y + 6 * scale, { width: cwSum, align: "center" });
+  x += cwSum;
+
+  p = p.rect(x, y, cwSum, rowH1 + rowH2);
+  doc.text("รวมทั้งหมด", x, y + 6 * scale, { width: cwSum, align: "center" });
+
+  p.stroke();
+
+  // แถวล่าง: หัวคอลัมน์ย่อย
+  y += rowH1;
+  x = startX + cwCode + cwName;
+
+  const subHeads = ["ค.1", "ค.2", "ต่าง", "เฉลี่ย"];
+  p = doc.lineWidth(0.5); // เริ่ม path ใหม่
+
+  for (let q = 1; q <= questionCount; q++) {
+    for (let h = 0; h < colsPerQuestion; h++) {
+      p = p.rect(x, y, cwScore, rowH2);
+      doc.text(subHeads[h], x, y + 3 * scale, {
+        width: cwScore,
+        align: "center",
+      });
+      x += cwScore;
+    }
+  }
+  p.stroke();
+
+  y += rowH2;
+
+  /* ---------------------------
+     Draw Body (รวบเส้นต่อแถว เหมือน drawBagScorePage)
+  ----------------------------*/
+  doc.font(FONT_NORMAL).fontSize(fontBodySize);
+
+  for (let i = 0; i < totalRows; i++) {
+    const bk = booklets[i];
+    x = startX;
+
+    // ✅ รวบเส้น body ต่อ 1 แถว
+    let pathRow = doc.rect(x, y, cwCode, rowH);
+    if (bk) {
+      doc.text(bk.examCode ?? "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
+        width: cwCode - 4 * scale,
+        align: "left",
+        ellipsis: true,
+      });
+    }
+    x += cwCode;
+
+    pathRow = pathRow.rect(x, y, cwName, rowH);
+    if (bk) {
+      doc.text(bk.fullName ?? "-", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
+        width: cwName - 4 * scale,
+        align: "left",
+        ellipsis: true,
+      });
+    }
+    x += cwName;
+
+    let totalPerSubject = 0;
+
+    for (let q = 1; q <= questionCount; q++) {
+      const qRow = bk?.questions?.find((qq: any) => qq.questionNo === q);
+
+      const s1 = qRow?.grader1Score ?? null;
+      const s2 = qRow?.grader2Score ?? null;
+      const diff =
+        s1 != null && s2 != null ? Math.abs(Number(s1) - Number(s2)) : null;
+      const avg =
+        s1 != null && s2 != null
+          ? (Number(s1) + Number(s2)) / 2
+          : qRow?.finalScore ?? null;
+
+      const vals = [s1, s2, diff, avg];
+
+      vals.forEach((val) => {
+        pathRow = pathRow.rect(x, y, cwScore, rowH);
+        doc.text(val == null ? "" : Number(val).toFixed(1), x, y + 3 * scale, {
+          width: cwScore,
+          align: "center",
+          ellipsis: true,
+        });
+        x += cwScore;
+      });
+
+      if (avg != null) totalPerSubject += Number(avg);
+    }
+
+    pathRow = pathRow.rect(x, y, cwSum, rowH);
+    doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, {
+      width: cwSum,
+      align: "center",
+    });
+    x += cwSum;
+
+    pathRow = pathRow.rect(x, y, cwSum, rowH);
+    doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, {
+      width: cwSum,
+      align: "center",
+    });
+
+    pathRow.stroke(); // ✅ ตีเส้นทีเดียวแบบ drawBagScorePage
+
+    y += rowH;
+  }
+}
 // =========================================================
 // Task 1: Generate Bag Score PDF
 // =========================================================
@@ -326,6 +585,31 @@ async function buildGraderBagSummaryPdf(options: { bagId: number, graderId: numb
       if (idx % 200 === 0) await new Promise(resolve => setTimeout(resolve, 0));
     }
 
+    doc.end();
+  } finally {
+    conn.release();
+  }
+}
+
+async function buildUnlockedBagScorePdf(options: { bagId: number }, writeStream: fs.WriteStream) {
+  const { bagId } = options;
+  const conn = await DB.getInstance().getConnection();
+  try {
+    const info = await getInfomation(bagId);
+    const questionCount = (await findQuestionCountForBagSubject(conn, bagId, 0)) ?? 0;
+    const questionLabels = await findQuestionLabelForBagSubject(conn, bagId, 0);
+    const rawPerBooklet = await findBookletQuestionStatsForBag(conn, bagId, 0);
+
+    // ใช้ฟังก์ชันใหม่ที่เราเพิ่งสร้าง
+    const booklets = buildUnlockedBookletBlocks(rawPerBooklet, questionCount);
+
+    const doc = new PDFDocument({
+      size: "A4", layout: "landscape", margins: { top: 40, bottom: 40, left: 40, right: 40 },
+      autoFirstPage: true, bufferPages: false, 
+    });
+    doc.pipe(writeStream);
+
+    drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLabels ?? []);
     doc.end();
   } finally {
     conn.release();
@@ -524,6 +808,7 @@ async function runTask() {
     else if (task === 'generateGraderBagSummaryPdf') await buildGraderBagSummaryPdf(options, writeStream);
     else if (task === 'generatePassListPdf') await buildPassListPdf(options, writeStream);
     else if (task === 'generateRankingPdf') await buildRankingPdf(options, writeStream);
+    else if (task === 'generateUnlockedBagScorePdf') await buildUnlockedBagScorePdf(options, writeStream);
 
     writeStream.on('finish', () => { parentPort?.postMessage({ status: 'success', filePath }); });
     writeStream.on('error', (err) => { throw err; });

@@ -8,6 +8,7 @@ import settingsRepo from "../Repo/settings.repo";
 import campaignRepo from "../Repo/campaign.repo";
 import { authservice } from "./auth.service";
 import bookletsRepo from "../Repo/booklets.repo";
+import { shuffle } from "lodash";
 
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 
@@ -59,9 +60,13 @@ function aesDecrypt(
     return Buffer.concat([decipher.update(cipherBuffer), decipher.final()]);
 }
 
+
+
+
 export class keyService {
 
 
+    private static MASKING_KEY = process.env.SCAN_SECRET_KEY || "tonlnwzasdadasdegery";
     static create = async (campaignId: number, key: string, account_id: number, order_num: number) => {
         if (Buffer.from(key, PAYLOAD_ENCODING).length !== 16) {
             throw new Error("คีย์ต้องมีความยาว 16 ตัวอักษร (128 bits) สำหรับ AES-128");
@@ -208,16 +213,16 @@ export class keyService {
     };
 
     static decryptQrPayloadWithKeys = async (
-        qrPayload: string, 
-        FirstKey: string, 
+        qrPayload: string,
+        FirstKey: string,
         SecondKey: string
     ) => {
         try {
-         
+
             const key1Buffer = Buffer.from(FirstKey, PAYLOAD_ENCODING);
             const key2Buffer = Buffer.from(SecondKey, PAYLOAD_ENCODING);
 
-   
+
             const iv1Buffer = STATIC_IV_BUFFER;
             const iv2Buffer = STATIC_IV_BUFFER;
 
@@ -227,15 +232,15 @@ export class keyService {
 
             const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
 
-   
+
             const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
 
-    
+
             const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
             const payload = JSON.parse(plainTextJsonString);
 
 
-            return payload; 
+            return payload;
 
         } catch (error: any) {
             console.error("Service Error (decryptQrPayloadWithKeys):", error);
@@ -318,15 +323,15 @@ export class keyService {
                     console.warn(`No users found for session ${sessionId}`);
                     throw new Error(`users in some session not imported yet ${sessionId}`);
                 }
-                console.log(`Encrypting ${allUserLinks.length} users for session ${sessionId}`);
+                const shuffledUserLinks = shuffle(allUserLinks);
 
-                // 🚀 OPTIMIZATION: แบ่งข้อมูลเป็นก้อน (Chunking) เพื่อ Bulk Insert
+                console.log(`Shuffled and Encrypting ${shuffledUserLinks.length} users for session ${sessionId}`);
                 const CHUNK_SIZE = 500;
 
-                for (let i = 0; i < allUserLinks.length; i += CHUNK_SIZE) {
-                    const chunk = allUserLinks.slice(i, i + CHUNK_SIZE);
 
-                    // 🛑 เปลี่ยนจาก array ของ {id, payload} เป็นรูปแบบสำหรับ Insert
+                for (let i = 0; i < shuffledUserLinks.length; i += CHUNK_SIZE) {
+                    const chunk = shuffledUserLinks.slice(i, i + CHUNK_SIZE);
+
                     const bookletsToInsert: { session_id: number; qr_payload: string }[] = [];
 
                     // 1. เข้ารหัสข้อมูลสำหรับ 500 คนใน Memory
@@ -346,7 +351,7 @@ export class keyService {
                         const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
                         const finalCiphertext = step2.toString(CIPHER_ENCODING);
 
-                        // 🛑 เตรียม Data สำหรับ Insert ลง booklets
+                        //  เตรียม Data สำหรับ Insert ลง booklets
                         bookletsToInsert.push({
                             session_id: sessionId,
                             qr_payload: finalCiphertext
@@ -537,20 +542,20 @@ export class keyService {
             const key2Buffer = Buffer.from(decryptedKey2Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
 
             console.log(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), decryptedKey2Buffer.toString(PAYLOAD_ENCODING))
-         
+
             const cipherBuffer = Buffer.from(ciphertext, CIPHER_ENCODING);
 
-       
+
 
             const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
 
 
             const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
 
- 
+
             const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
 
- 
+
             const payload = JSON.parse(plainTextJsonString);
 
             return payload;
@@ -817,9 +822,9 @@ export class keyService {
             importStatus,
             encryptedStatus,
             keyStatus,
-            sessionDates,   
-            subjectsQuestions, 
-            sessions,           
+            sessionDates,
+            subjectsQuestions,
+            sessions,
         };
     };
 
@@ -855,6 +860,49 @@ export class keyService {
         return decryptedKey1Buffer.toString(PAYLOAD_ENCODING);
     }
 
+    static encryptForPrint = (realQrPayload: string): string => {
+        const scanKey = Buffer.from(process.env.SCAN_SECRET_KEY || "SuperSecretScanK", "utf8");
+        const scanIv = STATIC_IV_BUFFER;
+        const plainBuffer = Buffer.from(realQrPayload, "utf8");
+        const cipherBuffer = aesEncrypt(plainBuffer, scanKey, scanIv);
+
+        return cipherBuffer.toString("base64");
+    };
+
+    static maskQrPayload = (realPayload: string): string => {
+        // 🛑 เปลี่ยนจาก 'utf8' เป็น 'base64' เพื่อให้ความยาวไม่บวม
+        const textBuffer = Buffer.from(realPayload, 'base64');
+        const keyBuffer = Buffer.from(this.MASKING_KEY, 'utf8');
+        const resultBuffer = Buffer.alloc(textBuffer.length);
+
+        for (let i = 0; i < textBuffer.length; i++) {
+            resultBuffer[i] = textBuffer[i] ^ keyBuffer[i % keyBuffer.length];
+        }
+
+        // คืนค่ากลับเป็น Base64
+        return resultBuffer.toString('base64');
+    };
+
+    /**
+     * 2. ถอดหน้ากาก: รับค่า Base64 จากสแกนเนอร์ -> คืนค่า Base64 ของจริงไปค้น DB
+     */
+    static unmaskQrPayload = (scannedText: string): string => {
+        try {
+            // 🛑 ใช้ logic เดียวกันเป๊ะ เพราะ XOR สลับไปสลับมาได้เลย
+            const maskedBuffer = Buffer.from(scannedText, 'base64');
+            const keyBuffer = Buffer.from(this.MASKING_KEY, 'utf8');
+            const resultBuffer = Buffer.alloc(maskedBuffer.length);
+
+            for (let i = 0; i < maskedBuffer.length; i++) {
+                resultBuffer[i] = maskedBuffer[i] ^ keyBuffer[i % keyBuffer.length];
+            }
+
+            // 🛑 เปลี่ยนเป็น 'base64' เพื่อให้ได้หน้าตาเหมือนข้อมูลจริงใน DB เป๊ะๆ
+            return resultBuffer.toString('base64');
+        } catch (error) {
+            throw new Error("❌ คิวอาร์โค้ดนี้ไม่ใช่ของระบบ หรือสแกนผิดพลาด");
+        }
+    };
 }
 
 

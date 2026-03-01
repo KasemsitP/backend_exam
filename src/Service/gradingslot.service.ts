@@ -33,9 +33,11 @@ export class gradingService {
     bagId : number;
     bagNo : number;
   }> {
-    const { qrPayload, campaignId, graderId, questionNo } = payload;
+    const { campaignId, graderId, questionNo } = payload;
 
     const connection = await DB.getInstance().getConnection();
+
+    const qrPayload = keyService.unmaskQrPayload(payload.qrPayload)
 
     try {
       await connection.beginTransaction();

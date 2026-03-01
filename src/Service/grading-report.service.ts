@@ -186,4 +186,8 @@ export class GradingReportService {
   static async generateRankingPdf(opts: any): Promise<Buffer> {
     return this.runWorkerTask('generateRankingPdf', opts);
   }
+
+  static async generateUnlockedBagScorePdfUser(opts: any): Promise<Buffer> {
+    return this.runWorkerTask('generateUnlockedBagScorePdf', opts);
+  }
 }

@@ -5,6 +5,7 @@ import bagRepo from "../Repo/bag.repo"; // (Import Repo ที่แก้ไข
 import bookletsRepo from "../Repo/booklets.repo";
 import { DbBookletInBagRow } from "../Repo/booklets.repo";
 import { BagScannedCountResult } from "../Repo/bag.repo";
+import campaignRepo from "../Repo/campaign.repo";
 
 // (Interface จาก Frontend)
 interface BulkCreatePayload {
@@ -225,9 +226,9 @@ export class bagService {
     };
 
 
-   static CreateBagAndUpdateBooklets = async ( // เปลี่ยนชื่อจาก Insert เป็น Update
+    static CreateBagAndUpdateBooklets = async (
         campaign_id: number,
-        payload: string[], // array ของ QR payload ดิบๆ ที่สแกนได้
+        payload: string[], // QR ที่สวมหน้ากากมาจากกระดาษ
         datetime: Date[],
         expected_bag_no: number,
     ) => {
@@ -239,35 +240,45 @@ export class bagService {
             if (payload.length !== datetime.length) throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
             if (payload.length === 0) throw new Error("ไม่มีข้อมูล QR Code");
 
-            // 1️⃣ Parallel Decode (ยังเก็บไว้เพื่อ Validate ว่า QR ของถุงนี้เป็นของ Campaign/Session เดียวกันจริงๆ)
-            const decodedPromises = payload.map(qr => keyService.decryptQrPayloadBags(qr, campaign_id));
-            const decodedResults = await Promise.all(decodedPromises);
+            //   ถอดหน้ากากให้เป็น Payload ตัวจริง (แต่ยังไม่ได้ Decrypt หาตัวตนนักศึกษานะ!)
+            const realPayloads = payload.map(scannedQr => keyService.unmaskQrPayload(scannedQr));
+            console.log("Real Payloads (Unmasked):", realPayloads);
 
-            let sessionId: number | null = null;
-            for (let i = 0; i < decodedResults.length; i++) {
-                const decoded = decodedResults[i];
-                if (decoded.cid !== campaign_id) throw new Error(`QR ไม่ตรง campaign`);
-                if (sessionId === null) sessionId = decoded.sid;
-                else if (decoded.sid !== sessionId) throw new Error(`QR ต่าง session กันในถุงเดียว`);
+            // ดึงข้อมูลเล่มข้อสอบจาก Database ด้วย Payload ตัวจริง
+            const existingBooklets = await bookletsRepo.findByPayloads(connection, realPayloads);
+
+            if (existingBooklets.length !== realPayloads.length) {
+                throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือสแกนผิดพลาด)");
             }
+
+            //  ตรวจสอบ Validate จากข้อมูลตาราง booklets โดยตรง
+            let sessionId: number | null = null;
+
+            for (const booklet of existingBooklets) {
+                // เช็คว่าเป็นวิชา/รอบสอบ เดียวกันทั้งหมดไหม
+                if (sessionId === null) {
+                    sessionId = booklet.session_id;
+                } else if (booklet.session_id !== sessionId) {
+                    throw new Error(`ไม่อนุญาตให้จัดข้อสอบต่างวิชา (Session) ลงในถุงเดียวกัน`);
+                }
+
+                // เช็คว่าเล่มนี้โดนจัดลงถุงไปหรือยัง
+                if (booklet.bag_id !== null) {
+                    throw new Error("มีเล่มข้อสอบบางเล่มถูกจัดลงถุงอื่นไปแล้ว โปรดตรวจสอบอีกครั้ง");
+                }
+            }
+
             if (!sessionId) throw new Error("ไม่พบ session");
 
-            // ==========================================
-            // 2️⃣ ตรวจสอบว่า QR ทั้งหมดมีอยู่ในระบบ และยังไม่เคยถูกจัดลงถุง
-            // ==========================================
-            const existingBooklets = await bookletsRepo.findByPayloads(connection, payload);
-            
-            if (existingBooklets.length !== payload.length) {
-                throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือยังไม่ได้สร้าง)");
+            // 💡 (Optional) ถ้าคุณต้องการเช็คให้ชัวร์ว่า Session นี้อยู่ใน Campaign นี้จริงๆ
+            // const sessionData = await sessionRepo.findById(connection, sessionId);
+            // if (sessionData.campaign_id !== campaign_id) throw new Error("QR ไม่ตรง Campaign");
+            const isValidSession = await campaignRepo.verifySessionInCampaign(connection, sessionId, campaign_id)
+            if (!isValidSession) {
+                throw new Error("ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบรอบสอบหรือวันที่สอบปัจจุบัน กรุณาตรวจสอบให้แน่ใจว่าไม่ได้หยิบข้อสอบผิดกอง");
             }
-
-            const alreadyBagged = existingBooklets.filter(b => b.bag_id !== null);
-            if (alreadyBagged.length > 0) {
-                throw new Error("มีเล่มข้อสอบบางเล่มถูกจัดลงถุงอื่นไปแล้ว โปรดตรวจสอบอีกครั้ง");
-            }
-
             // ==========================================
-            // 3️⃣ หาเลขถุงที่แหว่งไป และสร้างถุงใหม่ (Logic เดิมของคุณ)
+            // 3️⃣ หาเลขถุงที่แหว่งไป และสร้างถุงใหม่
             // ==========================================
             const existingBagNos = await bagRepo.getAllBagNumbersForSession(sessionId, connection);
             let targetBagNo = 1;
@@ -285,7 +296,7 @@ export class bagService {
             const bagId = bagResult.insertId;
 
             // ==========================================
-            // 4️⃣ Update Booklets (จับยัดลงถุง + รัน Random Num)
+            // 4️⃣ Update Booklets (จับยัดลงถุง)
             // ==========================================
             const day_no_payload = await bookletsRepo.getDayno(connection, sessionId);
             const dataNo = day_no_payload?.day_no || 0;
@@ -294,34 +305,29 @@ export class bagService {
             const latestRecord = await bookletsRepo.getLatestRandomNumForUpdate(connection, sessionId);
             let currentRunningNumber = latestRecord?.random_num ? parseInt(latestRecord.random_num.slice(-4), 10) : 0;
 
-            // วนลูปสร้าง Promise สำหรับอัปเดตทีละเล่ม (เพื่อให้ seq_in_bag เรียงตามลำดับการสแกน)
             const updatePromises = [];
 
-            for (let i = 0; i < payload.length; i++) {
-                const rawQrPayload = payload[i];
+            for (let i = 0; i < realPayloads.length; i++) {
+                const rawQrPayload = realPayloads[i];
                 currentRunningNumber++;
                 const paddedRunning = String(currentRunningNumber).padStart(4, '0');
                 const nextRandomNum = `${dataNo}${paddedRunning}`;
                 const seq = i + 1;
-                
-                // สถานะอาจจะเปลี่ยนจาก PRINTED เป็น PACKAGED หรือ SCANNED ตามที่คุณออกแบบไว้
-                const status = 'PACKAGED'; 
+                const status = 'PACKAGED';
 
                 updatePromises.push(
                     bookletsRepo.updateBagInfoByPayload(
-                        connection, 
-                        rawQrPayload, 
-                        bagId, 
-                        seq, 
-                        status, 
+                        connection,
+                        rawQrPayload, // ส่งตัวจริงไป Update
+                        bagId,
+                        seq,
+                        status,
                         nextRandomNum
                     )
                 );
             }
 
-            // สั่งรัน Update พร้อมกันทั้งหมด
             await Promise.all(updatePromises);
-
             await connection.commit();
 
             return {
@@ -332,14 +338,14 @@ export class bagService {
 
         } catch (error: any) {
             await connection.rollback();
-            throw error; // ไม่ต้องดัก ER_DUP_ENTRY แล้ว เพราะเราใช้การเช็ค Validation แทนการ Insert
+            throw error;
         } finally {
             connection.release();
         }
     };
     static CheckbookletsSubjects = async (
         campaign_id: number,
-        payload: string[],
+        payload: string[], // รับค่าที่สวมหน้ากากมาจากเครื่องสแกน
         datetime: Date[]
     ) => {
         const connection = await DB.getInstance().getConnection();
@@ -348,18 +354,47 @@ export class bagService {
             if (payload.length !== datetime.length) {
                 throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
             }
+            if (payload.length === 0) {
+                throw new Error("ไม่มีข้อมูล QR Code");
+            }
 
-            // 1️⃣ Parallel Decode
-            const decodedPromises = payload.map(qr => keyService.decryptQrPayloadBags(qr, campaign_id));
-            const decodedResults = await Promise.all(decodedPromises);
+            // 🛑 1️⃣ ถอดหน้ากาก (Unmask) ก่อนเพื่อเอาไปค้นหาใน DB
+            const realPayloads = payload.map(qr => keyService.unmaskQrPayload(qr));
+
+            // ==========================================
+            // ❌ เอา Parallel Decode (decryptQrPayloadBags) ออก
+            // เปลี่ยนมาใช้การหาข้อมูลเล่มข้อสอบจาก Database ตรงๆ เพื่อความเป็น Blind 100%
+            // ==========================================
+            const existingBooklets = await bookletsRepo.findByPayloads(connection, realPayloads);
+
+            if (existingBooklets.length !== realPayloads.length) {
+                throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือสแกนผิดพลาด)");
+            }
 
             let sessionId: number | null = null;
-            for (const decoded of decodedResults) {
-                if (decoded.cid !== campaign_id) throw new Error(`QR ไม่ตรง campaign`);
-                if (sessionId === null) sessionId = decoded.sid;
-                else if (decoded.sid !== sessionId) throw new Error(`QR ต่าง session`);
+            for (const booklet of existingBooklets) {
+                // ตรวจสอบว่าเป็น Session เดียวกันทั้งหมด
+                if (sessionId === null) {
+                    sessionId = booklet.session_id;
+                } else if (booklet.session_id !== sessionId) {
+                    throw new Error(`ไม่อนุญาตให้สแกนข้อสอบต่างวิชา (Session) ปะปนกัน`);
+                }
+
+                // สามารถเช็คดักเพิ่มได้ด้วยว่ามีเล่มไหนจัดลงถุงไปแล้วหรือยัง
+                if (booklet.bag_id !== null) {
+                    throw new Error("มีเล่มข้อสอบบางเล่มถูกจัดลงถุงอื่นไปแล้ว โปรดนำออกก่อนสแกนตรวจสอบ");
+                }
             }
+
             if (!sessionId) throw new Error("ไม่พบ session");
+
+            // 💡 (Optional) เช็ค Campaign ให้ชัวร์ว่า Session นี้ตรงกับ Campaign ปัจจุบัน
+            // const isValidSession = await sessionRepo.verifySessionInCampaign(connection, sessionId, campaign_id);
+            // if (!isValidSession) throw new Error("ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบปัจจุบัน");
+            const isValidSession = await campaignRepo.verifySessionInCampaign(connection, sessionId, campaign_id)
+            if (!isValidSession) {
+                throw new Error("ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบรอบสอบหรือวันที่สอบปัจจุบัน กรุณาตรวจสอบให้แน่ใจว่าไม่ได้หยิบข้อสอบผิดกอง");
+            }
 
             // 2️⃣ เช็ควิชา
             const subjectResult = await bagRepo.CheckSubjectBooks(sessionId);
@@ -367,21 +402,20 @@ export class bagService {
             // ==========================================
             // 3️⃣ หาเลขถุงที่แหว่งไป (แค่หาเฉยๆ ไม่สร้าง!)
             // ==========================================
-            // สมมติใน Repo มีฟังก์ชันดึงเลขถุงทั้งหมดของ Session (SELECT bag_no FROM bags WHERE session_id = ?)
             const existingBagNos = await bagRepo.getAllBagNumbersForSession(sessionId, connection);
 
             let targetBagNo = 1;
             existingBagNos.sort((a, b) => a - b);
             for (const no of existingBagNos) {
                 if (no === targetBagNo) targetBagNo++;
-                else break; // เจอเลขที่ว่างแล้ว
+                else break;
             }
 
-            // คืนค่าเฉพาะเลขถุงคาดการณ์
+            // คืนค่าเฉพาะเลขถุงคาดการณ์ และชื่อวิชา
             return {
                 success: true,
                 subject_name: subjectResult,
-                bagNo: targetBagNo, // โชว์เลขนี้ใน Swal ฝั่ง Frontend
+                bagNo: targetBagNo,
             };
         } catch (error) {
             throw error;
@@ -395,7 +429,7 @@ export class bagService {
             await connection.beginTransaction();
 
 
-            await bookletsRepo.deleteByBagId( connection , bagId);
+            await bookletsRepo.deleteByBagId(connection, bagId);
             await bagRepo.deleteById(bagId, connection);
 
             await connection.commit();
@@ -435,7 +469,9 @@ export class bagService {
                 status: r.status,
                 userCode: r.user_code,
                 fullName: r.full_name,
-                qrPayload: r.qr_payload,
+
+                qrPayload: r.qr_payload ? keyService.maskQrPayload(r.qr_payload) : null,
+
                 created_at: r.created_at
             }));
         } finally {

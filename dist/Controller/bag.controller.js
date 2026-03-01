@@ -37,7 +37,7 @@ bagController.CreateBagAndBooklets = (req, res) => __awaiter(void 0, void 0, voi
             return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
         }
         const dateTimes = datetime.map((d) => new Date(d));
-        const result = yield bag_service_1.bagService.CreateBagAndInsertBooklets(campaignId, payload, dateTimes, bagNo);
+        const result = yield bag_service_1.bagService.CreateBagAndUpdateBooklets(campaignId, payload, dateTimes, bagNo);
         return res.status(200).json(result);
     }
     catch (error) {

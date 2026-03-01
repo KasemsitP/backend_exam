@@ -81,6 +81,22 @@ export class GradingReportController {
       res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
     }
   }
+
+  static ReportScoreUserIFUnlock = async (req: Request, res: Response) => {
+    const bagId = Number(req.params.bagId);
+    try {
+      const buf = await GradingReportService.generateUnlockedBagScorePdfUser({ bagId });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="bag-${bagId}-scores.pdf"`
+      );
+      res.send(buf);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+    }
+  }
   static ReportScoreAllPDF = async (req: Request, res: Response) => {
     const { campaign_id } = req.params
     // console.log(campaign_id)

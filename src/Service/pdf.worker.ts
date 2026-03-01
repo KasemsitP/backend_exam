@@ -66,7 +66,7 @@ async function runHeavyPdfTask() {
         lastName: r.lastName, 
         userCode: r.userCode,
         roomName: r.roomName ?? null, 
-        qr_payload: matchedPayload, // 👈 ใส่ค่าที่หาเจอ
+       qr_payload: matchedPayload ? keyService.maskQrPayload(matchedPayload) : null,
         row_no: r.row_no, 
         title: r.title, 
         col_no: r.col_no

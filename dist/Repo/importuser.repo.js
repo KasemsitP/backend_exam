@@ -304,6 +304,13 @@ SELECT count(uc.id) as count from user_campaigns uc WHERE uc.campaign_id = ?;
             return result.affectedRows; // คืนค่าจำนวนแถวที่ถูกสร้างสำเร็จ
         });
     }
+    getUserinSystem(campaignId, dbClient) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `select count(*) as count from user_campaigns where campaign_id = ?`;
+            const [rows] = yield dbClient.query(sql, [campaignId]);
+            return rows[0].count;
+        });
+    }
 }
 const userImportRepo = new UserImportRepo();
 exports.default = userImportRepo;

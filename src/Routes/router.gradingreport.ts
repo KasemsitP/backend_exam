@@ -45,6 +45,11 @@ reportRouter.get(
   GradingReportController.exportBagGradersPdf
 );
 
+reportRouter.get(
+  "/reports/bags/:bagId/scores/pdf/unlocked/name",
+  GradingReportController.ReportScoreUserIFUnlock
+);
+
 reportRouter.get("/reports/campaigns/:campaignId/bags/graders/pdf", GradingReportController.exportCampaignAllBagsGradersPdf);
 
 

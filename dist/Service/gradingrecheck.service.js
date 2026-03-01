@@ -17,46 +17,7 @@ const DB_1 = require("../model/DB");
 const gradingscore_repo_1 = __importDefault(require("../Repo/gradingscore.repo"));
 const gradingslot_repo_1 = __importDefault(require("../Repo/gradingslot.repo"));
 const gradingslot_service_1 = require("./gradingslot.service");
-const key_service_1 = require("./key.service");
 class gradingRecheckService {
-    /**
-     * ใช้ตอน "บันทึกคะแนน" เพื่อเช็คว่าคะแนน 2 คนต่างกันเกิน threshold มั้ย
-     * - ถ้าใช่ → เซ็ต status ของ slot ทั้งคู่เป็น DISPUTED
-     * NOTE: ใช้ connection ที่ส่งมาจาก transaction เดิม (ห้าม commit/rollback เอง)
-     */
-    static scanDisputedFromQr(payload) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const { qrPayload, campaignId } = payload;
-            const conn = yield DB_1.DB.getInstance().getConnection();
-            try {
-                // 1) ถอด QR
-                const decoded = yield key_service_1.keyService.decryptQrPayload(qrPayload, campaignId);
-                const { cid, sid, uid } = decoded; // สมมติ structure เดิม { cid, sid, uid, ... }
-                if (cid !== campaignId) {
-                    throw new Error("QR ไม่ตรงกับแคมเปญที่เลือก");
-                }
-                // 2) หาเล่มของคนนี้ใน session นี้
-                const bookletRow = yield gradingslot_repo_1.default.findBookletForUser(conn, campaignId, sid, uid);
-                if (!bookletRow) {
-                    throw new Error("ไม่พบเล่มข้อสอบของผู้เข้าสอบรายนี้ใน session นี้");
-                }
-                // 3) ดึงทุก slot ที่ DISPUTED ในเล่มนี้
-                const disputedSlots = yield gradingscore_repo_1.default.findDisputedByBooklet(conn, bookletRow.booklet_id);
-                return {
-                    campaignId,
-                    sessionId: sid,
-                    userCode: bookletRow.user_code,
-                    userId: bookletRow.user_id,
-                    bookletId: bookletRow.booklet_id,
-                    hasDispute: disputedSlots.length > 0,
-                    disputedSlots,
-                };
-            }
-            finally {
-                conn.release();
-            }
-        });
-    }
     static checkAndMarkDisputedIfNeeded(conn, slotId, diffThreshold) {
         return __awaiter(this, void 0, void 0, function* () {
             // 1) เอา context ของ slot นี้ก่อน

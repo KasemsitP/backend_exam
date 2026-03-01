@@ -12,5 +12,4 @@ gradingrecheck_controller_1.GradingRecheckController.listDisputed);
 gradingRecheckRouter.post("/recheck/slot-from-qr", gradingrecheck_controller_1.GradingRecheckController.createRecheckSlot);
 // reset คะแนนของข้อหนึ่ง (slotId ตัวใดตัวหนึ่งในคู่นั้นก็ได้)
 gradingRecheckRouter.post("/recheck/reset/:slotId", gradingrecheck_controller_1.GradingRecheckController.resetRecheck);
-gradingRecheckRouter.post("/grading/recheck/scan-disputed", gradingrecheck_controller_1.GradingRecheckController.scanDisputed);
 exports.default = gradingRecheckRouter;

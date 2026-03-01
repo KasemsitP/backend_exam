@@ -16,6 +16,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.gradingscoreController = void 0;
 const gradingscore_service_1 = require("../Service/gradingscore.service");
 const gradingscore_repo_1 = __importDefault(require("../Repo/gradingscore.repo"));
+const key_service_1 = require("../Service/key.service");
 class gradingscoreController {
 }
 exports.gradingscoreController = gradingscoreController;
@@ -48,7 +49,14 @@ gradingscoreController.FetchRecord = (req, res) => __awaiter(void 0, void 0, voi
             return res.status(400).send({ message: "ไม่พบผู้ตรวจ" });
         }
         const result = yield gradingscore_repo_1.default.FindAllRecord(Number(graderId));
-        res.status(201).json(result);
+        const data = result.map(r => ({
+            random_num: r.random_num,
+            score: r.score,
+            slot_id: r.slot_id,
+            enteredAT: r.enteredAT,
+            qr_payload: key_service_1.keyService.maskQrPayload(r.qr_payload)
+        }));
+        res.status(201).json(data);
     }
     catch (error) {
         res.status(400).send({ message: error.message });

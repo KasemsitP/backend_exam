@@ -176,5 +176,10 @@ class GradingReportService {
             return this.runWorkerTask('generateRankingPdf', opts);
         });
     }
+    static generateUnlockedBagScorePdfUser(opts) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.runWorkerTask('generateUnlockedBagScorePdf', opts);
+        });
+    }
 }
 exports.GradingReportService = GradingReportService;

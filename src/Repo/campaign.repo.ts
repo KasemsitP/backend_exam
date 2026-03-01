@@ -174,6 +174,19 @@ SELECT is_active
     const [rows] = await conn.query(sql, userIds);
     return rows as { id: number; user_code: string }[];
   }
+
+ async verifySessionInCampaign(
+    connection: any, 
+    sessionId: number,
+    campaignId: number
+  ): Promise<boolean> {
+    
+    const sql = `SELECT 1 FROM sessions WHERE id = ? AND campaign_id = ?`;
+    const [rows] = await connection.execute(sql, [sessionId, campaignId]);
+    
+ 
+    return rows.length > 0;
+  }
 }
 
 const campaignRepo = new CampaignRepo();

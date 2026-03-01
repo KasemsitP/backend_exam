@@ -15,4 +15,5 @@ keyRouter.get("/keys/dashboard/:campaignId", keyController.getDashboard);
 
 
 
+keyRouter.post("/keys/test-mask", keyController.TestMask);
 export default keyRouter;

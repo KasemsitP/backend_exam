@@ -138,6 +138,23 @@ SELECT is_active
             return rows[0].is_active === 1;
         });
     }
+    findUserCodesByIds(conn, userIds) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (userIds.length === 0)
+                return [];
+            const placeholders = userIds.map(() => '?').join(',');
+            const sql = `SELECT id, user_code FROM users WHERE id IN (${placeholders})`;
+            const [rows] = yield conn.query(sql, userIds);
+            return rows;
+        });
+    }
+    verifySessionInCampaign(connection, sessionId, campaignId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `SELECT 1 FROM sessions WHERE id = ? AND campaign_id = ?`;
+            const [rows] = yield connection.execute(sql, [sessionId, campaignId]);
+            return rows.length > 0;
+        });
+    }
 }
 const campaignRepo = new CampaignRepo();
 exports.default = campaignRepo;

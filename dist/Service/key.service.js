@@ -22,6 +22,8 @@ const dashboard_repo_1 = __importDefault(require("../Repo/dashboard.repo"));
 const settings_repo_1 = __importDefault(require("../Repo/settings.repo"));
 const campaign_repo_1 = __importDefault(require("../Repo/campaign.repo"));
 const auth_service_1 = require("./auth.service");
+const booklets_repo_1 = __importDefault(require("../Repo/booklets.repo"));
+const lodash_1 = require("lodash");
 //FIX: เปลี่ยนจาก CTR เป็น CBC
 const ALGORITHM = "aes-128-cbc";
 const PAYLOAD_ENCODING = "utf8";
@@ -58,6 +60,7 @@ class keyService {
 }
 exports.keyService = keyService;
 _a = keyService;
+keyService.MASKING_KEY = process.env.SCAN_SECRET_KEY || "tonlnwzasdadasdegery";
 keyService.create = (campaignId, key, account_id, order_num) => __awaiter(void 0, void 0, void 0, function* () {
     if (Buffer.from(key, PAYLOAD_ENCODING).length !== 16) {
         throw new Error("คีย์ต้องมีความยาว 16 ตัวอักษร (128 bits) สำหรับ AES-128");
@@ -174,6 +177,25 @@ keyService.getPrerequisites = (campaignId) => __awaiter(void 0, void 0, void 0, 
         hasImportedUsers: userCount > 0,
     };
 });
+keyService.decryptQrPayloadWithKeys = (qrPayload, FirstKey, SecondKey) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const key1Buffer = Buffer.from(FirstKey, PAYLOAD_ENCODING);
+        const key2Buffer = Buffer.from(SecondKey, PAYLOAD_ENCODING);
+        const iv1Buffer = STATIC_IV_BUFFER;
+        const iv2Buffer = STATIC_IV_BUFFER;
+        const cipherBuffer = Buffer.from(qrPayload, CIPHER_ENCODING);
+        const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
+        const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
+        const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
+        const payload = JSON.parse(plainTextJsonString);
+        return payload;
+    }
+    catch (error) {
+        console.error("Service Error (decryptQrPayloadWithKeys):", error);
+        // ถ้าคีย์ผิด หรือ QR พัง มันจะเด้งเข้า catch ทันที 
+        throw new Error("คีย์ที่กรอกไม่ถูกต้อง หรือข้อมูล QR Code เสียหาย ไม่สามารถถอดรหัสได้");
+    }
+});
 keyService.runBulkEncryptionForSession = (campaignId) => __awaiter(void 0, void 0, void 0, function* () {
     const activeCamp = yield campaign_repo_1.default.IscampaignActive(campaignId);
     if (!activeCamp) {
@@ -201,55 +223,56 @@ keyService.runBulkEncryptionForSession = (campaignId) => __awaiter(void 0, void 
         }
         const keyFirst = keys.find(k => k.order_num === 1);
         const keySecond = keys.find(k => k.order_num === 2);
-        console.log(keyFirst, keySecond);
         if (!keyFirst || !keySecond) {
             throw new Error("คีย์สำหรับรอบสอบนี้ไม่ครบ 2 คีย์");
         }
         const decryptedKey1Buffer = aesDecrypt(Buffer.from(keyFirst.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
         const decryptedKey1 = decryptedKey1Buffer.toString(PAYLOAD_ENCODING);
-        console.log("Decrypted Key 1 for verification:", decryptedKey1);
         const decryptedKey2Buffer = aesDecrypt(Buffer.from(keySecond.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
         const decryptedKey2 = decryptedKey2Buffer.toString(PAYLOAD_ENCODING);
-        console.log("Decrypted Key 2 for verification:", decryptedKey2);
-        console.log(campaignId);
-        // const [key1, key2] = keys;
         const key1Buffer = Buffer.from(decryptedKey1, PAYLOAD_ENCODING);
         const key2Buffer = Buffer.from(decryptedKey2, PAYLOAD_ENCODING);
         // Static IV Buffer ที่กำหนดไว้
         const iv1Buffer = STATIC_IV_BUFFER;
-        const iv2Buffer = STATIC_IV_BUFFER; // (ใช้ตัวเดียวกันสำหรับ Layer 2 ตามโค้ด Demo)
+        const iv2Buffer = STATIC_IV_BUFFER;
         for (const sessionId of sessionIds) {
+            const isAlreadyGenerated = yield booklets_repo_1.default.checkIfSessionEncrypted(sessionId, connection);
+            if (isAlreadyGenerated) {
+                console.warn(`Session ${sessionId} already has booklets generated. Skipping.`);
+                continue; // ข้ามไปทำ Session ถัดไป หรือจะ Throw Error ก็ได้ตาม Business Logic
+            }
+            // ดึงรายชื่อคนที่มีสิทธิ์สอบใน Session นี้
             const allUserLinks = yield importuser_repo_1.default.findAllUserLinksForSession(sessionId, connection);
             if (allUserLinks.length === 0) {
                 console.warn(`No users found for session ${sessionId}`);
                 throw new Error(`users in some session not imported yet ${sessionId}`);
             }
-            console.log(`Encrypting ${allUserLinks.length} users for session ${sessionId}`);
-            // 🚀 OPTIMIZATION: แบ่งข้อมูลเป็นก้อน (Chunking) เพื่อ Bulk Update
-            const CHUNK_SIZE = 500; // อัปเดตทีละ 500 แถวต่อ 1 Query
-            for (let i = 0; i < allUserLinks.length; i += CHUNK_SIZE) {
-                const chunk = allUserLinks.slice(i, i + CHUNK_SIZE);
-                const updatesPayload = [];
-                // 1. เข้ารหัสข้อมูลสำหรับ 500 คนใน Memory (ตรงนี้ทำงานเร็วมาก)
+            const shuffledUserLinks = (0, lodash_1.shuffle)(allUserLinks);
+            console.log(`Shuffled and Encrypting ${shuffledUserLinks.length} users for session ${sessionId}`);
+            const CHUNK_SIZE = 500;
+            for (let i = 0; i < shuffledUserLinks.length; i += CHUNK_SIZE) {
+                const chunk = shuffledUserLinks.slice(i, i + CHUNK_SIZE);
+                const bookletsToInsert = [];
+                // 1. เข้ารหัสข้อมูลสำหรับ 500 คนใน Memory
                 for (const userLink of chunk) {
                     const payload = {
                         cid: campaignId,
                         sid: sessionId,
-                        uid: userLink.user_id,
+                        uid: userLink.user_id, // เก็บแค่ user_id
                     };
                     const plainTextBuffer = Buffer.from(JSON.stringify(payload), PAYLOAD_ENCODING);
                     const step1 = aesEncrypt(plainTextBuffer, key1Buffer, iv1Buffer);
                     const step2 = aesEncrypt(step1, key2Buffer, iv2Buffer);
                     const finalCiphertext = step2.toString(CIPHER_ENCODING);
-                    // เก็บผลลัพธ์ลง Array เตรียมส่งอัปเดต
-                    updatesPayload.push({
-                        id: userLink.user_session_id,
-                        payload: finalCiphertext
+                    //  เตรียม Data สำหรับ Insert ลง booklets
+                    bookletsToInsert.push({
+                        session_id: sessionId,
+                        qr_payload: finalCiphertext
                     });
                     usersEncrypted++;
                 }
-                // 2. ส่งข้อมูล 500 รายการไปอัปเดตใน Database ภายใน 1 Query
-                yield importuser_repo_1.default.bulkUpdateQrPayload(updatesPayload, connection);
+                // 2. 🛑 ส่งข้อมูล 500 รายการไป Insert ลงตาราง booklets ใน 1 Query
+                yield booklets_repo_1.default.bulkInsertBooklets(bookletsToInsert, connection);
             }
         }
         yield connection.commit();
@@ -316,7 +339,7 @@ keyService.decryptQrPayload = (ciphertext, campaignId) => __awaiter(void 0, void
         throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
     }
 });
-keyService.decryptQrPayloadNoLocks = (ciphertext, campaignId) => __awaiter(void 0, void 0, void 0, function* () {
+keyService.decryptPayloadStaff = (ciphertext, campaignId) => __awaiter(void 0, void 0, void 0, function* () {
     let flag_qr_inactive = false;
     try {
         const isActiveCamp = yield campaign_repo_1.default.IscampaignActive(campaignId);
@@ -351,6 +374,41 @@ keyService.decryptQrPayloadNoLocks = (ciphertext, campaignId) => __awaiter(void 
         // 5. แปลงกลับเป็น String และ JSON
         const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
         // 6. ตรวจสอบและคืนค่า
+        const payload = JSON.parse(plainTextJsonString);
+        return payload;
+    }
+    catch (error) {
+        console.error("Service Error (Decryption):", error);
+        if (flag_qr_inactive) {
+            throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากระบบสแกนคิวอาร์โค้ดถูกปิดใช้งานอยู่");
+        }
+        throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากข้อมูลไม่ถูกต้องหรือคีย์ไม่ครบถ้วน");
+    }
+});
+keyService.decryptQrPayloadNoLocks = (ciphertext, campaignId) => __awaiter(void 0, void 0, void 0, function* () {
+    let flag_qr_inactive = false;
+    try {
+        const isActiveCamp = yield campaign_repo_1.default.IscampaignActive(campaignId);
+        if (!isActiveCamp) {
+            flag_qr_inactive = true;
+            throw new Error("ไม่สามารถสแกนคิวอาร์โค้ดได้เนื่องจากรอบสอบนี้ยังไม่เปิดใช้งาน");
+        }
+        const keys = yield key_repo_1.default.findAllByCampaignId(campaignId);
+        if (keys.length !== 2) {
+            throw new Error("ไม่สามารถถอดรหัสได้ เนื่องจากรอบสอบนี้ต้องมีคีย์ทั้งหมด 2 คีย์");
+        }
+        const [key1, key2] = keys;
+        const iv1Buffer = STATIC_IV_BUFFER;
+        const iv2Buffer = STATIC_IV_BUFFER;
+        const decryptedKey1Buffer = aesDecrypt(Buffer.from(key1.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+        const decryptedKey2Buffer = aesDecrypt(Buffer.from(key2.key, CIPHER_ENCODING), Buffer.from(process.env.MASTER_KEY, PAYLOAD_ENCODING), STATIC_IV_BUFFER);
+        const key1Buffer = Buffer.from(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+        const key2Buffer = Buffer.from(decryptedKey2Buffer.toString(PAYLOAD_ENCODING), PAYLOAD_ENCODING);
+        console.log(decryptedKey1Buffer.toString(PAYLOAD_ENCODING), decryptedKey2Buffer.toString(PAYLOAD_ENCODING));
+        const cipherBuffer = Buffer.from(ciphertext, CIPHER_ENCODING);
+        const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
+        const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
+        const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
         const payload = JSON.parse(plainTextJsonString);
         return payload;
     }
@@ -500,6 +558,13 @@ keyService.GetDashBoard = (campaign_id) => __awaiter(void 0, void 0, void 0, fun
     const subjectsQuestions = yield dashboard_repo_1.default.getSubjectQuestionsByCampaign(Number(campaign_id));
     const sessionDates = yield key_repo_1.default.GetSessionDate(Number(campaign_id)); // << ควรมี session_id + session_code
     const keyStatus = yield key_repo_1.default.KeyStatus(Number(campaign_id));
+    console.log("Dashboard Data Retrieved:", {
+        importStatus,
+        encryptedStatus,
+        subjectsQuestions,
+        sessionDates,
+        keyStatus,
+    });
     // --- helper ---
     const toNumber = (v, fallback = 0) => {
         const n = Number(v);
@@ -559,9 +624,9 @@ keyService.GetDashBoard = (campaign_id) => __awaiter(void 0, void 0, void 0, fun
         importStatus,
         encryptedStatus,
         keyStatus,
-        sessionDates, // จะคงไว้ก็ได้
-        subjectsQuestions, // จะคงไว้ก็ได้ (ไว้ debug)
-        sessions, // ✅ ตัวใหม่ที่ UI ใช้ง่ายสุด
+        sessionDates,
+        subjectsQuestions,
+        sessions,
     };
 });
 keyService.getForgetKey = (campaign_id, key_id, account_id, password) => __awaiter(void 0, void 0, void 0, function* () {
@@ -593,3 +658,40 @@ keyService.getForgetKey = (campaign_id, key_id, account_id, password) => __await
     console.log("Decrypted Key for verification:", decryptedKey1Buffer.toString(PAYLOAD_ENCODING));
     return decryptedKey1Buffer.toString(PAYLOAD_ENCODING);
 });
+keyService.encryptForPrint = (realQrPayload) => {
+    const scanKey = Buffer.from(process.env.SCAN_SECRET_KEY || "SuperSecretScanK", "utf8");
+    const scanIv = STATIC_IV_BUFFER;
+    const plainBuffer = Buffer.from(realQrPayload, "utf8");
+    const cipherBuffer = aesEncrypt(plainBuffer, scanKey, scanIv);
+    return cipherBuffer.toString("base64");
+};
+keyService.maskQrPayload = (realPayload) => {
+    // 🛑 เปลี่ยนจาก 'utf8' เป็น 'base64' เพื่อให้ความยาวไม่บวม
+    const textBuffer = Buffer.from(realPayload, 'base64');
+    const keyBuffer = Buffer.from(_a.MASKING_KEY, 'utf8');
+    const resultBuffer = Buffer.alloc(textBuffer.length);
+    for (let i = 0; i < textBuffer.length; i++) {
+        resultBuffer[i] = textBuffer[i] ^ keyBuffer[i % keyBuffer.length];
+    }
+    // คืนค่ากลับเป็น Base64
+    return resultBuffer.toString('base64');
+};
+/**
+ * 2. ถอดหน้ากาก: รับค่า Base64 จากสแกนเนอร์ -> คืนค่า Base64 ของจริงไปค้น DB
+ */
+keyService.unmaskQrPayload = (scannedText) => {
+    try {
+        // 🛑 ใช้ logic เดียวกันเป๊ะ เพราะ XOR สลับไปสลับมาได้เลย
+        const maskedBuffer = Buffer.from(scannedText, 'base64');
+        const keyBuffer = Buffer.from(_a.MASKING_KEY, 'utf8');
+        const resultBuffer = Buffer.alloc(maskedBuffer.length);
+        for (let i = 0; i < maskedBuffer.length; i++) {
+            resultBuffer[i] = maskedBuffer[i] ^ keyBuffer[i % keyBuffer.length];
+        }
+        // 🛑 เปลี่ยนเป็น 'base64' เพื่อให้ได้หน้าตาเหมือนข้อมูลจริงใน DB เป๊ะๆ
+        return resultBuffer.toString('base64');
+    }
+    catch (error) {
+        throw new Error("❌ คิวอาร์โค้ดนี้ไม่ใช่ของระบบ หรือสแกนผิดพลาด");
+    }
+};

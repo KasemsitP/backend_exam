@@ -227,7 +227,7 @@ ORDER BY
     return rows[0] || null;
   }
 
-  async findScannCountByCampaign(
+async findScannCountByCampaign( 
     conn: PoolConnection,
     campaignId: number,
   ): Promise<BagScannedCountResult[] | null> {
@@ -236,32 +236,31 @@ SELECT
   b.id,
   s.campaign_id,
   b.session_id,
-  s.title              AS session_label,
+  s.title                AS session_label,
   b.bag_no,
-  b.count_items,             -- จำนวนเล่มตาม capacity
+  b.count_items,    
   b.status,
-  LPAD(b.bag_no, 3, '0')     AS bag_no_str,
-  COALESCE(bs.scanned_count,0) AS scanned_count
+  LPAD(b.bag_no, 3, '0') AS bag_no_str,
+  COALESCE(bs.scanned_count, 0) AS scanned_count
 FROM bags b
 JOIN sessions s
   ON b.session_id = s.id
 LEFT JOIN (
+  --
   SELECT
-    session_id,
-    bag_no,
+    bag_id,
     COUNT(*) AS scanned_count
   FROM booklets
-  GROUP BY session_id, bag_no
+  WHERE bag_id IS NOT NULL -- นับเฉพาะเล่มที่สแกนลงถุงแล้ว
+  GROUP BY bag_id
 ) bs
-  ON bs.session_id = b.session_id
- AND bs.bag_no     = b.bag_no
+  ON bs.bag_id = b.id -- 
 WHERE s.campaign_id = ?
-ORDER BY b.bag_no ASC;
-
+ORDER BY b.session_id ASC, b.bag_no ASC; -- 
     `;
+
     const [rows] = await conn.execute<BagScannedCountResult[]>(sql, [campaignId]);
     return rows || null;
-
   }
   async findById(
     connection: PoolConnection,

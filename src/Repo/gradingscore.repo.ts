@@ -212,10 +212,9 @@ class GradingScoreRepo {
     return rows[0] || null;
   }
 
-  async FindAllRecord(
+async FindAllRecord(
     grader_id: number
-  ): Promise<GradingRecordAll[] | null> {
-    // ✅ แก้ไข: ดึง qr_payload จากตาราง booklets (b.qr_payload)
+  ): Promise<GradingRecordAll[]> { // เอา | null ออกได้เลย
     const sql = `
       SELECT 
         b.random_num,
@@ -233,9 +232,8 @@ class GradingScoreRepo {
       LIMIT 25 OFFSET 0;
     `;
     const [rows] = await this.pool.execute<GradingRecordAll[]>(sql, [grader_id]);
-    return rows.length ? rows : null;
+    return rows; 
   }
-
   /**
    * ใช้ตอน recheck:
    * จาก slotId → หา context ว่าเป็นเล่มไหน / วิชาไหน / ข้อที่เท่าไหร่

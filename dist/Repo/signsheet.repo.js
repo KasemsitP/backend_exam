@@ -27,8 +27,7 @@ class SignSheetRepo {
                 ''             AS lastName,
                 uc.room_code   AS roomName,
                 uc.row_no,
-                uc.col_no,
-                us.qr_payload
+                uc.col_no
             FROM user_sessions us
             JOIN user_campaigns uc ON us.user_campaign_id = uc.id
             JOIN users u ON uc.user_id = u.id
@@ -86,7 +85,7 @@ class SignSheetRepo {
             const countSql = `SELECT COUNT(*) as total ${baseJoins} ${whereClause}`;
             const [countRows] = yield this.pool.execute(countSql, searchParams);
             const total = countRows[0].total;
-            // Query 2: Select Data
+            // Query 2: Select Data (🛑 ลบ us.qr_payload ออกแล้ว)
             const dataSql = `
             SELECT
                 us.id          AS user_session_id,
@@ -95,7 +94,6 @@ class SignSheetRepo {
                 u.full_name    AS firstName,
                 ''             AS lastName,
                 uc.room_code   AS roomName,
-                us.qr_payload,
                 uc.row_no,
                 uc.col_no
             ${baseJoins}

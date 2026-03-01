@@ -387,6 +387,12 @@ SELECT count(uc.id) as count from user_campaigns uc WHERE uc.campaign_id = ?;
     const [result]: any = await dbClient.query(sql, [values]);
     return result.affectedRows; // คืนค่าจำนวนแถวที่ถูกสร้างสำเร็จ
   }
+
+  async getUserinSystem(campaignId: number, dbClient: DbClient): Promise<number> {
+    const sql = `select count(*) as count from user_campaigns where campaign_id = ?`;
+    const [rows] = await dbClient.query<RowDataPacket[]>(sql, [campaignId]);
+    return rows[0].count;
+  }
 }
 
 const userImportRepo = new UserImportRepo();

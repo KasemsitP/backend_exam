@@ -183,6 +183,7 @@ userImportService.importUsersToCampaign = (campaignId, rows) => __awaiter(void 0
         // Phase 1: เตรียมข้อมูลทั้งหมดไว้ใน Memory
         // ------------------------------------------------------------------
         const processedData = [];
+        const seenNationalIdsInFile = new Set();
         for (const row of rows) { //      for (const row of shuffledRows) {
             const firstName = (_e = (_d = (_c = (_b = row.firstname) !== null && _b !== void 0 ? _b : row.first_name) !== null && _c !== void 0 ? _c : row.firstName) !== null && _d !== void 0 ? _d : row["ชื่อ"]) !== null && _e !== void 0 ? _e : row["first name"];
             const lastName = (_j = (_h = (_g = (_f = row.lastname) !== null && _f !== void 0 ? _f : row.last_name) !== null && _g !== void 0 ? _g : row.lastName) !== null && _h !== void 0 ? _h : row["นามสกุล"]) !== null && _j !== void 0 ? _j : row["last name"];
@@ -198,6 +199,13 @@ userImportService.importUsersToCampaign = (campaignId, rows) => __awaiter(void 0
             let userCode = String(generatedRunning);
             generatedRunning++;
             const nationalId = (_s = (_r = (_q = (_p = (_o = (_m = row.national_id) !== null && _m !== void 0 ? _m : row["national_id"]) !== null && _o !== void 0 ? _o : row["citizen_id"]) !== null && _p !== void 0 ? _p : row["เลขบัตรประชาชน"]) !== null && _q !== void 0 ? _q : row["เลขประจำตัวประชาชน"]) !== null && _r !== void 0 ? _r : row["id_card"]) !== null && _s !== void 0 ? _s : null;
+            if (nationalId) {
+                const cleanNationalId = String(nationalId).trim();
+                if (seenNationalIdsInFile.has(cleanNationalId)) {
+                    throw new Error(`พบข้อมูลซ้ำซ้อนในไฟล์ที่อัปโหลด: เลขบัตรประชาชน ${cleanNationalId} (ชื่อ: ${fullName}) มีมากกว่า 1 รายการ กรุณาตรวจสอบไฟล์ของท่าน`);
+                }
+                seenNationalIdsInFile.add(cleanNationalId);
+            }
             const birthDateRaw = (_x = (_w = (_v = (_u = (_t = row.dateofbirth) !== null && _t !== void 0 ? _t : row.birth_date) !== null && _u !== void 0 ? _u : row["birth date"]) !== null && _v !== void 0 ? _v : row["วันเกิด"]) !== null && _w !== void 0 ? _w : row["วัน/เดือน/ปีเกิด"]) !== null && _x !== void 0 ? _x : null;
             const birthDate = normalizeDate(birthDateRaw);
             processedData.push({
@@ -209,6 +217,28 @@ userImportService.importUsersToCampaign = (campaignId, rows) => __awaiter(void 0
                 nationalId,
                 birthDate,
             });
+        }
+        const nationalIdsToCheck = Array.from(seenNationalIdsInFile);
+        if (nationalIdsToCheck.length > 0) {
+            // หั่นทีละ 1000 เผื่อไฟล์ใหญ่มาก จะได้ไม่เกิน Limit ของ SQL 'IN' clause
+            const checkChunks = (0, lodash_1.chunk)(nationalIdsToCheck, 1000);
+            for (const nIdChunk of checkChunks) {
+                const placeholders = nIdChunk.map(() => "?").join(",");
+                const sqlCheck = `
+            SELECT u.national_id, u.full_name
+            FROM users u
+            JOIN user_campaigns uc ON u.id = uc.user_id
+            WHERE uc.campaign_id = ? 
+              AND u.national_id IN (${placeholders})
+          `;
+                const [existingUsers] = yield connection.query(sqlCheck, [campaignId, ...nIdChunk]);
+                if (existingUsers && existingUsers.length > 0) {
+                    // ถ้าเจอว่ามีในระบบแล้ว ดึงรายชื่อมาโชว์ใน Error
+                    const duplicateNames = existingUsers.slice(0, 3).map(u => `${u.full_name} (${u.national_id})`).join(", ");
+                    const moreCount = existingUsers.length > 3 ? ` และอื่นๆ อีก ${existingUsers.length - 3} รายการ` : "";
+                    throw new Error(`ไม่สามารถนำเข้าได้ เนื่องจากพบผู้เข้าสอบที่ถูกนำเข้าในรอบสอบนี้ไปแล้ว: ${duplicateNames}${moreCount}`);
+                }
+            }
         }
         // ------------------------------------------------------------------
         // Phase 2: ยิง Database (เปลี่ยนจาก Promise.all เป็น for...of เพื่อความปลอดภัยใน Transaction)

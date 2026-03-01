@@ -19,26 +19,58 @@ const fs_1 = __importDefault(require("fs"));
 const os_1 = __importDefault(require("os"));
 const qrcode_1 = __importDefault(require("qrcode"));
 const signsheet_repo_1 = __importDefault(require("../Repo/signsheet.repo"));
+const booklets_repo_1 = __importDefault(require("../Repo/booklets.repo"));
+const DB_1 = require("../model/DB");
+const key_service_1 = require("./key.service");
 const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 function runHeavyPdfTask() {
     return __awaiter(this, void 0, void 0, function* () {
         // ⏱️ 1. เริ่มจับเวลาภาพรวมของ Worker
         console.time("⏱️ [Worker] Total Task Time");
-        console.log("🚀 [Worker] เริ่มต้นการทำงานสร้าง PDF...");
+        console.log("🚀 [Worker] เริ่มต้นการทำงานสร้าง PDF (แบบตารางเดิม)...");
+        // สร้าง Connection สำหรับดึง Booklets
+        const connection = yield DB_1.DB.getInstance().getConnection();
         try {
             const { session_id, campaign_id, course, org, sessionText } = worker_threads_1.workerData;
             // ⏱️ 2. จับเวลาดึงข้อมูลจาก Database
-            console.time("  ├─ 💾 DB Fetch");
+            console.time("  ├─ 💾 DB Fetch & Mapping");
+            // 2.1 ดึงข้อมูลผู้เข้าสอบ
             const list = yield signsheet_repo_1.default.findUserSessionByCampaignAndSession(session_id, campaign_id);
+            // 2.2 ดึง QR จาก Booklets และถอดรหัสใน RAM
+            // 2.2 ดึง QR จาก Booklets และถอดรหัสใน RAM
+            const booklets = yield booklets_repo_1.default.findPayloadsBySessionId(connection, session_id);
+            const mappedBooklets = yield Promise.all(booklets.map((b) => __awaiter(this, void 0, void 0, function* () {
+                const decoded = yield key_service_1.keyService.decryptQrPayloadBags(b.qr_payload, campaign_id);
+                // ตรวจสอบโครงสร้าง decoded เผื่อว่ามันซ้อนกัน
+                const uid = (decoded === null || decoded === void 0 ? void 0 : decoded.uid) || (decoded === null || decoded === void 0 ? void 0 : decoded.user_id) || null;
+                return { qr_payload: b.qr_payload, uid: uid };
+            })));
+            // 🛑 แก้จุดที่ 1: บังคับ Key ใน Map ให้เป็น String เสมอ
+            const qrMap = new Map(mappedBooklets.map(mb => [String(mb.uid), mb.qr_payload]));
+            // 🛑 เพิ่ม Log เช็คจำนวนว่าถอดรหัสออกมาได้กี่คน
+            console.log(`  ├─ 🔍 ถอดรหัส QR ได้: ${mappedBooklets.length} รายการ (มีใน Map ${qrMap.size} keys)`);
+            // 2.3 นำข้อมูลมา Map รวมกัน
             const rows = list.map((r) => {
-                var _a, _b;
-                return ({
-                    firstName: r.firstName, lastName: r.lastName, userCode: r.userCode,
-                    roomName: (_a = r.roomName) !== null && _a !== void 0 ? _a : null, qr_payload: (_b = r.qr_payload) !== null && _b !== void 0 ? _b : null,
-                    row_no: r.row_no, title: r.title, col_no: r.col_no
-                });
+                var _a;
+                const uidString = String(r.user_id);
+                const matchedPayload = qrMap.get(uidString) || null;
+                // 🛑 เพิ่ม Log เช็คว่า User คนนี้หา QR เจอไหม (จะปรินต์ออกมาให้ดู)
+                // ถ้าหาไม่เจอ มันจะขึ้นว่า false
+                if (!matchedPayload) {
+                    console.log(`  │  ⚠️ หา QR ไม่เจอสำหรับ User ID: ${uidString} (รหัส ${r.userCode})`);
+                }
+                return {
+                    firstName: r.firstName,
+                    lastName: r.lastName,
+                    userCode: r.userCode,
+                    roomName: (_a = r.roomName) !== null && _a !== void 0 ? _a : null,
+                    qr_payload: matchedPayload ? key_service_1.keyService.maskQrPayload(matchedPayload) : null,
+                    row_no: r.row_no,
+                    title: r.title,
+                    col_no: r.col_no
+                };
             });
-            console.timeEnd("  ├─ 💾 DB Fetch");
+            console.timeEnd("  ├─ 💾 DB Fetch & Mapping");
             console.log(`  ├─ 👥 จำนวนผู้เข้าสอบทั้งหมด: ${rows.length} คน`);
             const doc = new pdfkit_1.default({
                 size: "A4",
@@ -58,6 +90,9 @@ function runHeavyPdfTask() {
             const totalPages = Math.max(1, pages.length);
             if (pages.length === 0)
                 pages.push([]);
+            // ==========================================
+            // Layout ตารางแบบเดิมของคุณ ไม่มีการแก้ไข
+            // ==========================================
             const tableX = 25;
             const colWidths = [40, 545.28 - (40 + 120 + 120), 120, 120];
             const x1 = tableX;
@@ -70,7 +105,6 @@ function runHeavyPdfTask() {
             for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
                 let pageRows = pages[pageIndex];
                 const pageNo = pageIndex + 1;
-                // ปริ้นท์บอกความคืบหน้าทุกๆ 100 หน้า จะได้รู้ว่า Worker ไม่ได้แฮงก์
                 if (pageNo % 100 === 0 || pageNo === totalPages) {
                     console.log(`  │  ...กำลังวาดหน้า ${pageNo} / ${totalPages}`);
                 }
@@ -140,29 +174,24 @@ function runHeavyPdfTask() {
                                 const margin = 1;
                                 const totalSize = size + (margin * 2);
                                 const cellSize = qrSize / totalSize;
-                                // วนลูปทีละบรรทัด (Row)
+                                // โค้ดวาด QR อันเดิมของคุณที่ Optimize มาแล้ว
                                 for (let row = 0; row < size; row++) {
                                     let startCol = -1;
-                                    // วนลูปแนวนอน (Col) เพื่อหาจุดดำที่ติดกัน
                                     for (let col = 0; col < size; col++) {
-                                        if (data[row * size + col]) { // ถ้าเป็นจุดสีดำ
+                                        if (data[row * size + col]) {
                                             if (startCol === -1)
-                                                startCol = col; // มาร์คจุดเริ่มต้น
+                                                startCol = col;
                                         }
-                                        else { // ถ้าเจอจุดสีขาว (หรือหมดแถบดำ)
+                                        else {
                                             if (startCol !== -1) {
-                                                // วาดสี่เหลี่ยมยาวๆ รวดเดียว
                                                 const rectWidth = col - startCol;
                                                 const cellY = qrY + (row + margin) * cellSize;
-                                                // ช่องซ้าย
                                                 doc.rect(qr1X + (startCol + margin) * cellSize, cellY, cellSize * rectWidth, cellSize);
-                                                // ช่องขวา
                                                 doc.rect(qr2X + (startCol + margin) * cellSize, cellY, cellSize * rectWidth, cellSize);
-                                                startCol = -1; // รีเซ็ตเพื่อรอหาแถบดำถัดไป
+                                                startCol = -1;
                                             }
                                         }
                                     }
-                                    // กรณีมีแถบสีดำลากยาวไปจนสุดขอบขวาสุดของ QR Code
                                     if (startCol !== -1) {
                                         const rectWidth = size - startCol;
                                         const cellY = qrY + (row + margin) * cellSize;
@@ -185,8 +214,6 @@ function runHeavyPdfTask() {
                     }
                     currentY += rowHeight;
                 }
-                // พักให้เซิร์ฟเวอร์หายใจ
-                // พักให้เซิร์ฟเวอร์หายใจน้อยลง (เพิ่มสปีด)
                 if (pageIndex % 50 === 0) {
                     yield new Promise(resolve => setTimeout(resolve, 0));
                 }
@@ -195,7 +222,6 @@ function runHeavyPdfTask() {
             // ⏱️ 4. จับเวลาตอนเซฟไฟล์ลง Temp Disk
             console.time("  ├─ 📦 File Writing (Stream)");
             doc.end();
-            // รอเขียนไฟล์เสร็จแล้วค่อยส่งกลับ
             writeStream.on('finish', () => {
                 console.timeEnd("  ├─ 📦 File Writing (Stream)");
                 console.timeEnd("⏱️ [Worker] Total Task Time");
@@ -208,9 +234,12 @@ function runHeavyPdfTask() {
             });
         }
         catch (error) {
-            console.timeEnd("⏱️ [Worker] Total Task Time"); // หยุดเวลาเผื่อพัง
+            console.timeEnd("⏱️ [Worker] Total Task Time");
             console.error("❌ Worker Error:", error);
             worker_threads_1.parentPort === null || worker_threads_1.parentPort === void 0 ? void 0 : worker_threads_1.parentPort.postMessage({ status: 'error', message: String(error) });
+        }
+        finally {
+            connection.release(); // สำคัญ: อย่าลืมคืน Connection นะครับ
         }
     });
 }

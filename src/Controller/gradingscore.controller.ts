@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { gradingScoreService } from "../Service/gradingscore.service";
 import gradingscoreRepo from "../Repo/gradingscore.repo";
+import { keyService } from "../Service/key.service";
+import { random } from "lodash";
 
 export class gradingscoreController {
   static SubmitScore = async (req: Request, res: Response) => {
@@ -37,7 +39,14 @@ export class gradingscoreController {
         return res.status(400).send({ message: "ไม่พบผู้ตรวจ" });
       }
       const result = await gradingscoreRepo.FindAllRecord(Number(graderId))
-      res.status(201).json(result);
+      const data = result.map(r => ({
+        random_num: r.random_num,
+        score: r.score,
+        slot_id: r.slot_id,
+        enteredAT: r.enteredAT,
+        qr_payload : keyService.maskQrPayload(r.qr_payload)
+      }))
+      res.status(201).json(data);
 
     } catch (error: any) {
       res.status(400).send({ message: error.message });

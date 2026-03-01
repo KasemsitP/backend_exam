@@ -54,28 +54,6 @@ class GradingRecheckController {
             }
         });
     }
-    static scanDisputed(req, res) {
-        return __awaiter(this, void 0, void 0, function* () {
-            var _a;
-            try {
-                const { qrPayload, campaignId } = req.body;
-                if (!qrPayload || !campaignId) {
-                    return res.status(400).json({ message: "ข้อมูลไม่ครบ" });
-                }
-                const result = yield gradingrecheck_service_1.gradingRecheckService.scanDisputedFromQr({
-                    qrPayload,
-                    campaignId: Number(campaignId),
-                });
-                return res.json(result);
-            }
-            catch (err) {
-                console.error(err);
-                return res
-                    .status(400)
-                    .json({ message: (_a = err.message) !== null && _a !== void 0 ? _a : "เกิดข้อผิดพลาด" });
-            }
-        });
-    }
     static listDisputed(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {

@@ -283,7 +283,12 @@ export async function findBookletQuestionStatsForBag(
     SELECT
       b.id          AS booklet_id,
       b.random_num,
-      b.user_code,  -- ✅ ดึง user_code ออกมาด้วย
+      b.user_code,
+      -- 🛑 Fetch student names for Unlocked mode
+      u.full_name,
+      u.first_name,
+      u.last_name,
+
       s.question_no,
       sq.label,
       sq.note       AS category,
@@ -304,6 +309,11 @@ export async function findBookletQuestionStatsForBag(
     FROM bags bg
     LEFT JOIN booklets b
       ON b.bag_id = bg.id
+    
+    -- 🛑 JOIN the users table to get the names
+    LEFT JOIN users u 
+      ON u.user_code = b.user_code
+
     LEFT JOIN grading_slots s
       ON s.booklet_id = b.id
     LEFT JOIN grading_scores gs
@@ -319,6 +329,9 @@ export async function findBookletQuestionStatsForBag(
       b.id,
       b.random_num,
       b.user_code,
+      u.full_name,   -- 🛑 Add to GROUP BY
+      u.first_name,  -- 🛑 Add to GROUP BY
+      u.last_name,   -- 🛑 Add to GROUP BY
       s.question_no,
       sq.label,
       sq.note
@@ -329,8 +342,10 @@ export async function findBookletQuestionStatsForBag(
 
   const [rows] = await conn.query<RawBookletQuestionStatsRow[]>(sql, [bagId]);
   
-  // 💡 แมป exam_code ส่งไปเผื่อ Service ที่ยังเป็นโค้ดเก่า
-  return rows.map(r => ({ ...r, exam_code: r.user_code || r.random_num }));
+  return rows.map(r => ({ 
+      ...r, 
+      exam_code: r.user_code || r.random_num 
+  }));
 }
 
 export async function getUnlockCampaignByBagId(
