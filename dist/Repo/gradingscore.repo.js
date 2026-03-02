@@ -258,241 +258,325 @@ class GradingScoreRepo {
             return rows;
         });
     }
+    // async findDisputedQuestions(
+    //   conn: Pool | PoolConnection = this.pool,
+    //   campaign_id: number,
+    //   thresholdDiff: number
+    // ): Promise<DisputedQuestionRow[]> {
+    //   // const sql = `
+    //   //   -- 🛑 1. กรองหา "เฉพาะข้อที่มีคะแนนขัดแย้งกัน" ก่อน (ทำงานเร็วมาก)
+    //   //   WITH DisputedScores AS (
+    //   //     SELECT
+    //   //       sl.booklet_id,
+    //   //       sl.subject_id,
+    //   //       sl.question_no,
+    //   //       MIN(gs.score) AS minScore,
+    //   //       MAX(gs.score) AS maxScore,
+    //   //       (MAX(gs.score) - MIN(gs.score)) AS diff
+    //   //     FROM grading_slots sl
+    //   //     JOIN grading_scores gs ON gs.slot_id = sl.id
+    //   //     JOIN booklets bk ON bk.id = sl.booklet_id
+    //   //     JOIN sessions sess ON bk.session_id = sess.id
+    //   //     WHERE sess.campaign_id = ?
+    //   //     GROUP BY sl.booklet_id, sl.subject_id, sl.question_no
+    //   //     HAVING COUNT(DISTINCT gs.entered_by) >= 2 
+    //   //        AND (MAX(gs.score) - MIN(gs.score)) > ?
+    //   //   )
+    //   //   -- 🛑 2. เอาเฉพาะข้อที่ขัดแย้ง (ที่มีไม่กี่แถว) มาดึงรายละเอียด และจัดรูปแบบคอลัมน์
+    //   //   SELECT
+    //   //     d.booklet_id       AS bookletId,
+    //   //     bg.bag_no          AS bagNo,
+    //   //     d.subject_id       AS subjectId,
+    //   //     subj.code          AS subjectCode,
+    //   //     subj.name          AS subjectName,
+    //   //     d.question_no      AS questionNo,
+    //   //     sq.label           AS questionLabel,
+    //   //     bk.random_num,
+    //   //     d.minScore,
+    //   //     d.maxScore,
+    //   //     d.diff,
+    //   //     -- ดึงข้อมูลคนที่ 1 (ใช้ grader_order เร็วกว่าใช้ ROW_NUMBER มากๆ)
+    //   //     MAX(CASE WHEN sl.grader_order = 1 THEN sl.id END) AS slotId1,
+    //   //     MAX(CASE WHEN sl.grader_order = 1 THEN gs.score END) AS score1,
+    //   //     MAX(CASE WHEN sl.grader_order = 1 THEN gs.entered_by END) AS graderId1,
+    //   //     MAX(CASE WHEN sl.grader_order = 1 THEN COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) END) AS graderName1,
+    //   //     -- ดึงข้อมูลคนที่ 2
+    //   //     MAX(CASE WHEN sl.grader_order = 2 THEN sl.id END) AS slotId2,
+    //   //     MAX(CASE WHEN sl.grader_order = 2 THEN gs.score END) AS score2,
+    //   //     MAX(CASE WHEN sl.grader_order = 2 THEN gs.entered_by END) AS graderId2,
+    //   //     MAX(CASE WHEN sl.grader_order = 2 THEN COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) END) AS graderName2
+    //   //   FROM DisputedScores d
+    //   //   JOIN booklets bk ON bk.id = d.booklet_id
+    //   //   LEFT JOIN bags bg ON bk.bag_id = bg.id
+    //   //   JOIN subjects subj ON subj.id = d.subject_id
+    //   //   LEFT JOIN subject_questions sq ON sq.subject_id = d.subject_id AND sq.question_no = d.question_no
+    //   //   -- JOIN กลับไปหาผู้ตรวจเฉพาะรายการที่ขัดแย้งเท่านั้น
+    //   //   JOIN grading_slots sl ON sl.booklet_id = d.booklet_id AND sl.subject_id = d.subject_id AND sl.question_no = d.question_no
+    //   //   JOIN grading_scores gs ON gs.slot_id = sl.id
+    //   //   JOIN graders gr ON gs.entered_by = gr.id
+    //   //   LEFT JOIN accounts acc ON gr.account_id = acc.id
+    //   //   GROUP BY
+    //   //     d.booklet_id, bg.bag_no, d.subject_id, subj.code, subj.name,
+    //   //     d.question_no, sq.label, bk.random_num, d.minScore, d.maxScore, d.diff
+    //   //   ORDER BY d.diff DESC;
+    //   // `;
+    //   const sql = `
+    //     SELECT
+    //       bk.id              AS bookletId,
+    //       bg.bag_no          AS bagNo,
+    //       sl1.subject_id     AS subjectId,
+    //       subj.code          AS subjectCode,
+    //       subj.name          AS subjectName,
+    //       sl1.question_no    AS questionNo,
+    //       sq.label           AS questionLabel,
+    //       bk.random_num,
+    //       --  ใช้ LEAST / GREATEST หาค่า Min/Max ในแถวเดียวกันได้เลย
+    //       LEAST(gs1.score, gs2.score) AS minScore,
+    //       GREATEST(gs1.score, gs2.score) AS maxScore,
+    //       ABS(gs1.score - gs2.score) AS diff,
+    //       -- ข้อมูลคนที่ 1
+    //       sl1.id AS slotId1,
+    //       gs1.score AS score1,
+    //       gs1.entered_by AS graderId1,
+    //       COALESCE(acc1.full_name, CONCAT('Grader #', gr1.id)) AS graderName1,
+    //       -- ข้อมูลคนที่ 2
+    //       sl2.id AS slotId2,
+    //       gs2.score AS score2,
+    //       gs2.entered_by AS graderId2,
+    //       COALESCE(acc2.full_name, CONCAT('Grader #', gr2.id)) AS graderName2
+    //     FROM grading_slots sl1
+    //     JOIN grading_scores gs1 ON gs1.slot_id = sl1.id
+    //     --  ท่าไม้ตาย: JOIN ตารางตัวเอง เพื่อดึงคะแนนของคนที่ 2 มาแปะข้างๆ คนที่ 1
+    //     JOIN grading_slots sl2 
+    //       ON sl2.booklet_id = sl1.booklet_id
+    //      AND sl2.subject_id = sl1.subject_id
+    //      AND sl2.question_no = sl1.question_no
+    //      AND sl2.grader_order = 2
+    //     JOIN grading_scores gs2 ON gs2.slot_id = sl2.id
+    //     -- JOIN ข้อมูลข้อสอบและรอบสอบ
+    //     JOIN booklets bk ON bk.id = sl1.booklet_id
+    //     JOIN sessions sess ON bk.session_id = sess.id
+    //     LEFT JOIN bags bg ON bk.bag_id = bg.id
+    //     -- JOIN ข้อมูลวิชา
+    //     JOIN subjects subj ON subj.id = sl1.subject_id
+    //     LEFT JOIN subject_questions sq 
+    //       ON sq.subject_id = sl1.subject_id 
+    //      AND sq.question_no = sl1.question_no
+    //     -- JOIN หาชื่อผู้ตรวจคนที่ 1
+    //     JOIN graders gr1 ON gs1.entered_by = gr1.id
+    //     LEFT JOIN accounts acc1 ON gr1.account_id = acc1.id
+    //     -- JOIN หาชื่อผู้ตรวจคนที่ 2
+    //     JOIN graders gr2 ON gs2.entered_by = gr2.id
+    //     LEFT JOIN accounts acc2 ON gr2.account_id = acc2.id
+    //     WHERE 
+    //       sl1.grader_order = 1       -- ตั้งต้นที่ผู้ตรวจคนที่ 1 เสมอ
+    //       AND sess.campaign_id = ?   -- กรองตามรอบสอบ
+    //       AND ABS(gs1.score - gs2.score) > ? --  เช็คความขัดแย้งตรงนี้ได้เลย!
+    //     ORDER BY diff DESC;
+    //   `;
+    //   const [rows] = await conn.query<DisputedQuestionRow[]>(sql, [campaign_id, thresholdDiff]);
+    //   return rows;
+    // }
     findDisputedQuestions() {
         return __awaiter(this, arguments, void 0, function* (conn = this.pool, campaign_id, thresholdDiff) {
-            // ✅ แก้ไข: JOIN sessions เพื่อเช็ค campaign_id แทน user_sessions
             const sql = `
-      SELECT
-        t.booklet_id       AS bookletId,
-        t.bag_no           AS bagNo,
-        t.subject_id       AS subjectId,
-        t.subjectCode,
-        t.subjectName,
-        t.question_no      AS questionNo,
-        t.questionLabel,
-        t.random_num,
-
-        MIN(t.minScore) AS minScore,
-        MAX(t.maxScore) AS maxScore,
-        MAX(t.maxScore - t.minScore) AS diff,
-
-        MAX(CASE WHEN t.rnAsc = 1 THEN t.slot_id    END) AS slotId1,
-        MAX(CASE WHEN t.rnAsc = 1 THEN t.score      END) AS score1,
-        MAX(CASE WHEN t.rnAsc = 1 THEN t.grader_id  END) AS graderId1,
-        MAX(CASE WHEN t.rnAsc = 1 THEN t.graderName END) AS graderName1,
-
-        MAX(CASE WHEN t.rnDesc = 1 THEN t.slot_id    END) AS slotId2,
-        MAX(CASE WHEN t.rnDesc = 1 THEN t.score      END) AS score2,
-        MAX(CASE WHEN t.rnDesc = 1 THEN t.grader_id  END) AS graderId2,
-        MAX(CASE WHEN t.rnDesc = 1 THEN t.graderName END) AS graderName2
-
-      FROM (
-        SELECT
-          sl.booklet_id,
-          bg.bag_no,
-          sl.subject_id,
-          subj.code AS subjectCode,
-          subj.name AS subjectName,
-          sl.question_no,
-          sq.label  AS questionLabel,
-          bk.random_num,
-
-          sl.id     AS slot_id,
-          gs.score,
-          gs.entered_by AS grader_id,
-          COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) AS graderName,
-
-          ROW_NUMBER() OVER (
-            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-            ORDER BY gs.score ASC
-          ) AS rnAsc,
-
-          ROW_NUMBER() OVER (
-            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-            ORDER BY gs.score DESC
-          ) AS rnDesc,
-
-          MIN(gs.score) OVER (
-            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-          ) AS minScore,
-
-          MAX(gs.score) OVER (
-            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-          ) AS maxScore
-
-        FROM grading_slots sl
-        JOIN grading_scores gs
-          ON gs.slot_id = sl.id
-        JOIN booklets bk
-          ON bk.id = sl.booklet_id
-        JOIN sessions sess
-          ON bk.session_id = sess.id
-        LEFT JOIN bags bg
-          ON bk.bag_id = bg.id
-        JOIN subjects subj
-          ON subj.id = sl.subject_id
-        LEFT JOIN subject_questions sq
-          ON sq.subject_id = sl.subject_id
-         AND sq.question_no = sl.question_no
-        JOIN graders gr
-          ON gs.entered_by = gr.id
-        LEFT JOIN accounts acc
-          ON gr.account_id = acc.id
-        WHERE sess.campaign_id = ?
-      ) t
-      JOIN (
-        SELECT
-          sl.booklet_id,
-          sl.subject_id,
-          sl.question_no,
-          COUNT(DISTINCT gs.entered_by) AS gradersCount
-        FROM grading_slots sl
-        JOIN grading_scores gs
-          ON gs.slot_id = sl.id
-        GROUP BY
-          sl.booklet_id,
-          sl.subject_id,
-          sl.question_no
-      ) gc
-        ON gc.booklet_id = t.booklet_id
-       AND gc.subject_id = t.subject_id
-       AND gc.question_no = t.question_no
-
-      WHERE
-        gc.gradersCount >= 2
-        AND (t.maxScore - t.minScore) > ?
-
-      GROUP BY
-        t.random_num,
-        t.booklet_id,
-        t.bag_no,
-        t.subject_id,
-        t.subjectCode,
-        t.subjectName,
-        t.question_no,
-        t.questionLabel
-
-      ORDER BY diff DESC;
+      -- 🛑 1. หากลุ่มเล่มข้อสอบของ Campaign นี้ก่อน (ลด Scope ข้อมูล)
+      WITH TargetBooklets AS (
+        SELECT b.id AS booklet_id, b.bag_id, b.random_num
+        FROM sessions s
+        JOIN booklets b ON b.session_id = s.id
+        WHERE s.campaign_id = ?
+      ),
+      -- 🛑 2. หาเฉพาะ "ข้อที่มีปัญหา" ล้วนๆ (คำนวณแต่ตัวเลข เร็วที่สุด)
+      ConflictingScores AS (
+        SELECT 
+            sl1.booklet_id, sl1.subject_id, sl1.question_no,
+            sl1.id AS slotId1, gs1.score AS score1, gs1.entered_by AS graderId1,
+            sl2.id AS slotId2, gs2.score AS score2, gs2.entered_by AS graderId2,
+            ABS(gs1.score - gs2.score) AS diff,
+            LEAST(gs1.score, gs2.score) AS minScore,
+            GREATEST(gs1.score, gs2.score) AS maxScore
+        FROM TargetBooklets tb
+        JOIN grading_slots sl1 ON sl1.booklet_id = tb.booklet_id AND sl1.grader_order = 1
+        JOIN grading_scores gs1 ON gs1.slot_id = sl1.id
+        JOIN grading_slots sl2 ON sl2.booklet_id = tb.booklet_id 
+             AND sl2.subject_id = sl1.subject_id 
+             AND sl2.question_no = sl1.question_no 
+             AND sl2.grader_order = 2
+        JOIN grading_scores gs2 ON gs2.slot_id = sl2.id
+        WHERE ABS(gs1.score - gs2.score) > ?
+      )
+      -- 🛑 3. เอาข้อที่มีปัญหา (ซึ่งมีน้อยมาก) มาแปะชื่อวิชา และชื่อคนตรวจ
+      SELECT 
+        cs.booklet_id AS bookletId,
+        bg.bag_no AS bagNo,
+        cs.subject_id AS subjectId,
+        subj.code AS subjectCode,
+        subj.name AS subjectName,
+        cs.question_no AS questionNo,
+        sq.label AS questionLabel,
+        tb.random_num,
+        cs.minScore, cs.maxScore, cs.diff,
+        
+        cs.slotId1, cs.score1, cs.graderId1,
+        COALESCE(acc1.full_name, CONCAT('Grader #', gr1.id)) AS graderName1,
+        
+        cs.slotId2, cs.score2, cs.graderId2,
+        COALESCE(acc2.full_name, CONCAT('Grader #', gr2.id)) AS graderName2
+        
+      FROM ConflictingScores cs
+      JOIN TargetBooklets tb ON tb.booklet_id = cs.booklet_id
+      LEFT JOIN bags bg ON bg.id = tb.bag_id
+      JOIN subjects subj ON subj.id = cs.subject_id
+      LEFT JOIN subject_questions sq ON sq.subject_id = cs.subject_id AND sq.question_no = cs.question_no
+      
+      -- JOIN ดึงชื่อเฉพาะคนที่มีปัญหาจริงๆ
+      JOIN graders gr1 ON gr1.id = cs.graderId1
+      LEFT JOIN accounts acc1 ON acc1.id = gr1.account_id
+      JOIN graders gr2 ON gr2.id = cs.graderId2
+      LEFT JOIN accounts acc2 ON acc2.id = gr2.account_id
+      
+      ORDER BY cs.diff DESC;
     `;
             const [rows] = yield conn.query(sql, [campaign_id, thresholdDiff]);
             return rows;
         });
     }
+    // async findDisputedQuestionsForDashboard(
+    //   campaign_id: number,
+    //   thresholdDiff: number
+    // ): Promise<number> {
+    //   // ✅ แก้ไข: JOIN sessions เพื่อเช็ค campaign_id แทน user_sessions เหมือนกับด้านบน
+    //   const sql = `
+    //     SELECT
+    //       t.booklet_id       AS bookletId,
+    //       t.bag_no           AS bagNo,
+    //       t.subject_id       AS subjectId,
+    //       t.subjectCode,
+    //       t.subjectName,
+    //       t.question_no      AS questionNo,
+    //       t.questionLabel,
+    //       MIN(t.minScore) AS minScore,
+    //       MAX(t.maxScore) AS maxScore,
+    //       MAX(t.maxScore - t.minScore) AS diff,
+    //       MAX(CASE WHEN t.rnAsc = 1 THEN t.slot_id    END) AS slotId1,
+    //       MAX(CASE WHEN t.rnAsc = 1 THEN t.score      END) AS score1,
+    //       MAX(CASE WHEN t.rnAsc = 1 THEN t.grader_id  END) AS graderId1,
+    //       MAX(CASE WHEN t.rnAsc = 1 THEN t.graderName END) AS graderName1,
+    //       MAX(CASE WHEN t.rnDesc = 1 THEN t.slot_id    END) AS slotId2,
+    //       MAX(CASE WHEN t.rnDesc = 1 THEN t.score      END) AS score2,
+    //       MAX(CASE WHEN t.rnDesc = 1 THEN t.grader_id  END) AS graderId2,
+    //       MAX(CASE WHEN t.rnDesc = 1 THEN t.graderName END) AS graderName2
+    //     FROM (
+    //       SELECT
+    //         sl.booklet_id,
+    //         bg.bag_no,
+    //         sl.subject_id,
+    //         subj.code AS subjectCode,
+    //         subj.name AS subjectName,
+    //         sl.question_no,
+    //         sq.label  AS questionLabel,
+    //         sl.id     AS slot_id,
+    //         gs.score,
+    //         gs.entered_by AS grader_id,
+    //         COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) AS graderName,
+    //         ROW_NUMBER() OVER (
+    //           PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+    //           ORDER BY gs.score ASC
+    //         ) AS rnAsc,
+    //         ROW_NUMBER() OVER (
+    //           PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+    //           ORDER BY gs.score DESC
+    //         ) AS rnDesc,
+    //         MIN(gs.score) OVER (
+    //           PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+    //         ) AS minScore,
+    //         MAX(gs.score) OVER (
+    //           PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
+    //         ) AS maxScore
+    //       FROM grading_slots sl
+    //       JOIN grading_scores gs
+    //         ON gs.slot_id = sl.id
+    //       JOIN booklets bk
+    //         ON bk.id = sl.booklet_id
+    //       JOIN sessions sess
+    //         ON bk.session_id = sess.id
+    //       LEFT JOIN bags bg
+    //         ON bk.bag_id = bg.id
+    //       JOIN subjects subj
+    //         ON subj.id = sl.subject_id
+    //       LEFT JOIN subject_questions sq
+    //         ON sq.subject_id = sl.subject_id
+    //        AND sq.question_no = sl.question_no
+    //       JOIN graders gr
+    //         ON gs.entered_by = gr.id
+    //       LEFT JOIN accounts acc
+    //         ON gr.account_id = acc.id
+    //       WHERE sess.campaign_id = ?
+    //     ) t
+    //     JOIN (
+    //       SELECT
+    //         sl.booklet_id,
+    //         sl.subject_id,
+    //         sl.question_no,
+    //         COUNT(DISTINCT gs.entered_by) AS gradersCount
+    //       FROM grading_slots sl
+    //       JOIN grading_scores gs
+    //         ON gs.slot_id = sl.id
+    //       GROUP BY
+    //         sl.booklet_id,
+    //         sl.subject_id,
+    //         sl.question_no
+    //     ) gc
+    //       ON gc.booklet_id = t.booklet_id
+    //      AND gc.subject_id = t.subject_id
+    //      AND gc.question_no = t.question_no
+    //     WHERE
+    //       gc.gradersCount >= 2
+    //       AND (t.maxScore - t.minScore) > ?
+    //     GROUP BY
+    //       t.booklet_id,
+    //       t.bag_no,
+    //       t.subject_id,
+    //       t.subjectCode,
+    //       t.subjectName,
+    //       t.question_no,
+    //       t.questionLabel
+    //     ORDER BY diff DESC;
+    //   `;
+    //   const [rows] = await this.pool.query<DisputedQuestionRow[]>(sql, [campaign_id, thresholdDiff]);
+    //   return rows ? rows.length : 0;
+    // }
     findDisputedQuestionsForDashboard(campaign_id, thresholdDiff) {
         return __awaiter(this, void 0, void 0, function* () {
-            // ✅ แก้ไข: JOIN sessions เพื่อเช็ค campaign_id แทน user_sessions เหมือนกับด้านบน
+            var _a;
+            // 🚀 ใช้ท่า Self-Join เพื่อหาคะแนนขัดแย้ง และใช้ COUNT(1) ให้นับจาก Database เลย
+            // ตัดการ JOIN ตาราง subjects, subject_questions, bags, graders, accounts ทิ้งให้หมด!
             const sql = `
-      SELECT
-        t.booklet_id       AS bookletId,
-        t.bag_no           AS bagNo,
-        t.subject_id       AS subjectId,
-        t.subjectCode,
-        t.subjectName,
-        t.question_no      AS questionNo,
-        t.questionLabel,
+      SELECT COUNT(1) AS total_disputed
+      FROM grading_slots sl1
+      JOIN grading_scores gs1 ON gs1.slot_id = sl1.id
+      
+      -- เอาผู้ตรวจคนที่ 2 มาชนกับคนที่ 1
+      JOIN grading_slots sl2 
+        ON sl2.booklet_id = sl1.booklet_id
+       AND sl2.subject_id = sl1.subject_id
+       AND sl2.question_no = sl1.question_no
+       AND sl2.grader_order = 2
+      JOIN grading_scores gs2 ON gs2.slot_id = sl2.id
 
-        MIN(t.minScore) AS minScore,
-        MAX(t.maxScore) AS maxScore,
-        MAX(t.maxScore - t.minScore) AS diff,
-
-        MAX(CASE WHEN t.rnAsc = 1 THEN t.slot_id    END) AS slotId1,
-        MAX(CASE WHEN t.rnAsc = 1 THEN t.score      END) AS score1,
-        MAX(CASE WHEN t.rnAsc = 1 THEN t.grader_id  END) AS graderId1,
-        MAX(CASE WHEN t.rnAsc = 1 THEN t.graderName END) AS graderName1,
-
-        MAX(CASE WHEN t.rnDesc = 1 THEN t.slot_id    END) AS slotId2,
-        MAX(CASE WHEN t.rnDesc = 1 THEN t.score      END) AS score2,
-        MAX(CASE WHEN t.rnDesc = 1 THEN t.grader_id  END) AS graderId2,
-        MAX(CASE WHEN t.rnDesc = 1 THEN t.graderName END) AS graderName2
-
-      FROM (
-        SELECT
-          sl.booklet_id,
-          bg.bag_no,
-          sl.subject_id,
-          subj.code AS subjectCode,
-          subj.name AS subjectName,
-          sl.question_no,
-          sq.label  AS questionLabel,
-
-          sl.id     AS slot_id,
-          gs.score,
-          gs.entered_by AS grader_id,
-          COALESCE(acc.full_name, CONCAT('Grader #', gr.id)) AS graderName,
-
-          ROW_NUMBER() OVER (
-            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-            ORDER BY gs.score ASC
-          ) AS rnAsc,
-
-          ROW_NUMBER() OVER (
-            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-            ORDER BY gs.score DESC
-          ) AS rnDesc,
-
-          MIN(gs.score) OVER (
-            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-          ) AS minScore,
-
-          MAX(gs.score) OVER (
-            PARTITION BY sl.booklet_id, sl.subject_id, sl.question_no
-          ) AS maxScore
-
-        FROM grading_slots sl
-        JOIN grading_scores gs
-          ON gs.slot_id = sl.id
-        JOIN booklets bk
-          ON bk.id = sl.booklet_id
-        JOIN sessions sess
-          ON bk.session_id = sess.id
-        LEFT JOIN bags bg
-          ON bk.bag_id = bg.id
-        JOIN subjects subj
-          ON subj.id = sl.subject_id
-        LEFT JOIN subject_questions sq
-          ON sq.subject_id = sl.subject_id
-         AND sq.question_no = sl.question_no
-        JOIN graders gr
-          ON gs.entered_by = gr.id
-        LEFT JOIN accounts acc
-          ON gr.account_id = acc.id
-        WHERE sess.campaign_id = ?
-      ) t
-      JOIN (
-        SELECT
-          sl.booklet_id,
-          sl.subject_id,
-          sl.question_no,
-          COUNT(DISTINCT gs.entered_by) AS gradersCount
-        FROM grading_slots sl
-        JOIN grading_scores gs
-          ON gs.slot_id = sl.id
-        GROUP BY
-          sl.booklet_id,
-          sl.subject_id,
-          sl.question_no
-      ) gc
-        ON gc.booklet_id = t.booklet_id
-       AND gc.subject_id = t.subject_id
-       AND gc.question_no = t.question_no
-
-      WHERE
-        gc.gradersCount >= 2
-        AND (t.maxScore - t.minScore) > ?
-
-      GROUP BY
-        t.booklet_id,
-        t.bag_no,
-        t.subject_id,
-        t.subjectCode,
-        t.subjectName,
-        t.question_no,
-        t.questionLabel
-
-      ORDER BY diff DESC;
+      -- เชื่อมไปหา campaign_id
+      JOIN booklets bk ON bk.id = sl1.booklet_id
+      JOIN sessions sess ON bk.session_id = sess.id
+      
+      WHERE 
+        sl1.grader_order = 1
+        AND sess.campaign_id = ?
+        AND ABS(gs1.score - gs2.score) > ? ; -- เช็คคะแนนที่ห่างกัน
     `;
+            // คืนค่าเป็นตัวเลขออกมาตัวเดียวเลย ไม่ต้องเอา Array มาเปลือง RAM
             const [rows] = yield this.pool.query(sql, [campaign_id, thresholdDiff]);
-            return rows ? rows.length : 0;
+            return ((_a = rows[0]) === null || _a === void 0 ? void 0 : _a.total_disputed) || 0;
         });
     }
 }

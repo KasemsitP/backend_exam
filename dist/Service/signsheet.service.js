@@ -105,56 +105,104 @@ class SignSheetService {
     static getPaginatedUserSessions(options) {
         return __awaiter(this, void 0, void 0, function* () {
             const { session_id, campaign_id, page, limit, search } = options;
-            console.log("Fetching paginated user sessions with options:", options);
-            // 1. ดึงข้อมูล User จาก Repo (ตอนนี้จะยังไม่มี qr_payload)
+            // 1. ดึงข้อมูลรายชื่อจาก Repo
             const result = yield signsheet_repo_1.default.findUserSessionsWithPagination(session_id, campaign_id, page, limit, search);
-            // ถ้าไม่มีข้อมูลเลย ให้รีเทิร์นกลับไปเลยเพื่อประหยัดเวลา
-            if (result.data.length === 0) {
+            if (result.data.length === 0)
                 return result;
-            }
-            // เซ็ตค่า qr_payload ตั้งต้นให้เป็น null ทุกคนเผื่อไว้ก่อน
-            result.data = result.data.map((row) => (Object.assign(Object.assign({}, row), { qr_payload: null })));
-            // 2. ดึง QR ของ Session นี้มาถอดรหัสเพื่อหาเจ้าของ
             let connection;
             try {
                 connection = yield DB_1.DB.getInstance().getConnection();
-                const booklets = yield booklets_repo_1.default.findPayloadsBySessionId(connection, session_id);
-                if (booklets && booklets.length > 0) {
-                    const mappedBooklets = yield Promise.all(booklets.map((b) => __awaiter(this, void 0, void 0, function* () {
-                        try {
-                            const decoded = yield key_service_1.keyService.decryptQrPayloadBags(b.qr_payload, campaign_id);
-                            const uid = (decoded === null || decoded === void 0 ? void 0 : decoded.uid) || (decoded === null || decoded === void 0 ? void 0 : decoded.user_id) || null;
-                            return { qr_payload: b.qr_payload, uid: uid };
-                        }
-                        catch (e) {
-                            // ถ้าถอดรหัสไม่ได้ (เช่น คีย์ผิด/ไม่มีคีย์) ก็ให้ข้าม QR ดวงนี้ไปเลย
-                            return { qr_payload: b.qr_payload, uid: null };
-                        }
-                    })));
-                    // สร้าง Map สำหรับค้นหา (ข้ามคนที่ uid เป็น null)
-                    const qrMap = new Map(mappedBooklets
-                        .filter(mb => mb.uid !== null)
-                        .map(mb => [String(mb.uid), mb.qr_payload]));
+                // 🛑 2. เช็คว่าแคมเปญนี้ปลดล็อค (is_unlock = 1) หรือยัง?
+                const [[campaign]] = yield connection.query(`SELECT is_unlock FROM exam_campaigns WHERE id = ?`, [campaign_id]);
+                const isUnlocked = (campaign === null || campaign === void 0 ? void 0 : campaign.is_unlock) === 1;
+                if (isUnlocked) {
+                    // ========================================================
+                    // 🚀 FAST PATH: ปลดล็อคแล้ว (ดึงจาก DB ตรงๆ เร็วสุดๆ)
+                    // ========================================================
+                    const userCodesInPage = result.data.map((r) => r.userCode); // เอาเฉพาะคนในหน้านี้ (เช่น 20 คน)
+                    if (userCodesInPage.length > 0) {
+                        const [booklets] = yield connection.query(`SELECT user_code, qr_payload FROM booklets WHERE session_id = ? AND user_code IN (?)`, [session_id, userCodesInPage]);
+                        // สร้าง Map จับคู่ user_code กับ qr_payload
+                        const fastQrMap = new Map(booklets.map(b => [b.user_code, b.qr_payload]));
+                        result.data = result.data.map((row) => (Object.assign(Object.assign({}, row), { qr_payload: fastQrMap.get(row.userCode) ? key_service_1.keyService.maskQrPayload(fastQrMap.get(row.userCode)) : null })));
+                    }
+                }
+                else {
+                    // ========================================================
+                    // 🐢 CACHE PATH: ยังเป็น Blind Mode (ต้องถอดรหัสผ่าน Worker)
+                    // ========================================================
+                    const now = Date.now();
+                    let cachedData = this.sessionQrCache.get(session_id);
+                    // ถ้าไม่มี Cache หรือ Cache หมดอายุ ให้ถอดรหัสใหม่ทั้งหมดผ่าน Worker
+                    if (!cachedData || (now - cachedData.timestamp > this.CACHE_TTL)) {
+                        const booklets = yield booklets_repo_1.default.findPayloadsBySessionId(connection, session_id);
+                        // 🚀 1. โยนงานถอดรหัสที่กิน CPU ไปให้ Worker ทำงานแทน!
+                        // ส่งอาเรย์ว่าง [] ไป เพื่อให้มันถอดรหัสทั้งก้อนเก็บไว้ใน Cache เลย
+                        const decryptedResults = yield SignSheetService.runDecryptWorker(booklets, campaign_id, []);
+                        // 2. เอาผลลัพธ์จาก Worker มาสร้างเป็น Map
+                        const newQrMap = new Map();
+                        decryptedResults.forEach((item) => {
+                            newQrMap.set(String(item.uid), item.qr_payload);
+                        });
+                        // 3. บันทึกลง Cache (จำไว้ใช้ 5 นาที)
+                        cachedData = { map: newQrMap, timestamp: now };
+                        this.sessionQrCache.set(session_id, cachedData);
+                    }
+                    // 4. ประกอบร่างข้อมูลด้วย Cache (เร็วปรื๊ด 0.01 วิ)
+                    const cachedQrMap = cachedData.map;
                     result.data = result.data.map((row) => {
-                        const uidString = String(row.user_id);
-                        const rawQrPayload = qrMap.get(uidString); // ดึงค่าจริงจาก DB
-                        return Object.assign(Object.assign({}, row), { 
-                            // 🛑 สวมหน้ากากตรงนี้เลย! (ถ้ามีค่า ค่อยเอาไป Mask)
-                            qr_payload: rawQrPayload ? key_service_1.keyService.maskQrPayload(rawQrPayload) : null });
+                        //  เปลี่ยนเป็น userCode ให้ตรงกับไส้ใน QR
+                        const uidString = String(row.userCode);
+                        const rawQrPayload = cachedQrMap.get(uidString);
+                        return Object.assign(Object.assign({}, row), { qr_payload: rawQrPayload ? key_service_1.keyService.maskQrPayload(rawQrPayload) : null });
                     });
                 }
             }
             catch (err) {
-                // หาก Database Error หรือไม่มีคีย์หลัก จะตกลงมาที่นี่
-                console.warn(` แจ้งเตือน: ข้ามการจับคู่ QR Code เนื่องจาก ${err.message}`);
-                // ไม่ต้อง throw error ออกไป ปล่อยให้มันไหลไป return result ที่มีแค่รายชื่อ
+                console.warn(`[SignSheetService] Warning: ${err.message}`);
+                // ป้องกัน Error 500 ให้ส่งข้อมูลรายชื่อกลับไปหน้าเว็บตามปกติ (แค่ไม่มี QR)
+                result.data = result.data.map((row) => (Object.assign(Object.assign({}, row), { qr_payload: null })));
             }
             finally {
                 if (connection)
-                    connection.release(); // คืน connection อย่างปลอดภัย
+                    connection.release();
             }
             return result;
         });
     }
+    static runDecryptWorker(booklets, campaign_id, targetUserCodes) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve, reject) => {
+                const isTsNode = __filename.endsWith('.ts');
+                const workerPath = path_1.default.resolve(__dirname, `decrypt-worker${isTsNode ? '.ts' : '.js'}`);
+                let worker;
+                if (isTsNode) {
+                    // สำหรับ Environment Development (ts-node)
+                    worker = new worker_threads_1.Worker(`
+        require('ts-node').register();
+        const { workerData } = require('worker_threads');
+        require(workerData.__workerPath);
+      `, {
+                        eval: true,
+                        workerData: { __workerPath: workerPath, booklets, campaign_id, targetUserCodes }
+                    });
+                }
+                else {
+                    // สำหรับ Production (compiled js)
+                    worker = new worker_threads_1.Worker(workerPath, {
+                        workerData: { booklets, campaign_id, targetUserCodes }
+                    });
+                }
+                worker.on("message", (data) => resolve(data));
+                worker.on("error", reject);
+                worker.on("exit", (code) => {
+                    if (code !== 0)
+                        reject(new Error(`Worker stopped with exit code ${code}`));
+                });
+            });
+        });
+    }
 }
 exports.SignSheetService = SignSheetService;
+SignSheetService.sessionQrCache = new Map();
+SignSheetService.CACHE_TTL = 5 * 60 * 1000; // 5 นาที

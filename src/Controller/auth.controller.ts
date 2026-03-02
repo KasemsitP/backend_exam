@@ -47,7 +47,7 @@ export class authcontroller {
         email,
         role,
         campaignId,
-        manager_order
+        manager_order: manager_order ?? null
       };
 
       // ... (โค้ดส่วนที่เหลือเหมือนเดิม) ...

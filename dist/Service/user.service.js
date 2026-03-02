@@ -29,3 +29,7 @@ userservice.getUsersByCampaign = (req) => __awaiter(void 0, void 0, void 0, func
         throw new Error("ไม่พบข้อมูล");
     return result;
 });
+userservice.getCountUserCampaign = (campaign_id) => __awaiter(void 0, void 0, void 0, function* () {
+    const result = yield user_repo_1.default.getCountUserCampaign(Number(String(campaign_id)));
+    return result;
+});

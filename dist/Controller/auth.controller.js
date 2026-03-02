@@ -50,7 +50,7 @@ authcontroller.register = (req, res) => __awaiter(void 0, void 0, void 0, functi
             email,
             role,
             campaignId,
-            manager_order
+            manager_order: manager_order !== null && manager_order !== void 0 ? manager_order : null
         };
         // ... (โค้ดส่วนที่เหลือเหมือนเดิม) ...
         const insertId = yield auth_repo_1.default.createAccount(userData);

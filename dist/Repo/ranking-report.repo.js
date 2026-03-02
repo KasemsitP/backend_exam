@@ -51,9 +51,15 @@ class RankingReportRepo {
         END AS has_both
 
       FROM booklets b
-      JOIN user_sessions us ON us.id = b.user_session_id
-      JOIN user_campaigns uc ON uc.id = us.user_campaign_id
-      JOIN users u ON u.id = uc.user_id
+      
+      -- ✅ 1. เชื่อมตรงเข้า users ผ่าน user_code (ได้มาจากตอน Unlock)
+      JOIN users u ON u.user_code = b.user_code
+      
+      -- ✅ 2. เชื่อม sessions เพื่อเอาไปอ้างอิง campaign_id
+      JOIN sessions s ON s.id = b.session_id
+      
+      -- ✅ 3. เชื่อมหาที่นั่งสอบ โดยอิงจาก user_id และ campaign_id
+      JOIN user_campaigns uc ON uc.user_id = u.id AND uc.campaign_id = s.campaign_id
       
       -- Join Grader 1 (Main)
       JOIN grading_slots gs1 
@@ -73,7 +79,8 @@ class RankingReportRepo {
       -- Join Score 2
       LEFT JOIN grading_scores sc2 ON sc2.slot_id = gs2.id
 
-      WHERE us.campaign_id = ?
+      -- ✅ ใช้ s.campaign_id แทน us.campaign_id
+      WHERE s.campaign_id = ?
       ORDER BY u.user_code ASC, gs1.subject_id ASC, gs1.question_no ASC
       `, [...opts.subjectIds, opts.campaignId]);
             return rows;

@@ -11,4 +11,8 @@ export class userservice {
     if(result.length === 0) throw new Error("ไม่พบข้อมูล")
     return result;
   };
+  static getCountUserCampaign = async (campaign_id: number) => {
+    const result = await userepo.getCountUserCampaign(Number(String(campaign_id)))
+    return result;
+  };
 }

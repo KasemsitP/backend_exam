@@ -64,43 +64,53 @@ class SignSheetRepo {
             ORDER BY u.user_code + 0  ASC;
 */
     // --- 2. Fetch Paginated data (For Web Display) ---
-    async findUserSessionsWithPagination(
+    // --- 2. Fetch Paginated data (For Web Display) ---
+   async findUserSessionsWithPagination(
         sessionId: number,
         campaign_id: number,
         page: number,
         limit: number,
         search: string = ""
-    ): Promise<any> { // เปลี่ยน Type เป็น any ไปก่อน หรือใช้ Type ที่คุณกำหนดไว้
+    ): Promise<any> { 
         const offset = (page - 1) * limit;
-        const searchTerm = `%${search}%`;
 
-        // Base Joins (Shared between Count and Select)
+        // 🛑 1. ลบ LEFT JOIN exam_rooms ทิ้ง เพราะไม่ได้ใช้ประโยชน์อะไรเลย
         const baseJoins = `
             FROM user_sessions us
             JOIN user_campaigns uc ON us.user_campaign_id = uc.id
             JOIN users u ON uc.user_id = u.id
-            LEFT JOIN exam_rooms er ON er.room_code = uc.room_code AND er.campaign_id = uc.campaign_id
         `;
 
-        // Base Where Clause
-        const whereClause = `
+        // 🛑 2. แยกเงื่อนไข Where ออกมา
+        let whereClause = `
             WHERE us.session_id = ? 
             AND us.campaign_id = ?
-            AND (
-                u.user_code LIKE ? OR 
-                u.full_name LIKE ? OR
-                uc.room_code LIKE ?
-            )
         `;
+        
+        // ใส่ parameters ตั้งต้นไว้ 2 ตัว
+        const searchParams: any[] = [sessionId, campaign_id];
 
-        const searchParams = [sessionId, campaign_id, searchTerm, searchTerm, searchTerm];
+        // 🛑 3. เช็คว่ามีคำค้นหา "จริงๆ" ค่อยต่อ String Query ยัดคำสั่ง LIKE
+        if (search && search.trim() !== "") {
+            const searchTerm = `%${search.trim()}%`;
+            whereClause += `
+                AND (
+                    u.user_code LIKE ? OR 
+                    u.full_name LIKE ? OR
+                    uc.room_code LIKE ?
+                )
+            `;
+            // ดัน parameter เพิ่มเข้าไป 3 ตัวสำหรับ LIKE
+            searchParams.push(searchTerm, searchTerm, searchTerm);
+        }
 
-        // Query 1: Count Total
-        const countSql = `SELECT COUNT(*) as total ${baseJoins} ${whereClause}`;
-        const [countRows] = await this.pool.execute<any[]>(countSql, searchParams);
+        // Query 1: Count Total (ใช้ COUNT(1) จะเร็วกว่า COUNT(*) เล็กน้อยในบาง Engine)
+      const countSql = `SELECT COUNT(1) as total ${baseJoins} ${whereClause}`;
+        // 🛑 เปลี่ยนจาก execute เป็น query
+        const [countRows] = await this.pool.query<any[]>(countSql, searchParams); 
         const total = countRows[0].total;
 
-        // Query 2: Select Data (🛑 ลบ us.qr_payload ออกแล้ว)
+        // Query 2: Select Data
         const dataSql = `
             SELECT
                 us.id          AS user_session_id,
@@ -117,13 +127,12 @@ class SignSheetRepo {
             LIMIT ? OFFSET ?
         `;
 
-        // Execute with limit/offset
-        const [rows] = await this.pool.execute<any[]>(dataSql, [
+        // 🛑 เปลี่ยนจาก execute เป็น query และบังคับให้เป็น Number
+        const [rows] = await this.pool.query<any[]>(dataSql, [
             ...searchParams,
-            limit.toString(),
-            offset.toString()
+            Number(limit),  // บังคับแปลงเป็นตัวเลขเสมอ
+            Number(offset)  // บังคับแปลงเป็นตัวเลขเสมอ
         ]);
-
         return {
             data: rows,
             meta: {

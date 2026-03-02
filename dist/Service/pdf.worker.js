@@ -52,7 +52,7 @@ function runHeavyPdfTask() {
             // 2.3 นำข้อมูลมา Map รวมกัน
             const rows = list.map((r) => {
                 var _a;
-                const uidString = String(r.user_id);
+                const uidString = String(r.userCode);
                 const matchedPayload = qrMap.get(uidString) || null;
                 // 🛑 เพิ่ม Log เช็คว่า User คนนี้หา QR เจอไหม (จะปรินต์ออกมาให้ดู)
                 // ถ้าหาไม่เจอ มันจะขึ้นว่า false

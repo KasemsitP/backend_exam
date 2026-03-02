@@ -44,12 +44,12 @@ class BagRepo {
     this.pool = DB.getInstance()
   }
 
-  // ⭐️ (FIX 3: REPO GET ต้อง JOIN sessions เพื่อหา campaign_id)
+  //  (FIX 3: REPO GET ต้อง JOIN sessions เพื่อหา campaign_id)
   async findAllByCampaignId(campaignId: string, connection: PoolConnection): Promise<DbBagRow[]> {
     // (แปลง "camp-1" เป็น 1)
     const campaignIdNumeric = parseInt(campaignId.replace("camp-", ""));
 
-    // ⭐️ (FIX 7: ลบการขึ้นบรรทัดใหม่ (Newline) หน้า SELECT)
+    //  (FIX 7: ลบการขึ้นบรรทัดใหม่ (Newline) หน้า SELECT)
     //     const sql = `
     // SELECT
     //   b.id,

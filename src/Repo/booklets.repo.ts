@@ -321,20 +321,16 @@ SELECT
     return rows;
   }
 
-  async findBlindBookletsByCampaign(
-    conn: PoolConnection,
-    campaignId: number
-  ): Promise<{ id: number; qr_payload: string , session_id : number }[]> {
+async findBlindBookletsByCampaign(conn: PoolConnection, campaignId: number) {
     const sql = `
-      SELECT b.id, b.qr_payload, b.session_id
+      SELECT b.id, b.qr_payload, b.session_id 
       FROM booklets b
       JOIN sessions s ON b.session_id = s.id
       WHERE s.campaign_id = ? 
-        AND b.user_id IS NULL 
-        AND b.qr_payload IS NOT NULL
+        AND b.user_code IS NULL 
     `;
-    const [rows] = await conn.query(sql, [campaignId]);
-    return rows as { id: number; qr_payload: string, session_id: number }[];
+    const [rows] = await conn.query<any[]>(sql, [campaignId]);
+    return rows;
   }
 
   // อัปเดตข้อมูลการ Unblind แบบ 1 Query (แก้ไขลำดับ Parameters)

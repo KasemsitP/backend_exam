@@ -34,6 +34,15 @@ class userRepo {
             return rows;
         });
     }
+    getCountUserCampaign(campaignId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+select COUNT(uc.id) as user_count from user_campaigns uc WHERE uc.campaign_id = ?;
+`;
+            const [rows] = yield this.pool.execute(sql, [campaignId]);
+            return rows;
+        });
+    }
 }
 const userepo = new userRepo();
 exports.default = userepo;

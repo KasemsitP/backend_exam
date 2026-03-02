@@ -255,12 +255,11 @@ SELECT
     findBlindBookletsByCampaign(conn, campaignId) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-      SELECT b.id, b.qr_payload, b.session_id
+      SELECT b.id, b.qr_payload, b.session_id 
       FROM booklets b
       JOIN sessions s ON b.session_id = s.id
       WHERE s.campaign_id = ? 
-        AND b.user_id IS NULL 
-        AND b.qr_payload IS NOT NULL
+        AND b.user_code IS NULL 
     `;
             const [rows] = yield conn.query(sql, [campaignId]);
             return rows;

@@ -26,3 +26,16 @@ usercontroller.getUsersByCampagin = (req, res) => __awaiter(void 0, void 0, void
         return res.status(400).send({ message: error.message });
     }
 });
+usercontroller.getCountUserCampaign = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaignId } = req.params;
+        if (!campaignId)
+            throw new Error("ไม่พบรอบสอบ");
+        const result = yield user_service_1.userservice.getCountUserCampaign(Number(campaignId));
+        res.json(result);
+    }
+    catch (error) {
+        // console.log(error)
+        return res.status(400).send({ message: error.message });
+    }
+});

@@ -30,7 +30,19 @@ class userRepo {
         const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaignCode]);
         return rows;
     }
+
+    async getCountUserCampaign(campaignId: number) {
+
+        const sql = `
+select COUNT(uc.id) as user_count from user_campaigns uc WHERE uc.campaign_id = ?;
+`;
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaignId]);
+        return rows;
+    }
 }
+
+
+
 
 
 const userepo = new userRepo()

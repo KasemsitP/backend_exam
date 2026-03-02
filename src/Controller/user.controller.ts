@@ -10,4 +10,15 @@ export class usercontroller {
             return res.status(400).send({ message: error.message });
         }
     }
+    static getCountUserCampaign = async (req: Request, res: Response) => {
+        try {
+            const { campaignId } = req.params;
+            if (!campaignId) throw new Error("ไม่พบรอบสอบ");
+            const result = await userservice.getCountUserCampaign(Number(campaignId));           
+            res.json(result);
+        } catch (error: any) {
+           // console.log(error)
+            return res.status(400).send({ message: error.message });
+        }
+    }
 }

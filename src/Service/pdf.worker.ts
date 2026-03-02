@@ -51,8 +51,8 @@ async function runHeavyPdfTask() {
     console.log(`  ├─ 🔍 ถอดรหัส QR ได้: ${mappedBooklets.length} รายการ (มีใน Map ${qrMap.size} keys)`);
 
     // 2.3 นำข้อมูลมา Map รวมกัน
-    const rows = list.map((r: any) => {
-      const uidString = String(r.user_id);
+const rows = list.map((r: any) => {
+      const uidString = String(r.userCode); 
       const matchedPayload = qrMap.get(uidString) || null;
 
       // 🛑 เพิ่ม Log เช็คว่า User คนนี้หา QR เจอไหม (จะปรินต์ออกมาให้ดู)

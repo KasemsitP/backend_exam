@@ -21,7 +21,7 @@ const STATIC_IV_STRING = "encryptionivgodz"; // 16 bytes
 const STATIC_IV_BUFFER = Buffer.from(STATIC_IV_STRING, PAYLOAD_ENCODING);
 
 
-function aesEncrypt(
+export function aesEncrypt(
     textBuffer: Buffer,
     key: Buffer,
     iv: Buffer
@@ -42,7 +42,9 @@ function aesEncrypt(
 
 
 
-function aesDecrypt(
+
+
+export function aesDecrypt(
     cipherBuffer: Buffer,
     key: Buffer,
     iv: Buffer
@@ -375,6 +377,30 @@ export class keyService {
             throw error;
         } finally {
             connection.release();
+        }
+    };
+
+    static decryptFast = (
+        ciphertext: string,
+        key1Buffer: Buffer,
+        key2Buffer: Buffer
+    ) => {
+        try {
+            const iv1Buffer = STATIC_IV_BUFFER;
+            const iv2Buffer = STATIC_IV_BUFFER;
+
+            const cipherBuffer = Buffer.from(ciphertext, CIPHER_ENCODING);
+
+            // Decrypt Layer 2
+            const step1DecryptedBuffer = aesDecrypt(cipherBuffer, key2Buffer, iv2Buffer);
+
+            // Decrypt Layer 1
+            const finalDecryptedBuffer = aesDecrypt(step1DecryptedBuffer, key1Buffer, iv1Buffer);
+
+            const plainTextJsonString = finalDecryptedBuffer.toString(PAYLOAD_ENCODING);
+            return JSON.parse(plainTextJsonString);
+        } catch (error) {
+            return null; // ถอดรหัสไม่ได้ให้คืนค่า null ทันที ไม่ต้อง throw error ให้แอปพัง
         }
     };
 
@@ -870,7 +896,7 @@ export class keyService {
     };
 
     static maskQrPayload = (realPayload: string): string => {
-        // 🛑 เปลี่ยนจาก 'utf8' เป็น 'base64' เพื่อให้ความยาวไม่บวม
+        //  เปลี่ยนจาก 'utf8' เป็น 'base64' เพื่อให้ความยาวไม่บวม
         const textBuffer = Buffer.from(realPayload, 'base64');
         const keyBuffer = Buffer.from(this.MASKING_KEY, 'utf8');
         const resultBuffer = Buffer.alloc(textBuffer.length);
@@ -878,6 +904,8 @@ export class keyService {
         for (let i = 0; i < textBuffer.length; i++) {
             resultBuffer[i] = textBuffer[i] ^ keyBuffer[i % keyBuffer.length];
         }
+        console.log("real payload",realPayload);
+        console.log("masked payload", resultBuffer.toString('base64'));
 
         // คืนค่ากลับเป็น Base64
         return resultBuffer.toString('base64');
@@ -888,7 +916,7 @@ export class keyService {
      */
     static unmaskQrPayload = (scannedText: string): string => {
         try {
-            // 🛑 ใช้ logic เดียวกันเป๊ะ เพราะ XOR สลับไปสลับมาได้เลย
+            //  ใช้ logic เดียวกันเป๊ะ เพราะ XOR สลับไปสลับมาได้เลย
             const maskedBuffer = Buffer.from(scannedText, 'base64');
             const keyBuffer = Buffer.from(this.MASKING_KEY, 'utf8');
             const resultBuffer = Buffer.alloc(maskedBuffer.length);
@@ -897,8 +925,12 @@ export class keyService {
                 resultBuffer[i] = maskedBuffer[i] ^ keyBuffer[i % keyBuffer.length];
             }
 
-            // 🛑 เปลี่ยนเป็น 'base64' เพื่อให้ได้หน้าตาเหมือนข้อมูลจริงใน DB เป๊ะๆ
+            console.log("scanned masked payload", scannedText);
+            console.log("unmasked real payload", resultBuffer.toString('base64'));
+
+            //  เปลี่ยนเป็น 'base64' เพื่อให้ได้หน้าตาเหมือนข้อมูลจริงใน DB เป๊ะๆ
             return resultBuffer.toString('base64');
+
         } catch (error) {
             throw new Error("❌ คิวอาร์โค้ดนี้ไม่ใช่ของระบบ หรือสแกนผิดพลาด");
         }

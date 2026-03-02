@@ -315,9 +315,10 @@ function drawUnlockedBagScorePage(
 
   // รวบเส้น header ชั้นบน
   let p = doc.rect(x, y, cwCode, rowH1 + rowH2);
-  doc.text("รหัสประจำตัวสอบ", x, y + 6 * scale, {
+  doc.text("รหัสประจำตัว\nสอบ", x, y + 4 * scale, {
     width: cwCode,
     align: "center",
+    lineGap: 1 * scale,
   });
   x += cwCode;
 
@@ -375,12 +376,12 @@ function drawUnlockedBagScorePage(
     const bk = booklets[i];
     x = startX;
 
-    // ✅ รวบเส้น body ต่อ 1 แถว
+    //  รวบเส้น body ต่อ 1 แถว
     let pathRow = doc.rect(x, y, cwCode, rowH);
     if (bk) {
       doc.text(bk.examCode ?? "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
         width: cwCode - 4 * scale,
-        align: "left",
+        align: "center",
         ellipsis: true,
       });
     }
@@ -605,7 +606,7 @@ async function buildUnlockedBagScorePdf(options: { bagId: number }, writeStream:
 
     const doc = new PDFDocument({
       size: "A4", layout: "landscape", margins: { top: 40, bottom: 40, left: 40, right: 40 },
-      autoFirstPage: true, bufferPages: false, 
+      autoFirstPage: true, bufferPages: false,
     });
     doc.pipe(writeStream);
 
@@ -790,7 +791,143 @@ async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
     y += 20;
     if (idx % 200 === 0) await new Promise(resolve => setTimeout(resolve, 0));
   }
-  doc.end();
+ // doc.end();
+const allKeys = new Set<string>();
+
+for (const u of rankingList) {
+  for (const k of u.scoresMap.keys()) {
+    allKeys.add(k);
+  }
+}
+
+const scoreColumns = Array.from(allKeys).sort();
+
+// =============================
+// DRAW VERIFICATION PAGE
+// =============================
+function drawVerificationPage(
+  doc: any,
+  rankingList: any[],
+  groups: { title: string }[]
+) {
+  const PAGE = {
+    size: "A4",
+    layout: "landscape",
+    margins: { top: 40, bottom: 40, left: 40, right: 40 },
+  } as const;
+
+  const groupHeaders = groups.map((g, i) => (g.title?.trim() ? g.title.trim() : `Group ${i + 1}`));
+  const headers = ["ลำดับ", "รหัสประจำตัวสอบ", "ชื่อ-สกุล", ...groupHeaders, "รวม"];
+
+  // fixed widths
+  const wRank = 45;
+  const wExam = 80;
+  const wName = 220;
+
+  const rowH = 16;
+  const headH = 22;
+
+  function addLandscapePageWithTitle() {
+    doc.addPage(PAGE);
+
+    // ✅ ตั้งฟอนต์/ขนาดทุกหน้าให้เหมือนกัน
+    doc.font(FONT_BOLD).fontSize(14).text("ตารางตรวจสอบคะแนนตามกลุ่ม", {
+      align: "center",
+    });
+  }
+
+  function getBounds() {
+    const left = doc.page.margins.left;
+    const right = doc.page.margins.right;
+    const top = doc.page.margins.top;
+    const bottom = doc.page.margins.bottom;
+
+    const pageWidth = doc.page.width - left - right;
+    const pageHeight = doc.page.height - bottom; // bottom boundary (y ห้ามเกิน)
+
+    return { left, right, top, bottom, pageWidth, pageHeight };
+  }
+
+  function getColWidths(pageWidth: number) {
+    const remainingCols = headers.length - 3; // group + total
+    const wRest = (pageWidth - (wRank + wExam + wName)) / remainingCols;
+    return [wRank, wExam, wName, ...Array(remainingCols).fill(wRest)];
+  }
+
+  function drawTableHeader(y: number, left: number, colWidths: number[]) {
+    doc.font(FONT_BOLD).fontSize(8);
+
+    let x = left;
+    for (let i = 0; i < headers.length; i++) {
+      const w = colWidths[i];
+      doc.rect(x, y, w, headH).stroke();
+      doc.text(headers[i], x + 2, y + 6, { width: w - 4, align: "center" });
+      x += w;
+    }
+    return y + headH;
+  }
+
+  // --- first page ---
+  addLandscapePageWithTitle();
+
+  // ✅ อย่าพึ่ง doc.y มากเกินไป → ล็อกจุดเริ่มตารางให้คงที่
+  let { left, pageWidth, pageHeight, top } = getBounds();
+  let colWidths = getColWidths(pageWidth);
+
+  let y = top + 28; // ระยะจากขอบบนแบบคงที่ (ปรับได้)
+  y = drawTableHeader(y, left, colWidths);
+
+  doc.font(FONT_NORMAL).fontSize(8);
+
+  for (let index = 0; index < rankingList.length; index++) {
+    const user = rankingList[index];
+
+    // ✅ ต้องใช้ pageHeight ของ "หน้าปัจจุบัน"
+    ({ left, pageWidth, pageHeight, top } = getBounds());
+    colWidths = getColWidths(pageWidth);
+
+    if (y + rowH > pageHeight) {
+      addLandscapePageWithTitle();
+
+      ({ left, pageWidth, pageHeight, top } = getBounds());
+      colWidths = getColWidths(pageWidth);
+
+      y = top + 28;
+      y = drawTableHeader(y, left, colWidths);
+      doc.font(FONT_NORMAL).fontSize(8);
+    }
+
+    const rowData = [
+      index + 1,
+      user.userCode,
+      `${user.title ?? ""}${user.fullName ?? ""}`,
+      ...(user.groupScores ?? []).map((v: any) => (v == null ? "-" : Number(v).toFixed(2))),
+      Number(user.totalScore ?? 0).toFixed(2),
+    ];
+
+    let x = left;
+    for (let i = 0; i < rowData.length; i++) {
+      const w = colWidths[i];
+      doc.rect(x, y, w, rowH).stroke();
+
+      const isName = i === 2;
+      doc.text(String(rowData[i]), x + (isName ? 4 : 0), y + 4, {
+        width: w - (isName ? 8 : 0),
+        align: isName ? "left" : "center",
+        ellipsis: true,
+      });
+
+      x += w;
+    }
+
+    y += rowH;
+  }
+}
+// =============================
+// CALL IT
+// =============================
+drawVerificationPage(doc, rankingList, groups);
+doc.end();
 }
 
 // =========================================================
