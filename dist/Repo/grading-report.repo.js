@@ -180,6 +180,7 @@ function findBookletQuestionStatsForBag(conn, bagId, subjectId) {
       b.random_num,
       b.user_code,
       -- 🛑 Fetch student names for Unlocked mode
+      u.title,
       u.full_name,
       u.first_name,
       u.last_name,
@@ -224,6 +225,7 @@ function findBookletQuestionStatsForBag(conn, bagId, subjectId) {
       b.id,
       b.random_num,
       b.user_code,
+      u.title,
       u.full_name,   -- 🛑 Add to GROUP BY
       u.first_name,  -- 🛑 Add to GROUP BY
       u.last_name,   -- 🛑 Add to GROUP BY
@@ -235,6 +237,7 @@ function findBookletQuestionStatsForBag(conn, bagId, subjectId) {
       s.question_no;
   `;
         const [rows] = yield conn.query(sql, [bagId]);
+        //console.log("RawBookletQuestionStatsRow results:", rows);
         return rows.map(r => (Object.assign(Object.assign({}, r), { exam_code: r.user_code || r.random_num })));
     });
 }

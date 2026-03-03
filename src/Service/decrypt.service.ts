@@ -9,22 +9,14 @@ function formatUnlockError(pr: { issues: { code: string; message: string; meta?:
   return pr.issues
     .map((i) => {
       switch (i.code) {
-        case "NO_KEYS":
-          return ["❌ ยังไม่มีคีย์เข้ารหัส", "กรุณาสร้าง/เพิ่มคีย์อย่างน้อย 2 ดอกก่อนปลดล็อก"].join("\n");
-        case "NOT_ENOUGH_KEYS":
-          return ["❌ คีย์เข้ารหัสยังไม่ครบ", `ตอนนี้มี ${i.meta?.keyCount ?? "ไม่ทราบ"} ดอก`, "ต้องมีอย่างน้อย 2 ดอกถึงจะปลดล็อกได้"].join("\n");
-        case "NO_IMPORT":
-          return ["❌ ยังไม่ได้นำเข้าข้อมูลผู้เข้าสอบ", "กรุณา Import รายชื่อผู้เข้าสอบก่อน"].join("\n");
-        case "MISSING_SEAT":
-          return ["❌ ยังจัดที่นั่งสอบไม่ครบ", `ยังเหลืออีก ${i.meta?.missingSeat ?? "ไม่ทราบ"} คน ที่ยังไม่มีห้อง/แถว/คอลัมน์`, "กรุณาจัดที่นั่งให้ครบก่อนปลดล็อก"].join("\n");
-        case "UNBAGGED":
-          return ["❌ ยังมีเล่มข้อสอบที่ยังไม่ถูกใส่ถุง", `ยังเหลือ ${i.meta?.unbagged ?? "ไม่ทราบ"} เล่ม`, "กรุณาจัดถุงให้ครบก่อนปลดล็อก"].join("\n");
-        case "QUESTION_COUNT_MISMATCH":
-          return ["❌ จำนวนข้อสอบไม่ตรงกัน", `พบ ${i.meta?.mismatchCountTotal ?? "ไม่ทราบ"} วิชา/รอบ ที่จำนวนข้อในระบบไม่สอดคล้องกัน`, "กรุณาตรวจให้จำนวนข้อใน Session กับ Subject Questions ตรงกันก่อน"].join("\n");
-        case "SLOT_MISSING":
-          return ["❌ ยังสร้าง Slot การตรวจไม่ครบ", `ยังขาด ${i.meta?.missingSlotsTotal ?? "ไม่ทราบ"} slot`, "ต้องสร้าง slot ให้ครบทุกเล่ม/ทุกข้อ/ผู้ตรวจ 2 คนก่อนปลดล็อก"].join("\n");
-        case "SLOT_NOT_COMPLETED":
-          return ["❌ ยังตรวจข้อสอบไม่ครบ", `ยังเหลือ ${i.meta?.pendingSlots ?? i.meta?.notCompletedTotal ?? "ไม่ทราบ"} slot ที่สถานะยังไม่เสร็จ`, "ต้องให้สถานะเป็น COMPLETED ครบก่อนปลดล็อก"].join("\n");
+        case "NO_SCANNED_DATA":
+          return ["❌ ยังไม่มีข้อมูลข้อสอบ", i.message, "ต้องมีการสแกนเล่มข้อสอบลงถุงก่อน"].join("\n");
+        case "NO_GRADING_SLOTS":
+          return ["❌ ยังไม่ได้สร้างช่องตรวจ", i.message, "ต้องสร้างช่องตรวจให้ครบก่อน"].join("\n");
+        case "GRADING_INCOMPLETE":
+          return ["❌ กรรมการยังตรวจไม่เสร็จ", i.message, "ต้องตรวจข้อสอบให้เสร็จ 100% (สถานะ COMPLETED) ก่อนปลดล็อก"].join("\n");
+        case "SCORE_MISSING":
+          return ["❌ ข้อมูลคะแนนสูญหาย", i.message, "กรุณาติดต่อผู้ดูแลระบบเพื่อตรวจสอบความถูกต้องของฐานข้อมูล"].join("\n");
         default:
           return `❌ ${i.message ?? "มีเงื่อนไขบางอย่างยังไม่ผ่าน"}`;
       }

@@ -111,6 +111,28 @@ class ExamRoomRepo {
             }
         });
     }
+    UpdateRoom(campaignId, roomCode, capacity) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+        UPDATE exam_rooms
+        SET capacity = ?
+        WHERE campaign_id = ? AND room_code = ?;
+      `;
+            yield this.pool.execute(sql, [capacity, campaignId, roomCode]);
+        });
+    }
+    IsUpdateAssignedRoom(campaignId, roomCode) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+        SELECT COUNT(*) AS assigned_count
+        FROM user_campaigns
+        WHERE campaign_id = ? AND room_code = ? AND row_no IS NOT NULL AND col_no IS NOT NULL;
+      `;
+            const [rows] = yield this.pool.execute(sql, [campaignId, roomCode]);
+            const assignedCount = Number(rows[0].assigned_count);
+            return assignedCount > 0;
+        });
+    }
 }
 const examRoomRepo = new ExamRoomRepo();
 exports.default = examRoomRepo;

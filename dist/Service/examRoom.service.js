@@ -25,6 +25,15 @@ const toFrontendRoom = (dbRoom) => {
     };
 };
 class examRoomService {
+    static UpdateRoom(campaignId, roomCode, capacity) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const isassigned = yield examroom_repo_1.default.IsUpdateAssignedRoom(campaignId, roomCode);
+            if (isassigned) {
+                throw new Error(`ไม่สามารถอัปเดตความจุได้ เนื่องจากมีผู้ใช้ที่นั่งอยู่ในห้องนี้แล้ว`);
+            }
+            yield examroom_repo_1.default.UpdateRoom(campaignId, roomCode, capacity);
+        });
+    }
 }
 exports.examRoomService = examRoomService;
 _a = examRoomService;

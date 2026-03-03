@@ -62,7 +62,7 @@ function buildBookletBlocks(raw, questionCount, unlock) {
     return Array.from(byBooklet.values()).sort((a, b) => a.bookletId - b.bookletId);
 }
 function buildUnlockedBookletBlocks(raw, questionCount) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     const byBooklet = new Map();
     for (const r of raw) {
         let block = byBooklet.get(r.booklet_id);
@@ -71,17 +71,18 @@ function buildUnlockedBookletBlocks(raw, questionCount) {
                 bookletId: r.booklet_id,
                 examCode: (_a = r.exam_code) !== null && _a !== void 0 ? _a : String(r.random_num),
                 // ดึงชื่อมาด้วย (ต้องแน่ใจว่า SQL ใน Repo มีการ SELECT full_name หรือ title, first_name, last_name มาให้แล้ว)
-                fullName: (_b = r.full_name) !== null && _b !== void 0 ? _b : (r.firstName ? `${r.firstName} ${r.lastName}` : ""),
+                fullName: `${(_b = r.title) !== null && _b !== void 0 ? _b : ""}${(_c = r.full_name) !== null && _c !== void 0 ? _c : `${(_d = r.first_name) !== null && _d !== void 0 ? _d : ""} ${(_e = r.last_name) !== null && _e !== void 0 ? _e : ""}`}`
+                    .trim(),
                 questionCount: 0,
                 questions: [],
             };
             byBooklet.set(r.booklet_id, block);
         }
         block.questions.push({
-            questionNo: r.question_no, label: (_c = r.label) !== null && _c !== void 0 ? _c : `ข้อ ${r.question_no}`,
-            category: (_d = r.category) !== null && _d !== void 0 ? _d : null, grader1Score: r.grader1_score != null ? Number(r.grader1_score) : null,
-            grader1Name: (_e = r.grader1_names) !== null && _e !== void 0 ? _e : null, grader2Score: r.grader2_score != null ? Number(r.grader2_score) : null,
-            grader2Name: (_f = r.grader2_names) !== null && _f !== void 0 ? _f : null, finalScore: r.final_score != null ? Number(r.final_score) : null,
+            questionNo: r.question_no, label: (_f = r.label) !== null && _f !== void 0 ? _f : `ข้อ ${r.question_no}`,
+            category: (_g = r.category) !== null && _g !== void 0 ? _g : null, grader1Score: r.grader1_score != null ? Number(r.grader1_score) : null,
+            grader1Name: (_h = r.grader1_names) !== null && _h !== void 0 ? _h : null, grader2Score: r.grader2_score != null ? Number(r.grader2_score) : null,
+            grader2Name: (_j = r.grader2_names) !== null && _j !== void 0 ? _j : null, finalScore: r.final_score != null ? Number(r.final_score) : null,
         });
     }
     for (const block of byBooklet.values()) {

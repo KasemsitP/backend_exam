@@ -66,3 +66,18 @@ examRoomController.delete = (req, res) => __awaiter(void 0, void 0, void 0, func
         res.status(500).send({ message: error.message });
     }
 });
+examRoomController.updateRoom = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { campaign_id, roomCode } = req.params;
+        const { capacity } = req.body;
+        if (!campaign_id || !roomCode || !capacity) {
+            return res.status(400).json({ message: "Invalid campaign_id, roomCode or capacity" });
+        }
+        yield examroom_service_1.examRoomService.UpdateRoom(Number(campaign_id), String(roomCode), Number(capacity));
+        return res.status(200).json({ message: "Seat updated successfully", success: true });
+    }
+    catch (error) {
+        console.error("updateSeat error:", error);
+        return res.status(500).json({ message: error.message, success: false });
+    }
+});

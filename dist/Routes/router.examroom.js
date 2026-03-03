@@ -7,4 +7,5 @@ const examRoomRouter = (0, express_1.Router)();
 examRoomRouter.get("/exam-rooms/campaign/:campaignId", examroom_controller_1.examRoomController.getAllByCampaign);
 examRoomRouter.post("/exam-rooms", examroom_controller_1.examRoomController.save);
 examRoomRouter.delete("/exam-rooms/:campaignId/:roomCode", examroom_controller_1.examRoomController.delete);
+examRoomRouter.put("/exam-rooms/:campaign_id/:roomCode", examroom_controller_1.examRoomController.updateRoom);
 exports.default = examRoomRouter;

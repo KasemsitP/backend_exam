@@ -22,26 +22,18 @@ const booklets_repo_1 = __importDefault(require("../Repo/booklets.repo"));
 function formatUnlockError(pr) {
     return pr.issues
         .map((i) => {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
+        var _a;
         switch (i.code) {
-            case "NO_KEYS":
-                return ["❌ ยังไม่มีคีย์เข้ารหัส", "กรุณาสร้าง/เพิ่มคีย์อย่างน้อย 2 ดอกก่อนปลดล็อก"].join("\n");
-            case "NOT_ENOUGH_KEYS":
-                return ["❌ คีย์เข้ารหัสยังไม่ครบ", `ตอนนี้มี ${(_b = (_a = i.meta) === null || _a === void 0 ? void 0 : _a.keyCount) !== null && _b !== void 0 ? _b : "ไม่ทราบ"} ดอก`, "ต้องมีอย่างน้อย 2 ดอกถึงจะปลดล็อกได้"].join("\n");
-            case "NO_IMPORT":
-                return ["❌ ยังไม่ได้นำเข้าข้อมูลผู้เข้าสอบ", "กรุณา Import รายชื่อผู้เข้าสอบก่อน"].join("\n");
-            case "MISSING_SEAT":
-                return ["❌ ยังจัดที่นั่งสอบไม่ครบ", `ยังเหลืออีก ${(_d = (_c = i.meta) === null || _c === void 0 ? void 0 : _c.missingSeat) !== null && _d !== void 0 ? _d : "ไม่ทราบ"} คน ที่ยังไม่มีห้อง/แถว/คอลัมน์`, "กรุณาจัดที่นั่งให้ครบก่อนปลดล็อก"].join("\n");
-            case "UNBAGGED":
-                return ["❌ ยังมีเล่มข้อสอบที่ยังไม่ถูกใส่ถุง", `ยังเหลือ ${(_f = (_e = i.meta) === null || _e === void 0 ? void 0 : _e.unbagged) !== null && _f !== void 0 ? _f : "ไม่ทราบ"} เล่ม`, "กรุณาจัดถุงให้ครบก่อนปลดล็อก"].join("\n");
-            case "QUESTION_COUNT_MISMATCH":
-                return ["❌ จำนวนข้อสอบไม่ตรงกัน", `พบ ${(_h = (_g = i.meta) === null || _g === void 0 ? void 0 : _g.mismatchCountTotal) !== null && _h !== void 0 ? _h : "ไม่ทราบ"} วิชา/รอบ ที่จำนวนข้อในระบบไม่สอดคล้องกัน`, "กรุณาตรวจให้จำนวนข้อใน Session กับ Subject Questions ตรงกันก่อน"].join("\n");
-            case "SLOT_MISSING":
-                return ["❌ ยังสร้าง Slot การตรวจไม่ครบ", `ยังขาด ${(_k = (_j = i.meta) === null || _j === void 0 ? void 0 : _j.missingSlotsTotal) !== null && _k !== void 0 ? _k : "ไม่ทราบ"} slot`, "ต้องสร้าง slot ให้ครบทุกเล่ม/ทุกข้อ/ผู้ตรวจ 2 คนก่อนปลดล็อก"].join("\n");
-            case "SLOT_NOT_COMPLETED":
-                return ["❌ ยังตรวจข้อสอบไม่ครบ", `ยังเหลือ ${(_p = (_m = (_l = i.meta) === null || _l === void 0 ? void 0 : _l.pendingSlots) !== null && _m !== void 0 ? _m : (_o = i.meta) === null || _o === void 0 ? void 0 : _o.notCompletedTotal) !== null && _p !== void 0 ? _p : "ไม่ทราบ"} slot ที่สถานะยังไม่เสร็จ`, "ต้องให้สถานะเป็น COMPLETED ครบก่อนปลดล็อก"].join("\n");
+            case "NO_SCANNED_DATA":
+                return ["❌ ยังไม่มีข้อมูลข้อสอบ", i.message, "ต้องมีการสแกนเล่มข้อสอบลงถุงก่อน"].join("\n");
+            case "NO_GRADING_SLOTS":
+                return ["❌ ยังไม่ได้สร้างช่องตรวจ", i.message, "ต้องสร้างช่องตรวจให้ครบก่อน"].join("\n");
+            case "GRADING_INCOMPLETE":
+                return ["❌ กรรมการยังตรวจไม่เสร็จ", i.message, "ต้องตรวจข้อสอบให้เสร็จ 100% (สถานะ COMPLETED) ก่อนปลดล็อก"].join("\n");
+            case "SCORE_MISSING":
+                return ["❌ ข้อมูลคะแนนสูญหาย", i.message, "กรุณาติดต่อผู้ดูแลระบบเพื่อตรวจสอบความถูกต้องของฐานข้อมูล"].join("\n");
             default:
-                return `❌ ${(_q = i.message) !== null && _q !== void 0 ? _q : "มีเงื่อนไขบางอย่างยังไม่ผ่าน"}`;
+                return `❌ ${(_a = i.message) !== null && _a !== void 0 ? _a : "มีเงื่อนไขบางอย่างยังไม่ผ่าน"}`;
         }
     })
         .join("\n\n");

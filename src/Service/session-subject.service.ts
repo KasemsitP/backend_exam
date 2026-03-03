@@ -43,22 +43,16 @@ export class sessionSubjectService {
                 throw new Error("no question found")
             }
 
+            const examDate = new Date(session.exam_date);
 
-            const examDateISO = new Date(session.exam_date).toISOString();
-            const examDatePart = examDateISO.slice(0, 10);
+            const year = examDate.getFullYear();
+            const month = String(examDate.getMonth() + 1).padStart(2, "0");
+            const day = String(examDate.getDate()).padStart(2, "0");
 
-            const extractHHmm = (s: string) => {
-                const m = s.match(/(\d{2}:\d{2})/);
-                if (!m) throw new Error(`Invalid time format: ${s}`);
-                return m[1];
-            };
+            const examDatePart = `${year}-${month}-${day}`;
 
-            const startTime = extractHHmm(payload.start_at);
-            const endTime = extractHHmm(payload.end_at);
-
-            const startDateTime = `${examDatePart} ${startTime}:00`;
-            const endDateTime = `${examDatePart} ${endTime}:00`;
-
+            const startDateTime = `${examDatePart} ${payload.start_at}:00`;
+            const endDateTime = `${examDatePart} ${payload.end_at}:00`;
             console.log("Start DateTime:", startDateTime);
             console.log("End DateTime:", endDateTime);
             //    console.log(payload.question_count)

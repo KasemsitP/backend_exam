@@ -80,7 +80,9 @@ function buildUnlockedBookletBlocks(raw: any[], questionCount: number) {
         bookletId: r.booklet_id,
         examCode: r.exam_code ?? String(r.random_num),
         // ดึงชื่อมาด้วย (ต้องแน่ใจว่า SQL ใน Repo มีการ SELECT full_name หรือ title, first_name, last_name มาให้แล้ว)
-        fullName: r.full_name ?? (r.firstName ? `${r.firstName} ${r.lastName}` : ""),
+        fullName:
+          `${r.title ?? ""}${r.full_name ?? `${r.first_name ?? ""} ${r.last_name ?? ""}`}`
+            .trim(),
         questionCount: 0,
         questions: [],
       };
@@ -791,143 +793,143 @@ async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
     y += 20;
     if (idx % 200 === 0) await new Promise(resolve => setTimeout(resolve, 0));
   }
- // doc.end();
-const allKeys = new Set<string>();
+  // doc.end();
+  const allKeys = new Set<string>();
 
-for (const u of rankingList) {
-  for (const k of u.scoresMap.keys()) {
-    allKeys.add(k);
-  }
-}
-
-const scoreColumns = Array.from(allKeys).sort();
-
-// =============================
-// DRAW VERIFICATION PAGE
-// =============================
-function drawVerificationPage(
-  doc: any,
-  rankingList: any[],
-  groups: { title: string }[]
-) {
-  const PAGE = {
-    size: "A4",
-    layout: "landscape",
-    margins: { top: 40, bottom: 40, left: 40, right: 40 },
-  } as const;
-
-  const groupHeaders = groups.map((g, i) => (g.title?.trim() ? g.title.trim() : `Group ${i + 1}`));
-  const headers = ["ลำดับ", "รหัสประจำตัวสอบ", "ชื่อ-สกุล", ...groupHeaders, "รวม"];
-
-  // fixed widths
-  const wRank = 45;
-  const wExam = 80;
-  const wName = 220;
-
-  const rowH = 16;
-  const headH = 22;
-
-  function addLandscapePageWithTitle() {
-    doc.addPage(PAGE);
-
-    // ✅ ตั้งฟอนต์/ขนาดทุกหน้าให้เหมือนกัน
-    doc.font(FONT_BOLD).fontSize(14).text("ตารางตรวจสอบคะแนนตามกลุ่ม", {
-      align: "center",
-    });
-  }
-
-  function getBounds() {
-    const left = doc.page.margins.left;
-    const right = doc.page.margins.right;
-    const top = doc.page.margins.top;
-    const bottom = doc.page.margins.bottom;
-
-    const pageWidth = doc.page.width - left - right;
-    const pageHeight = doc.page.height - bottom; // bottom boundary (y ห้ามเกิน)
-
-    return { left, right, top, bottom, pageWidth, pageHeight };
-  }
-
-  function getColWidths(pageWidth: number) {
-    const remainingCols = headers.length - 3; // group + total
-    const wRest = (pageWidth - (wRank + wExam + wName)) / remainingCols;
-    return [wRank, wExam, wName, ...Array(remainingCols).fill(wRest)];
-  }
-
-  function drawTableHeader(y: number, left: number, colWidths: number[]) {
-    doc.font(FONT_BOLD).fontSize(8);
-
-    let x = left;
-    for (let i = 0; i < headers.length; i++) {
-      const w = colWidths[i];
-      doc.rect(x, y, w, headH).stroke();
-      doc.text(headers[i], x + 2, y + 6, { width: w - 4, align: "center" });
-      x += w;
+  for (const u of rankingList) {
+    for (const k of u.scoresMap.keys()) {
+      allKeys.add(k);
     }
-    return y + headH;
   }
 
-  // --- first page ---
-  addLandscapePageWithTitle();
+  const scoreColumns = Array.from(allKeys).sort();
 
-  // ✅ อย่าพึ่ง doc.y มากเกินไป → ล็อกจุดเริ่มตารางให้คงที่
-  let { left, pageWidth, pageHeight, top } = getBounds();
-  let colWidths = getColWidths(pageWidth);
+  // =============================
+  // DRAW VERIFICATION PAGE
+  // =============================
+  function drawVerificationPage(
+    doc: any,
+    rankingList: any[],
+    groups: { title: string }[]
+  ) {
+    const PAGE = {
+      size: "A4",
+      layout: "landscape",
+      margins: { top: 40, bottom: 40, left: 40, right: 40 },
+    } as const;
 
-  let y = top + 28; // ระยะจากขอบบนแบบคงที่ (ปรับได้)
-  y = drawTableHeader(y, left, colWidths);
+    const groupHeaders = groups.map((g, i) => (g.title?.trim() ? g.title.trim() : `Group ${i + 1}`));
+    const headers = ["ลำดับ", "รหัสประจำตัวสอบ", "ชื่อ-สกุล", ...groupHeaders, "รวม"];
 
-  doc.font(FONT_NORMAL).fontSize(8);
+    // fixed widths
+    const wRank = 45;
+    const wExam = 80;
+    const wName = 220;
 
-  for (let index = 0; index < rankingList.length; index++) {
-    const user = rankingList[index];
+    const rowH = 16;
+    const headH = 22;
 
-    // ✅ ต้องใช้ pageHeight ของ "หน้าปัจจุบัน"
-    ({ left, pageWidth, pageHeight, top } = getBounds());
-    colWidths = getColWidths(pageWidth);
+    function addLandscapePageWithTitle() {
+      doc.addPage(PAGE);
 
-    if (y + rowH > pageHeight) {
-      addLandscapePageWithTitle();
+      // ✅ ตั้งฟอนต์/ขนาดทุกหน้าให้เหมือนกัน
+      doc.font(FONT_BOLD).fontSize(14).text("ตารางตรวจสอบคะแนนตามกลุ่ม", {
+        align: "center",
+      });
+    }
 
+    function getBounds() {
+      const left = doc.page.margins.left;
+      const right = doc.page.margins.right;
+      const top = doc.page.margins.top;
+      const bottom = doc.page.margins.bottom;
+
+      const pageWidth = doc.page.width - left - right;
+      const pageHeight = doc.page.height - bottom; // bottom boundary (y ห้ามเกิน)
+
+      return { left, right, top, bottom, pageWidth, pageHeight };
+    }
+
+    function getColWidths(pageWidth: number) {
+      const remainingCols = headers.length - 3; // group + total
+      const wRest = (pageWidth - (wRank + wExam + wName)) / remainingCols;
+      return [wRank, wExam, wName, ...Array(remainingCols).fill(wRest)];
+    }
+
+    function drawTableHeader(y: number, left: number, colWidths: number[]) {
+      doc.font(FONT_BOLD).fontSize(8);
+
+      let x = left;
+      for (let i = 0; i < headers.length; i++) {
+        const w = colWidths[i];
+        doc.rect(x, y, w, headH).stroke();
+        doc.text(headers[i], x + 2, y + 6, { width: w - 4, align: "center" });
+        x += w;
+      }
+      return y + headH;
+    }
+
+    // --- first page ---
+    addLandscapePageWithTitle();
+
+    // ✅ อย่าพึ่ง doc.y มากเกินไป → ล็อกจุดเริ่มตารางให้คงที่
+    let { left, pageWidth, pageHeight, top } = getBounds();
+    let colWidths = getColWidths(pageWidth);
+
+    let y = top + 28; // ระยะจากขอบบนแบบคงที่ (ปรับได้)
+    y = drawTableHeader(y, left, colWidths);
+
+    doc.font(FONT_NORMAL).fontSize(8);
+
+    for (let index = 0; index < rankingList.length; index++) {
+      const user = rankingList[index];
+
+      // ✅ ต้องใช้ pageHeight ของ "หน้าปัจจุบัน"
       ({ left, pageWidth, pageHeight, top } = getBounds());
       colWidths = getColWidths(pageWidth);
 
-      y = top + 28;
-      y = drawTableHeader(y, left, colWidths);
-      doc.font(FONT_NORMAL).fontSize(8);
+      if (y + rowH > pageHeight) {
+        addLandscapePageWithTitle();
+
+        ({ left, pageWidth, pageHeight, top } = getBounds());
+        colWidths = getColWidths(pageWidth);
+
+        y = top + 28;
+        y = drawTableHeader(y, left, colWidths);
+        doc.font(FONT_NORMAL).fontSize(8);
+      }
+
+      const rowData = [
+        index + 1,
+        user.userCode,
+        `${user.title ?? ""}${user.fullName ?? ""}`,
+        ...(user.groupScores ?? []).map((v: any) => (v == null ? "-" : Number(v).toFixed(2))),
+        Number(user.totalScore ?? 0).toFixed(2),
+      ];
+
+      let x = left;
+      for (let i = 0; i < rowData.length; i++) {
+        const w = colWidths[i];
+        doc.rect(x, y, w, rowH).stroke();
+
+        const isName = i === 2;
+        doc.text(String(rowData[i]), x + (isName ? 4 : 0), y + 4, {
+          width: w - (isName ? 8 : 0),
+          align: isName ? "left" : "center",
+          ellipsis: true,
+        });
+
+        x += w;
+      }
+
+      y += rowH;
     }
-
-    const rowData = [
-      index + 1,
-      user.userCode,
-      `${user.title ?? ""}${user.fullName ?? ""}`,
-      ...(user.groupScores ?? []).map((v: any) => (v == null ? "-" : Number(v).toFixed(2))),
-      Number(user.totalScore ?? 0).toFixed(2),
-    ];
-
-    let x = left;
-    for (let i = 0; i < rowData.length; i++) {
-      const w = colWidths[i];
-      doc.rect(x, y, w, rowH).stroke();
-
-      const isName = i === 2;
-      doc.text(String(rowData[i]), x + (isName ? 4 : 0), y + 4, {
-        width: w - (isName ? 8 : 0),
-        align: isName ? "left" : "center",
-        ellipsis: true,
-      });
-
-      x += w;
-    }
-
-    y += rowH;
   }
-}
-// =============================
-// CALL IT
-// =============================
-drawVerificationPage(doc, rankingList, groups);
-doc.end();
+  // =============================
+  // CALL IT
+  // =============================
+  drawVerificationPage(doc, rankingList, groups);
+  doc.end();
 }
 
 // =========================================================

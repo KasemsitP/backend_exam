@@ -123,6 +123,26 @@ class ExamRoomRepo {
       throw error;
     }
   }
+    async UpdateRoom(campaignId: number, roomCode: string, capacity: number): Promise<void> {
+        const sql = `
+        UPDATE exam_rooms
+        SET capacity = ?
+        WHERE campaign_id = ? AND room_code = ?;
+      `;
+        await this.pool.execute(sql, [capacity, campaignId, roomCode]);
+    }
+
+    async IsUpdateAssignedRoom (campaignId: number, roomCode: string): Promise<boolean> {
+        const sql = `
+        SELECT COUNT(*) AS assigned_count
+        FROM user_campaigns
+        WHERE campaign_id = ? AND room_code = ? AND row_no IS NOT NULL AND col_no IS NOT NULL;
+      `;
+        const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaignId, roomCode]);
+        const assignedCount = Number(rows[0].assigned_count);
+        return assignedCount > 0;
+    }
+
 }
 
 

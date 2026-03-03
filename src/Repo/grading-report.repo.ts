@@ -285,6 +285,7 @@ export async function findBookletQuestionStatsForBag(
       b.random_num,
       b.user_code,
       -- 🛑 Fetch student names for Unlocked mode
+      u.title,
       u.full_name,
       u.first_name,
       u.last_name,
@@ -329,6 +330,7 @@ export async function findBookletQuestionStatsForBag(
       b.id,
       b.random_num,
       b.user_code,
+      u.title,
       u.full_name,   -- 🛑 Add to GROUP BY
       u.first_name,  -- 🛑 Add to GROUP BY
       u.last_name,   -- 🛑 Add to GROUP BY
@@ -341,6 +343,7 @@ export async function findBookletQuestionStatsForBag(
   `;
 
   const [rows] = await conn.query<RawBookletQuestionStatsRow[]>(sql, [bagId]);
+  //console.log("RawBookletQuestionStatsRow results:", rows);
   
   return rows.map(r => ({ 
       ...r, 

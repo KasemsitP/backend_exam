@@ -183,23 +183,27 @@ export class GraderReportRepo {
     const { bagId, subjectId } = params;
     
     // Corrected SQL with 3 placeholders for [subjectId, subjectId, bagId]
-    const sql = `
+const sql = `
         SELECT
           b.id AS booklet_id,
           b.random_num,
-          u.user_code,
-          u.user_code AS exam_code,
+          b.user_code,
+          
+          -- 🛑 แก้ไข 1: รองรับ Fallback ถ้ายังไม่ปลดล็อค ให้โชว์รหัสถุงแทน
+          COALESCE(b.user_code, b.random_num) AS exam_code,
+          
           gs1.subject_id,
           gs1.question_no,
           sc1.score AS grader1_score,
           sc2.score AS grader2_score,
           a1.full_name AS grader1_name,
           a2.full_name AS grader2_name
+          
         FROM booklets b
         JOIN bags bg ON bg.id = b.bag_id
-        JOIN user_sessions us ON us.id = b.user_session_id
-        JOIN user_campaigns uc ON uc.id = us.user_campaign_id
-        JOIN users u ON u.id = uc.user_id
+        
+        -- 🛑 แก้ไข 2: เปลี่ยนมาใช้ LEFT JOIN ผ่าน user_code เพื่อไม่ให้ข้อสอบหายตอน Blind Mode
+        LEFT JOIN users u ON u.user_code = b.user_code
         
         LEFT JOIN grading_slots gs1 
           ON gs1.booklet_id = b.id 
@@ -214,13 +218,18 @@ export class GraderReportRepo {
 
         LEFT JOIN grading_scores sc1 ON sc1.slot_id = gs1.id
         LEFT JOIN grading_scores sc2 ON sc2.slot_id = gs2.id
-        LEFT JOIN graders g1 ON g1.id = gs1.grader_id
-        LEFT JOIN graders g2 ON g2.id = gs2.grader_id
+        
+        -- 🛑 แก้ไข 3: อ้างอิงคนตรวจจาก sc.entered_by (คนที่กรอกคะแนนจริง)
+        LEFT JOIN graders g1 ON g1.id = sc1.entered_by
+        LEFT JOIN graders g2 ON g2.id = sc2.entered_by
+        
         LEFT JOIN accounts a1 ON a1.id = g1.account_id
         LEFT JOIN accounts a2 ON a2.id = g2.account_id
         
         WHERE bg.id = ?           -- Param 3
-        ORDER BY u.user_code ASC, gs1.question_no ASC
+        
+        -- 🛑 แก้ไข 4: เรียงลำดับด้วย random_num เป็นหลักก่อน จะได้ไม่พังตอนไม่มี user_code
+        ORDER BY b.random_num ASC, gs1.question_no ASC
     `;
 
     const [rows] = await conn.query<any[]>(sql, [subjectId, subjectId, bagId]); 

@@ -15,4 +15,6 @@ examRoomRouter.delete(
     examRoomController.delete
 );
 
+examRoomRouter.put("/exam-rooms/:campaign_id/:roomCode", examRoomController.updateRoom);
+
 export default examRoomRouter;

@@ -105,7 +105,7 @@ class GradingReportService {
     }
     static getBagScoresReport(bagId_1) {
         return __awaiter(this, arguments, void 0, function* (bagId, subjectId = 0) {
-            var _a, _b, _c, _d, _e, _f, _g, _h;
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
             const conn = yield DB_1.DB.getInstance().getConnection();
             try {
                 const questionCount = (_a = (yield (0, grading_report_repo_1.findQuestionCountForBagSubject)(conn, bagId, subjectId))) !== null && _a !== void 0 ? _a : 0;
@@ -118,14 +118,18 @@ class GradingReportService {
                 for (const r of rawPerBooklet) {
                     let block = byBooklet.get(r.booklet_id);
                     if (!block) {
-                        block = { bookletId: r.booklet_id, examCode: unlock === 1 ? r.exam_code : String(r.random_num), questionCount: 0, questions: [] };
+                        block = { bookletId: r.booklet_id, examCode: unlock === 1 ? r.exam_code : String(r.random_num),
+                            candidateName: unlock === 1
+                                ? `${(_d = r.title) !== null && _d !== void 0 ? _d : ''}${(_e = r.full_name) !== null && _e !== void 0 ? _e : ''}`.trim()
+                                : null,
+                            questionCount: 0, questions: [] };
                         byBooklet.set(r.booklet_id, block);
                     }
                     block.questions.push({
-                        questionNo: r.question_no, label: (_d = r.label) !== null && _d !== void 0 ? _d : `ข้อ ${r.question_no}`,
-                        category: (_e = r.category) !== null && _e !== void 0 ? _e : null, grader1Score: r.grader1_score != null ? Number(r.grader1_score) : null,
-                        grader1Name: (_f = r.grader1_names) !== null && _f !== void 0 ? _f : null, grader2Score: r.grader2_score != null ? Number(r.grader2_score) : null,
-                        grader2Name: (_g = r.grader2_names) !== null && _g !== void 0 ? _g : null, finalScore: r.final_score != null ? Number(r.final_score) : null,
+                        questionNo: r.question_no, label: (_f = r.label) !== null && _f !== void 0 ? _f : `ข้อ ${r.question_no}`,
+                        category: (_g = r.category) !== null && _g !== void 0 ? _g : null, grader1Score: r.grader1_score != null ? Number(r.grader1_score) : null,
+                        grader1Name: (_h = r.grader1_names) !== null && _h !== void 0 ? _h : null, grader2Score: r.grader2_score != null ? Number(r.grader2_score) : null,
+                        grader2Name: (_j = r.grader2_names) !== null && _j !== void 0 ? _j : null, finalScore: r.final_score != null ? Number(r.final_score) : null,
                     });
                 }
                 for (const block of byBooklet.values()) {
@@ -135,12 +139,13 @@ class GradingReportService {
                     const maxQ = questionCount && questionCount > 0 ? questionCount : Array.from(map.keys()).reduce((m, q) => Math.max(m, q), 0);
                     const filled = [];
                     for (let q = 1; q <= maxQ; q++) {
-                        filled.push((_h = map.get(q)) !== null && _h !== void 0 ? _h : { questionNo: q, label: `ข้อ ${q}`, category: null, grader1Score: null, grader1Name: null, grader2Score: null, grader2Name: null, finalScore: null });
+                        filled.push((_k = map.get(q)) !== null && _k !== void 0 ? _k : { questionNo: q, label: `ข้อ ${q}`, category: null, grader1Score: null, grader1Name: null, grader2Score: null, grader2Name: null, finalScore: null });
                     }
                     block.questionCount = maxQ;
                     block.questions = filled;
                 }
                 const booklets = Array.from(byBooklet.values()).sort((a, b) => a.bookletId - b.bookletId);
+                console.log("getBagScoresReport - booklets:", rawPerBooklet);
                 return { bagId, subjectId, questionCount, booklets, questionLabels: questionLabels !== null && questionLabels !== void 0 ? questionLabels : [] };
             }
             finally {

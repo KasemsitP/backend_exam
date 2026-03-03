@@ -98,4 +98,12 @@ export class examRoomService {
       connection.release();
     }
   };
+    static async UpdateRoom(campaignId: number, roomCode: string, capacity: number) {
+        const isassigned = await examRoomRepo.IsUpdateAssignedRoom(campaignId, roomCode);
+        if (isassigned) {
+            throw new Error(`ไม่สามารถอัปเดตความจุได้ เนื่องจากมีผู้ใช้ที่นั่งอยู่ในห้องนี้แล้ว`);
+        }
+        await examRoomRepo.UpdateRoom(campaignId, roomCode, capacity);
+    
+    }
 }

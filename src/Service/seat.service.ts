@@ -315,4 +315,5 @@ export class seatService {
         console.log(result)
         return result;
     }
+
 }

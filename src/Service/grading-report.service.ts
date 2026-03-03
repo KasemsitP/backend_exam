@@ -135,7 +135,11 @@ export class GradingReportService {
       for (const r of rawPerBooklet) {
         let block = byBooklet.get(r.booklet_id);
         if (!block) {
-          block = { bookletId: r.booklet_id, examCode: unlock === 1 ? r.exam_code : String(r.random_num), questionCount: 0, questions: [] };
+          block = { bookletId: r.booklet_id, examCode: unlock === 1 ? r.exam_code : String(r.random_num),
+                candidateName: unlock === 1 
+      ? `${r.title ?? ''}${r.full_name ?? ''}`.trim()
+      : null,
+            questionCount: 0, questions: [] };
           byBooklet.set(r.booklet_id, block);
         }
         block.questions.push({
@@ -156,6 +160,7 @@ export class GradingReportService {
         block.questionCount = maxQ; block.questions = filled;
       }
       const booklets = Array.from(byBooklet.values()).sort((a, b) => a.bookletId - b.bookletId);
+      console.log("getBagScoresReport - booklets:", rawPerBooklet);
 
       return { bagId, subjectId, questionCount, booklets, questionLabels: questionLabels ?? [] };
     } finally {
