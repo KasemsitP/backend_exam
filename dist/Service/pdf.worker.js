@@ -20,6 +20,7 @@ const os_1 = __importDefault(require("os"));
 const qrcode_1 = __importDefault(require("qrcode"));
 const signsheet_repo_1 = __importDefault(require("../Repo/signsheet.repo"));
 const booklets_repo_1 = __importDefault(require("../Repo/booklets.repo"));
+const seatplan_repo_1 = __importDefault(require("../Repo/seatplan.repo"));
 const DB_1 = require("../model/DB");
 const key_service_1 = require("./key.service");
 const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
@@ -35,6 +36,11 @@ function runHeavyPdfTask() {
             // ⏱️ 2. จับเวลาดึงข้อมูลจาก Database
             console.time("  ├─ 💾 DB Fetch & Mapping");
             // 2.1 ดึงข้อมูลผู้เข้าสอบ
+            const Info = yield seatplan_repo_1.default.getExamInfoWithSessions(campaign_id);
+            if (!Info) {
+                throw new Error(`ไม่พบข้อมูล Session ID: ${session_id}`);
+            }
+            //console.log(Info.exam.site)
             const list = yield signsheet_repo_1.default.findUserSessionByCampaignAndSession(session_id, campaign_id);
             // 2.2 ดึง QR จาก Booklets และถอดรหัสใน RAM
             // 2.2 ดึง QR จาก Booklets และถอดรหัสใน RAM
@@ -114,11 +120,13 @@ function runHeavyPdfTask() {
                 }
                 doc.addPage();
                 // --- HEADER ---
-                doc.font("SarabunBold").fontSize(16).text(`ใบเซ็นชื่อสอบวิชา ${course}`, { align: "center" });
+                doc.font("SarabunBold").fontSize(16).text(`ใบเซ็นชื่อสอบวิชา ${course} ${org}`, { align: "center" });
                 doc.moveDown(0.2);
-                doc.font("Sarabun").text(`${sessionText} ณ ${org}`, { align: "center" });
+                doc.font("Sarabun").text(`${sessionText}`, { align: "center" });
                 doc.moveDown(0.1);
-                doc.fillColor("#666666").text(`${rows.length} คน | หน้า ${pageNo}/${totalPages}`, { align: "center" });
+                doc.font("Sarabun").fontSize(16).text(`ณ ${Info.exam.site}`, { align: "center" });
+                doc.moveDown(0.1);
+                doc.fillColor("#666666").text(`จำนวน ${rows.length} คน | หน้า ${pageNo}/${totalPages}`, { align: "center" });
                 doc.moveDown(0.5);
                 // --- TABLE STRUCTURE ---
                 const headerHeight = 20;
@@ -136,9 +144,9 @@ function runHeavyPdfTask() {
                 const textY = startY + 4;
                 doc.font("SarabunBold").fontSize(11).fillColor("black");
                 doc.text("ลำดับ", x1, textY, { width: colWidths[0], align: "center" });
-                doc.text("ชื่อ-นามสกุล / รหัส / ห้อง", x2 + 6, textY, { width: colWidths[1], align: "left" });
-                doc.text("คิวอาร์โค้ดภาคผนวก", x3, textY, { width: colWidths[2], align: "center" });
-                doc.text("คิวอาร์โค้ดภาคผนวก", x4, textY, { width: colWidths[3], align: "center" });
+                doc.text("ชื่อ-นามสกุล / รหัสประจำตัวสอบ / ห้อง / แถว / ลำดับในแถว", x2 + 6, textY, { width: colWidths[1], align: "left" });
+                doc.text("คิวอาร์โค้ดอ้างอิง", x3, textY, { width: colWidths[2], align: "center" });
+                doc.text("คิวอาร์โค้ดแปะเล่มข้อสอบ", x4, textY, { width: colWidths[3], align: "center" });
                 let currentY = startY + headerHeight;
                 // --- วาดข้อมูลแต่ละแถว ---
                 for (let i = 0; i < pageRows.length; i++) {
