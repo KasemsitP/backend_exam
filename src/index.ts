@@ -94,12 +94,30 @@ const MySQLStore = MySQLStoreFactory(session);
 // });
 
 //prod
+// const sessionStore = new MySQLStore({
+//   host: process.env.DB_HOST,
+//   user: process.env.DB_USER,
+//   password: process.env.DB_PASS,
+//   database: process.env.DB_NAME,
+//   port: Number(process.env.DB_PORT) || 3306,
+//   schema: {
+//     tableName: "auth_sessions",
+//     columnNames: {
+//       session_id: "sid",
+//       expires: "expires",
+//       data: "data",
+//     },
+//   },
+// });
+
+
 const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
+  host: isProduction ? process.env.DB_HOST : process.env.host,
+  user: isProduction ? process.env.DB_USER : process.env.user,
+  password: isProduction ? process.env.DB_PASS : process.env.password,
+  database: isProduction ? process.env.DB_NAME : process.env.database,
   port: Number(process.env.DB_PORT) || 3306,
+
   schema: {
     tableName: "auth_sessions",
     columnNames: {

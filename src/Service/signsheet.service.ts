@@ -32,7 +32,7 @@ export class SignSheetService {
 
 
   private static sessionQrCache = new Map<number, { map: Map<string, string>, timestamp: number }>();
-  private static CACHE_TTL = 5 * 60 * 1000; // 5 นาที
+  private static CACHE_TTL = 30*1000; // 5 นาที  5 * 60 * 1000
 
   static async generatePdfInWorker(options: any): Promise<string> {
     return new Promise((resolve, reject) => {

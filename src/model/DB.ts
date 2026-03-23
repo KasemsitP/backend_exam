@@ -21,6 +21,7 @@ export class DB {
       //   password: process.env.password,
       //   database: process.env.database,
       // });
+      // console.log(process.env.host, process.env.user, process.env.password, process.env.database);
 
       // // สำหรับ production (Render.com)
       console.log(process.env.DB_HOST, process.env.DB_USER, process.env.DB_PASS, process.env.DB_NAME, process.env.DB_PORT);

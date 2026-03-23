@@ -205,4 +205,4 @@ class SignSheetService {
 }
 exports.SignSheetService = SignSheetService;
 SignSheetService.sessionQrCache = new Map();
-SignSheetService.CACHE_TTL = 5 * 60 * 1000; // 5 นาที
+SignSheetService.CACHE_TTL = 30 * 1000; // 5 นาที  5 * 60 * 1000
