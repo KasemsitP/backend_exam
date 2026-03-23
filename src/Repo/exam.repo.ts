@@ -257,7 +257,7 @@ SET is_active = 1 where id = ?;
   async UpdateExamNoActive(conn: PoolConnection, campaign_id: number) {
     const sql = `
 UPDATE exam_campaigns
-SET is_active = 0 where id = ?;
+SET is_active = 0, qr_active = 0 where id = ? ;
   `;
 
     await conn.execute(sql, [campaign_id]);
