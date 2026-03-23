@@ -148,6 +148,7 @@ LIMIT 1;;
 SELECT 
     us.id              AS userSessionId,
     u.id               AS userId,
+    u.title,
     u.user_code        AS userCode,
     u.first_name       AS firstName,
     u.last_name        AS lastName,
