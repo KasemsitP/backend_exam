@@ -34,6 +34,7 @@ export class DB {
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0
+        
       });
       // DB.instance = mysql.createPool({
       //   host: "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",

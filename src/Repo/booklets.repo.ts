@@ -238,8 +238,8 @@ SELECT
 
   async deleteByBagId(conn: PoolConnection, bagId: number): Promise<void> {
     const sql = `
-        DELETE FROM booklets
-        WHERE bag_id = ?
+        update booklets set bag_id = null, seq_in_bag = null, status = 'CREATED', random_num = null
+        where bag_id = ?
     `;
     // สังเกตการใช้ [values] เป็น array ซ้อน array สำหรับ mysql2 bulk insert
     await conn.query(sql, [bagId]);
