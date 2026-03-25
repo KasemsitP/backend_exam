@@ -40,7 +40,7 @@ VALUES
       payload.site,
       payload.campaign_size,
       payload.name,
-      payload.is_active ? 1 : 1,
+      payload.is_active ? 1 : 0,
     ];
 
     const [result] = await dbClient.execute<any>(sql, params);

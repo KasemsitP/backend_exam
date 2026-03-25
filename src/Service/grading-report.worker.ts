@@ -123,7 +123,7 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
   const { left, right, top, bottom } = doc.page.margins;
   const contentWidth = pageWidth - left - right;
   const labelMap = new Map(questionLabels.map((q) => [q.question_no, q.label]));
-  const title_code = unlock === 1 ? "รหัสประจำตัวสอบ" : "เลขรหัส";
+  const title_code = unlock === 1 ? "รหัสประจำตัวสอบ" : "ลำดับจัดเก็บ";
 
   let y = top;
   doc.font(FONT_BOLD).fontSize(16).text(`เอกสารคะแนนการทดสอบเพื่อบรรจุเป็นข้าราชการอัยการในตำแหน่งอัยการผู้ช่วย พ.ศ.${info?.year_be} (${info?.campaign_size})`, left, y, { width: contentWidth, align: "center" });

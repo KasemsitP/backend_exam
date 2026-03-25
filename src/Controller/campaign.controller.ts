@@ -6,6 +6,7 @@ export class campaignController {
   static create = async (req: Request, res: Response) => {
     try {
       const payload: CreateCampaignPayload = req.body;
+      console.log(payload)
       const newCampaign = await campaignService.create(payload);
       res.status(201).json(newCampaign);
 

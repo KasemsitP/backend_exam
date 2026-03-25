@@ -6,7 +6,7 @@ import { ApiCampaign, CreateCampaignPayload } from "../Repo/campaign.repo";
 export class campaignService {
   static create = async (payload: CreateCampaignPayload): Promise<ApiCampaign> => {
     const checkCampActive = await campaignRepo.CheckActiveCamp()
-    if (checkCampActive) {
+    if (checkCampActive && payload.is_active) {
       throw new Error("มีรอบสอบที่เปิดใช้งานอยู่แล้ว ไม่สามารถสร้างรอบสอบใหม่ได้");
     }
     console.log(payload)

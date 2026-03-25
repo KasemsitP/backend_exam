@@ -100,7 +100,7 @@ function drawBagGraderMatrixPage(doc: any, report: BagGradersReport) {
   const contentWidth = pageWidth - left - right;
 
   const labelMap = new Map<number, string>(questionLabels.map((q: any) => [q.question_no, q.label]));
-  const user_code_title = unlock === 1 ? "รหัสประจำตัวสอบ" : "เลขรหัส";
+  const user_code_title = unlock === 1 ? "รหัสประจำตัวสอบ" : "ลำดับจัดเก็บ";
 
   // ====================== HEADER =======================
   let y = top;
