@@ -1,0 +1,1 @@
+import{a as o,c as u,bB as a,bC as c,j as e}from"./index-DnQuZbyc.js";function g({permission:t,anyOf:r,fallback:n=null,children:l}){const s=o(u)?.roles;return(t?a(s,t):r&&r.length>0?c(s,r):!!s?.length)?e.jsx(e.Fragment,{children:l}):e.jsx(e.Fragment,{children:n})}export{g as S};
