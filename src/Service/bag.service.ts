@@ -348,7 +348,16 @@ export class bagService {
         payload: string[], // รับค่าที่สวมหน้ากากมาจากเครื่องสแกน
         datetime: Date[]
     ) => {
+
+        const started = Date.now();
+
+        console.log("[CheckbookletsSubjects] start", {
+            campaign_id,
+            payloadCount: payload?.length,
+            datetimeCount: datetime?.length,
+        });
         const connection = await DB.getInstance().getConnection();
+        console.log("[CheckbookletsSubjects] got connection", Date.now() - started, "ms");
 
         try {
             if (payload.length !== datetime.length) {
@@ -360,12 +369,14 @@ export class bagService {
 
             // 🛑 1️⃣ ถอดหน้ากาก (Unmask) ก่อนเพื่อเอาไปค้นหาใน DB
             const realPayloads = payload.map(qr => keyService.unmaskQrPayload(qr));
+             console.log("[CheckbookletsSubjects] unmask done", Date.now() - started, "ms");
 
             // ==========================================
             // ❌ เอา Parallel Decode (decryptQrPayloadBags) ออก
             // เปลี่ยนมาใช้การหาข้อมูลเล่มข้อสอบจาก Database ตรงๆ เพื่อความเป็น Blind 100%
             // ==========================================
             const existingBooklets = await bookletsRepo.findByPayloads(connection, realPayloads);
+             console.log("[CheckbookletsSubjects] findByPayloads done", Date.now() - started, "ms");
 
             if (existingBooklets.length !== realPayloads.length) {
                 throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือสแกนผิดพลาด)");
@@ -392,17 +403,20 @@ export class bagService {
             // const isValidSession = await sessionRepo.verifySessionInCampaign(connection, sessionId, campaign_id);
             // if (!isValidSession) throw new Error("ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบปัจจุบัน");
             const isValidSession = await campaignRepo.verifySessionInCampaign(connection, sessionId, campaign_id)
+            console.log("[CheckbookletsSubjects] verifySessionInCampaign done", Date.now() - started, "ms");
             if (!isValidSession) {
                 throw new Error("ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบรอบสอบหรือวันที่สอบปัจจุบัน กรุณาตรวจสอบให้แน่ใจว่าไม่ได้หยิบข้อสอบผิดกอง");
             }
 
             // 2️⃣ เช็ควิชา
-            const subjectResult = await bagRepo.CheckSubjectBooks(sessionId);
+            const subjectResult = await bagRepo.CheckSubjectBooksConn(sessionId, connection);
+            console.log("[CheckbookletsSubjects] CheckSubjectBooks done", Date.now() - started, "ms");
 
             // ==========================================
             // 3️⃣ หาเลขถุงที่แหว่งไป (แค่หาเฉยๆ ไม่สร้าง!)
             // ==========================================
             const existingBagNos = await bagRepo.getAllBagNumbersForSession(sessionId, connection);
+             console.log("[CheckbookletsSubjects] getAllBagNumbersForSession done", Date.now() - started, "ms");
 
             let targetBagNo = 1;
             existingBagNos.sort((a, b) => a - b);
@@ -410,7 +424,7 @@ export class bagService {
                 if (no === targetBagNo) targetBagNo++;
                 else break;
             }
-
+            console.log("[CheckbookletsSubjects] success", Date.now() - started, "ms");
             // คืนค่าเฉพาะเลขถุงคาดการณ์ และชื่อวิชา
             return {
                 success: true,

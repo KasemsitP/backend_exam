@@ -303,7 +303,22 @@ SELECT s.name from subjects s JOIN session_subjects ss ON   ss.subject_id = s.id
     const arr = rows as { subject_name: string }[];
     return arr[0];
   }
+async CheckSubjectBooksConn(
+  session_id: number,
+  connection: PoolConnection
+): Promise<{ subject_name: string } | null> {
+  const sql = `
+    SELECT s.name AS subject_name
+    FROM subjects s
+    JOIN session_subjects ss ON ss.subject_id = s.id
+    WHERE ss.session_id = ?
+    LIMIT 1;
+  `;
 
+  const [rows] = await connection.execute<RowDataPacket[]>(sql, [session_id]);
+  const arr = rows as { subject_name: string }[];
+  return arr[0] ?? null;
+}
   async findBySessionAndNo(
     connection: PoolConnection,
     sessionId: number,
