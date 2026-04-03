@@ -364,7 +364,7 @@ export class keyService {
 
 
 
-                    // 2. 🛑 ส่งข้อมูล 500 รายการไป Insert ลงตาราง booklets ใน 1 Query
+                    // 2.  ส่งข้อมูล 500 รายการไป Insert ลงตาราง booklets ใน 1 Query
                     await bookletsRepo.bulkInsertBooklets(bookletsToInsert, connection);
                 }
             }

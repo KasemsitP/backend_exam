@@ -168,10 +168,10 @@ userImportService.importUsersToCampaign = (campaignId, rows) => __awaiter(void 0
     try {
         yield connection.beginTransaction();
         const sessions = yield session_repo_1.default.findAllLiteByCampaignId(campaignId, connection);
-        if (sessions.length < 3) {
-            console.warn(`Campaign ID ${campaignId} has no sessions to link.`);
-            throw new Error(`รอบสอบนี้ยังไม่สร้างวันที่สอบครบ 3 วัน กรุณาสร้างให้เรียบร้อยก่อนนำเข้าผู้สอบ`); // <-- เพิ่ม Error เพื่อบังคับให้มี Session ก่อน (ถ้าไม่มี Session เลย)
-        }
+        // if (sessions.length < 3) {
+        //   console.warn(`Campaign ID ${campaignId} has no sessions to link.`);
+        //   throw new Error(`รอบสอบนี้ยังไม่สร้างวันที่สอบครบ 3 วัน กรุณาสร้างให้เรียบร้อยก่อนนำเข้าผู้สอบ`); // <-- เพิ่ม Error เพื่อบังคับให้มี Session ก่อน (ถ้าไม่มี Session เลย)
+        // }
         console.log("Sessions to link:", sessions.length);
         //  throw new Error("ทดสอบ Rollback"); // <-- ลองโยน Error เพื่อดูว่า Rollback ทำงานไหม (ลบออกเมื่อทดสอบเสร็จ)
         const previsNumber = yield importuser_repo_1.default.findPreviousNumber(campaignId, connection);

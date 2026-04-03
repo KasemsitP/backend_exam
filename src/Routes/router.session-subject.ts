@@ -16,4 +16,9 @@ sessionSubjectRouter.delete(
     sessionSubjectController.delete
 );
 
+sessionSubjectRouter.get(
+    "/session-subjects/linked/:campaign_id",
+    sessionSubjectController.IsSessionLinkedToSubject
+);
+
 export default sessionSubjectRouter;

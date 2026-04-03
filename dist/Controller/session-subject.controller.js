@@ -60,3 +60,13 @@ sessionSubjectController.delete = (req, res) => __awaiter(void 0, void 0, void 0
         return res.status(500).send({ message: error.message });
     }
 });
+sessionSubjectController.IsSessionLinkedToSubject = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { campaign_id } = req.params;
+    try {
+        const isLinked = yield session_subject_service_1.sessionSubjectService.IsLinkedToSession(Number(campaign_id));
+        return res.status(200).json({ success: true, isLinked });
+    }
+    catch (error) {
+        return res.status(500).send({ message: error.message });
+    }
+});

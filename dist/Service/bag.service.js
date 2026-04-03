@@ -235,6 +235,9 @@ datetime, expected_bag_no) => __awaiter(void 0, void 0, void 0, function* () {
         if (existingBooklets.length !== realPayloads.length) {
             throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือสแกนผิดพลาด)");
         }
+        const sessInCamp = yield campaign_repo_1.default.sessioninCampaign(campaign_id, connection);
+        console.log(campaign_id);
+        console.log("sessInCamp:", sessInCamp);
         //  ตรวจสอบ Validate จากข้อมูลตาราง booklets โดยตรง
         let sessionId = null;
         for (const booklet of existingBooklets) {
@@ -244,6 +247,9 @@ datetime, expected_bag_no) => __awaiter(void 0, void 0, void 0, function* () {
             }
             else if (booklet.session_id !== sessionId) {
                 throw new Error(`ไม่อนุญาตให้จัดข้อสอบต่างวิชา (Session) ลงในถุงเดียวกัน`);
+            }
+            if (!sessInCamp.some(s => s.session_id === booklet.session_id)) {
+                throw new Error(`ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบปัจจุบัน`);
             }
             // เช็คว่าเล่มนี้โดนจัดลงถุงไปหรือยัง
             if (booklet.bag_id !== null) {
@@ -294,7 +300,7 @@ datetime, expected_bag_no) => __awaiter(void 0, void 0, void 0, function* () {
             const seq = i + 1;
             const status = 'PACKAGED';
             updatePromises.push(booklets_repo_1.default.updateBagInfoByPayload(connection, rawQrPayload, // ส่งตัวจริงไป Update
-            bagId, seq, status, nextRandomNum));
+            bagId, seq, status, nextRandomNum, datetime[i]));
         }
         yield Promise.all(updatePromises);
         yield connection.commit();
@@ -314,7 +320,14 @@ datetime, expected_bag_no) => __awaiter(void 0, void 0, void 0, function* () {
 });
 bagService.CheckbookletsSubjects = (campaign_id, payload, // รับค่าที่สวมหน้ากากมาจากเครื่องสแกน
 datetime) => __awaiter(void 0, void 0, void 0, function* () {
+    const started = Date.now();
+    console.log("[CheckbookletsSubjects] start", {
+        campaign_id,
+        payloadCount: payload === null || payload === void 0 ? void 0 : payload.length,
+        datetimeCount: datetime === null || datetime === void 0 ? void 0 : datetime.length,
+    });
     const connection = yield DB_1.DB.getInstance().getConnection();
+    console.log("[CheckbookletsSubjects] got connection", Date.now() - started, "ms");
     try {
         if (payload.length !== datetime.length) {
             throw new Error("จำนวน QR และ datetime ไม่ตรงกัน");
@@ -324,14 +337,19 @@ datetime) => __awaiter(void 0, void 0, void 0, function* () {
         }
         // 🛑 1️⃣ ถอดหน้ากาก (Unmask) ก่อนเพื่อเอาไปค้นหาใน DB
         const realPayloads = payload.map(qr => key_service_1.keyService.unmaskQrPayload(qr));
+        console.log("[CheckbookletsSubjects] unmask done", Date.now() - started, "ms");
         // ==========================================
-        // ❌ เอา Parallel Decode (decryptQrPayloadBags) ออก
+        //  เอา Parallel Decode (decryptQrPayloadBags) ออก
         // เปลี่ยนมาใช้การหาข้อมูลเล่มข้อสอบจาก Database ตรงๆ เพื่อความเป็น Blind 100%
         // ==========================================
         const existingBooklets = yield booklets_repo_1.default.findByPayloads(connection, realPayloads);
+        console.log("[CheckbookletsSubjects] findByPayloads done", Date.now() - started, "ms");
         if (existingBooklets.length !== realPayloads.length) {
             throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือสแกนผิดพลาด)");
         }
+        const sessInCamp = yield campaign_repo_1.default.sessioninCampaign(campaign_id, connection);
+        console.log(campaign_id);
+        console.log("sessInCamp:", sessInCamp);
         let sessionId = null;
         for (const booklet of existingBooklets) {
             // ตรวจสอบว่าเป็น Session เดียวกันทั้งหมด
@@ -340,6 +358,9 @@ datetime) => __awaiter(void 0, void 0, void 0, function* () {
             }
             else if (booklet.session_id !== sessionId) {
                 throw new Error(`ไม่อนุญาตให้สแกนข้อสอบต่างวิชา (Session) ปะปนกัน`);
+            }
+            if (!sessInCamp.some(s => s.session_id === booklet.session_id)) {
+                throw new Error(`ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบปัจจุบัน`);
             }
             // สามารถเช็คดักเพิ่มได้ด้วยว่ามีเล่มไหนจัดลงถุงไปแล้วหรือยัง
             if (booklet.bag_id !== null) {
@@ -352,15 +373,18 @@ datetime) => __awaiter(void 0, void 0, void 0, function* () {
         // const isValidSession = await sessionRepo.verifySessionInCampaign(connection, sessionId, campaign_id);
         // if (!isValidSession) throw new Error("ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบปัจจุบัน");
         const isValidSession = yield campaign_repo_1.default.verifySessionInCampaign(connection, sessionId, campaign_id);
+        console.log("[CheckbookletsSubjects] verifySessionInCampaign done", Date.now() - started, "ms");
         if (!isValidSession) {
             throw new Error("ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบรอบสอบหรือวันที่สอบปัจจุบัน กรุณาตรวจสอบให้แน่ใจว่าไม่ได้หยิบข้อสอบผิดกอง");
         }
         // 2️⃣ เช็ควิชา
-        const subjectResult = yield bag_repo_1.default.CheckSubjectBooks(sessionId);
+        const subjectResult = yield bag_repo_1.default.CheckSubjectBooksConn(sessionId, connection);
+        console.log("[CheckbookletsSubjects] CheckSubjectBooks done", Date.now() - started, "ms");
         // ==========================================
         // 3️⃣ หาเลขถุงที่แหว่งไป (แค่หาเฉยๆ ไม่สร้าง!)
         // ==========================================
         const existingBagNos = yield bag_repo_1.default.getAllBagNumbersForSession(sessionId, connection);
+        console.log("[CheckbookletsSubjects] getAllBagNumbersForSession done", Date.now() - started, "ms");
         let targetBagNo = 1;
         existingBagNos.sort((a, b) => a - b);
         for (const no of existingBagNos) {
@@ -369,6 +393,7 @@ datetime) => __awaiter(void 0, void 0, void 0, function* () {
             else
                 break;
         }
+        console.log("[CheckbookletsSubjects] success", Date.now() - started, "ms");
         // คืนค่าเฉพาะเลขถุงคาดการณ์ และชื่อวิชา
         return {
             success: true,

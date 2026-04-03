@@ -185,8 +185,8 @@ SELECT
     deleteByBagId(conn, bagId) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
-        DELETE FROM booklets
-        WHERE bag_id = ?
+        update booklets set bag_id = null, seq_in_bag = null, status = 'CREATED', random_num = null
+        where bag_id = ?
     `;
             // สังเกตการใช้ [values] เป็น array ซ้อน array สำหรับ mysql2 bulk insert
             yield conn.query(sql, [bagId]);
@@ -231,14 +231,14 @@ SELECT
         });
     }
     // 11. อัปเดตข้อมูล Booklet เมื่อถูกจัดลงถุง
-    updateBagInfoByPayload(connection, qr_payload, bag_id, seq_in_bag, status, random_num) {
+    updateBagInfoByPayload(connection, qr_payload, bag_id, seq_in_bag, status, random_num, datetime) {
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
         UPDATE booklets 
-        SET bag_id = ?, seq_in_bag = ?, status = ?, random_num = ?
+        SET bag_id = ?, seq_in_bag = ?, status = ?, random_num = ? , created_at = ?
         WHERE qr_payload = ?
     `;
-            yield connection.query(sql, [bag_id, seq_in_bag, status, random_num, qr_payload]);
+            yield connection.query(sql, [bag_id, seq_in_bag, status, random_num, datetime, qr_payload]);
         });
     }
     findPayloadsBySessionId(connection, sessionId) {

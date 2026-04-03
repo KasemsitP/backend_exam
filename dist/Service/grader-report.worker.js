@@ -93,7 +93,7 @@ function drawBagGraderMatrixPage(doc, report) {
     const { left, right, top, bottom } = doc.page.margins;
     const contentWidth = pageWidth - left - right;
     const labelMap = new Map(questionLabels.map((q) => [q.question_no, q.label]));
-    const user_code_title = unlock === 1 ? "รหัสประจำตัวสอบ" : "เลขรหัส";
+    const user_code_title = unlock === 1 ? "รหัสประจำตัวสอบ" : "ลำดับจัดเก็บ";
     // ====================== HEADER =======================
     let y = top;
     const headerY = y;

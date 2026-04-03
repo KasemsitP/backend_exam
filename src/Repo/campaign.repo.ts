@@ -1,6 +1,7 @@
 import { DB } from "../model/DB"; // (สมมติว่านี่คือไฟล์ DB Pool ของคุณ)
 import { Pool, PoolConnection } from "mysql2/promise";
 import { RowDataPacket } from "mysql2";
+import session from "express-session";
 
 export type ApiBoolean = boolean | 0 | 1;
 
@@ -187,7 +188,13 @@ SELECT is_active
  
     return rows.length > 0;
   }
+async sessioninCampaign(campaign_id: number , dbClient: DbClient = this.pool): Promise<{session_id : number}[]> {
+  const sql = `select s.id as session_id from sessions s WHERE  s.campaign_id = ?;`;
+  const [rows] = await dbClient.execute(sql, [campaign_id]);
+  return rows as {session_id : number}[];
 }
+}
+
 
 const campaignRepo = new CampaignRepo();
 export default campaignRepo;

@@ -267,6 +267,21 @@ SELECT s.name from subjects s JOIN session_subjects ss ON   ss.subject_id = s.id
             return arr[0];
         });
     }
+    CheckSubjectBooksConn(session_id, connection) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            const sql = `
+    SELECT s.name AS subject_name
+    FROM subjects s
+    JOIN session_subjects ss ON ss.subject_id = s.id
+    WHERE ss.session_id = ?
+    LIMIT 1;
+  `;
+            const [rows] = yield connection.execute(sql, [session_id]);
+            const arr = rows;
+            return (_a = arr[0]) !== null && _a !== void 0 ? _a : null;
+        });
+    }
     findBySessionAndNo(connection, sessionId, bagNo) {
         return __awaiter(this, void 0, void 0, function* () {
             // แก้ไข SQL: เพิ่ม JOIN sessions เพื่อเอา campaign_id

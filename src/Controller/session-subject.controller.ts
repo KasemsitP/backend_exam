@@ -52,5 +52,15 @@ export class sessionSubjectController {
       return res.status(500).send({ message: error.message });
     }
   };
+
+  static IsSessionLinkedToSubject = async (req: Request, res: Response) => {
+      const {campaign_id} = req.params;
+      try {
+          const isLinked = await sessionSubjectService.IsLinkedToSession(Number(campaign_id));
+          return res.status(200).json({ success: true, isLinked });
+      } catch (error: any) {
+          return res.status(500).send({ message: error.message });
+      }
+  }
 }
 

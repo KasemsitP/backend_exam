@@ -112,7 +112,7 @@ function drawBagScorePage(doc, info, booklets, questionCount, questionLabels, un
     const { left, right, top, bottom } = doc.page.margins;
     const contentWidth = pageWidth - left - right;
     const labelMap = new Map(questionLabels.map((q) => [q.question_no, q.label]));
-    const title_code = unlock === 1 ? "รหัสประจำตัวสอบ" : "เลขรหัส";
+    const title_code = unlock === 1 ? "รหัสประจำตัวสอบ" : "ลำดับจัดเก็บ";
     let y = top;
     doc.font(FONT_BOLD).fontSize(16).text(`เอกสารคะแนนการทดสอบเพื่อบรรจุเป็นข้าราชการอัยการในตำแหน่งอัยการผู้ช่วย พ.ศ.${info === null || info === void 0 ? void 0 : info.year_be} (${info === null || info === void 0 ? void 0 : info.campaign_size})`, left, y, { width: contentWidth, align: "center" });
     doc.font(FONT_NORMAL).fontSize(30).text(`ถุงที่ ${info === null || info === void 0 ? void 0 : info.bag_no}`, left, y, { width: contentWidth, align: "right" });

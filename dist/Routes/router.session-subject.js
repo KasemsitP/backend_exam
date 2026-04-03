@@ -5,4 +5,5 @@ const session_subject_controller_1 = require("../Controller/session-subject.cont
 const sessionSubjectRouter = (0, express_1.Router)();
 sessionSubjectRouter.post("/session-subjects", session_subject_controller_1.sessionSubjectController.create);
 sessionSubjectRouter.delete("/session-subjects/:sessionId/:subjectId", session_subject_controller_1.sessionSubjectController.delete);
+sessionSubjectRouter.get("/session-subjects/linked/:campaign_id", session_subject_controller_1.sessionSubjectController.IsSessionLinkedToSubject);
 exports.default = sessionSubjectRouter;

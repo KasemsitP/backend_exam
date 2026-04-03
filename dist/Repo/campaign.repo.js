@@ -28,7 +28,7 @@ VALUES
                 payload.site,
                 payload.campaign_size,
                 payload.name,
-                payload.is_active ? 1 : 1,
+                payload.is_active ? 1 : 0,
             ];
             const [result] = yield dbClient.execute(sql, params);
             const newId = result.insertId;
@@ -153,6 +153,13 @@ SELECT is_active
             const sql = `SELECT 1 FROM sessions WHERE id = ? AND campaign_id = ?`;
             const [rows] = yield connection.execute(sql, [sessionId, campaignId]);
             return rows.length > 0;
+        });
+    }
+    sessioninCampaign(campaign_id_1) {
+        return __awaiter(this, arguments, void 0, function* (campaign_id, dbClient = this.pool) {
+            const sql = `select s.id as session_id from sessions s WHERE  s.campaign_id = ?;`;
+            const [rows] = yield dbClient.execute(sql, [campaign_id]);
+            return rows;
         });
     }
 }

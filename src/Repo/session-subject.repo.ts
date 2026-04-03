@@ -169,6 +169,11 @@ LIMIT 1;`;
         const [rows] = await dbClient.execute<any[]>(sql, [subject_id, campaign_id]);
         return rows.length > 0;
     }
+    async IsLinkedToSession(campaign_id: number): Promise<boolean> {
+        const sql = `SELECT ss.session_id FROM session_subjects ss JOIN sessions s ON s.id = ss.session_id  WHERE s.campaign_id = ?;`
+        const [rows] = await this.pool.execute<any[]>(sql, [campaign_id]);
+        return rows.length > 0;
+    }
 }
 
 const sessionSubjectRepo = new SessionSubjectRepo();

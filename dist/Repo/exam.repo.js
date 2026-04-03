@@ -229,7 +229,7 @@ SET is_active = 1 where id = ?;
         return __awaiter(this, void 0, void 0, function* () {
             const sql = `
 UPDATE exam_campaigns
-SET is_active = 0 where id = ?;
+SET is_active = 0, qr_active = 0 where id = ? ;
   `;
             yield conn.execute(sql, [campaign_id]);
         });

@@ -102,3 +102,10 @@ sessionSubjectService.delete = (sessionId, subjectId) => __awaiter(void 0, void 
         connection.release();
     }
 });
+sessionSubjectService.IsLinkedToSession = (campaign_id) => __awaiter(void 0, void 0, void 0, function* () {
+    const data = yield session_subject_repo_1.default.IsLinkedToSession(campaign_id);
+    if (data) {
+        return true;
+    }
+    return false;
+});

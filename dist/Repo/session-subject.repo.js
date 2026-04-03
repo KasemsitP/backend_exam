@@ -127,6 +127,13 @@ LIMIT 1;`;
             return rows.length > 0;
         });
     }
+    IsLinkedToSession(campaign_id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `SELECT ss.session_id FROM session_subjects ss JOIN sessions s ON s.id = ss.session_id  WHERE s.campaign_id = ?;`;
+            const [rows] = yield this.pool.execute(sql, [campaign_id]);
+            return rows.length > 0;
+        });
+    }
 }
 const sessionSubjectRepo = new SessionSubjectRepo();
 exports.default = sessionSubjectRepo;

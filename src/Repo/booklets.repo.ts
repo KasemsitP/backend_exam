@@ -293,14 +293,15 @@ SELECT
     bag_id: number,
     seq_in_bag: number,
     status: string,
-    random_num: string
+    random_num: string,
+    datetime : Date
   ): Promise<void> {
     const sql = `
         UPDATE booklets 
-        SET bag_id = ?, seq_in_bag = ?, status = ?, random_num = ?
+        SET bag_id = ?, seq_in_bag = ?, status = ?, random_num = ? , created_at = ?
         WHERE qr_payload = ?
     `;
-    await connection.query(sql, [bag_id, seq_in_bag, status, random_num, qr_payload]);
+    await connection.query(sql, [bag_id, seq_in_bag, status, random_num, datetime, qr_payload]);
   }
   async findPayloadsBySessionId(
     connection: PoolConnection,

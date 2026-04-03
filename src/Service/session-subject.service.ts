@@ -117,5 +117,13 @@ export class sessionSubjectService {
             connection.release();
         }
     };
+
+    static IsLinkedToSession = async (campaign_id : number ) => {
+        const data = await sessionSubjectRepo.IsLinkedToSession(campaign_id);
+        if(data){
+            return true;
+        }
+        return false;
+    }
 }
 

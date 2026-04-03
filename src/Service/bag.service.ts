@@ -250,6 +250,9 @@ export class bagService {
             if (existingBooklets.length !== realPayloads.length) {
                 throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือสแกนผิดพลาด)");
             }
+            const sessInCamp = await campaignRepo.sessioninCampaign(campaign_id, connection);
+            console.log(campaign_id)
+            console.log("sessInCamp:", sessInCamp);
 
             //  ตรวจสอบ Validate จากข้อมูลตาราง booklets โดยตรง
             let sessionId: number | null = null;
@@ -260,6 +263,10 @@ export class bagService {
                     sessionId = booklet.session_id;
                 } else if (booklet.session_id !== sessionId) {
                     throw new Error(`ไม่อนุญาตให้จัดข้อสอบต่างวิชา (Session) ลงในถุงเดียวกัน`);
+                }
+                
+                if (!sessInCamp.some(s => s.session_id === booklet.session_id)) {
+                    throw new Error(`ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบปัจจุบัน`);
                 }
 
                 // เช็คว่าเล่มนี้โดนจัดลงถุงไปหรือยัง
@@ -322,7 +329,8 @@ export class bagService {
                         bagId,
                         seq,
                         status,
-                        nextRandomNum
+                        nextRandomNum,
+                        datetime[i]
                     )
                 );
             }
@@ -372,7 +380,7 @@ export class bagService {
              console.log("[CheckbookletsSubjects] unmask done", Date.now() - started, "ms");
 
             // ==========================================
-            // ❌ เอา Parallel Decode (decryptQrPayloadBags) ออก
+            //  เอา Parallel Decode (decryptQrPayloadBags) ออก
             // เปลี่ยนมาใช้การหาข้อมูลเล่มข้อสอบจาก Database ตรงๆ เพื่อความเป็น Blind 100%
             // ==========================================
             const existingBooklets = await bookletsRepo.findByPayloads(connection, realPayloads);
@@ -381,6 +389,10 @@ export class bagService {
             if (existingBooklets.length !== realPayloads.length) {
                 throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือสแกนผิดพลาด)");
             }
+            
+            const sessInCamp = await campaignRepo.sessioninCampaign(campaign_id, connection);
+            console.log(campaign_id)
+            console.log("sessInCamp:", sessInCamp);
 
             let sessionId: number | null = null;
             for (const booklet of existingBooklets) {
@@ -389,6 +401,10 @@ export class bagService {
                     sessionId = booklet.session_id;
                 } else if (booklet.session_id !== sessionId) {
                     throw new Error(`ไม่อนุญาตให้สแกนข้อสอบต่างวิชา (Session) ปะปนกัน`);
+                }
+
+                if (!sessInCamp.some(s => s.session_id === booklet.session_id)) {
+                    throw new Error(`ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบปัจจุบัน`);
                 }
 
                 // สามารถเช็คดักเพิ่มได้ด้วยว่ามีเล่มไหนจัดลงถุงไปแล้วหรือยัง

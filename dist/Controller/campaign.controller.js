@@ -19,6 +19,7 @@ _a = campaignController;
 campaignController.create = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const payload = req.body;
+        console.log(payload);
         const newCampaign = yield campaign_service_1.campaignService.create(payload);
         res.status(201).json(newCampaign);
     }
