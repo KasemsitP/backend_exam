@@ -22,6 +22,17 @@ export interface GradingSlotRow extends RowDataPacket {
   grader_id: number | null;
 }
 
+export interface GradingSlotAndScoreRow extends RowDataPacket {
+  id: number;
+  booklet_id: number;
+  subject_id: number;
+  question_no: number;
+  grader_order: number;
+  status: string;
+  grader_id: number | null;
+  score: number 
+}
+
 
 class GradingslotRepo {
   /**
@@ -83,6 +94,40 @@ LIMIT 1;
       ${forUpdate ? "FOR UPDATE" : ""}
     `;
     const [rows] = await conn.execute<GradingSlotRow[]>(sql, [
+      bookletId,
+      subjectId,
+      questionNo,
+    ]);
+    return rows;
+  }
+
+  async findSlotsByBookletAndQuestionAndScore(
+    conn: PoolConnection,
+    bookletId: number,
+    subjectId: number,
+    questionNo: number,
+    forUpdate: boolean = false
+  ): Promise<GradingSlotAndScoreRow[]> {
+    const sql = `
+SELECT 
+  gs.id,
+  gs.booklet_id,
+  gs.subject_id,
+  gs.question_no,
+  gs.grader_order,
+  gs.status,
+  gs.grader_id,
+  gsc.score
+  
+FROM grading_slots gs
+LEFT JOIN grading_scores gsc ON gsc.slot_id = gs.id
+WHERE gs.booklet_id = ? 
+  AND gs.subject_id = ? 
+  AND gs.question_no = ?
+  ORDER BY grader_order;
+      ${forUpdate ? "FOR UPDATE" : ""}
+    `;
+    const [rows] = await conn.execute<GradingSlotAndScoreRow[]>(sql, [
       bookletId,
       subjectId,
       questionNo,

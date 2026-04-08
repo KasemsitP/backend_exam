@@ -40,17 +40,40 @@ class GradingRecheckController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const slotId = Number(req.params.slotId);
+                const userId = Number(req.params.userId);
                 if (!slotId) {
                     return res.status(400).json({ message: "slotId ไม่ถูกต้อง" });
                 }
-                yield gradingrecheck_service_1.gradingRecheckService.resetQuestionForRecheck({ slotId });
+                if (!userId) {
+                    return res.status(400).json({ message: "userId ไม่ถูกต้อง" });
+                }
+                throw new Error("ฟีเจอร์นี้ยังไม่เปิดใช้งาน");
+                yield gradingrecheck_service_1.gradingRecheckService.resetQuestionForRecheck({ slotId, userId });
                 return res.json({ message: "รีเซ็ตคะแนนเพื่อ recheck เรียบร้อยแล้ว" });
             }
             catch (err) {
                 console.error(err);
                 return res
-                    .status(500)
+                    .status(400)
                     .json({ message: err.message || "Internal Server Error" });
+            }
+        });
+    }
+    static ResetScore(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { slotId1, slotId2, userId, score1, score2 } = req.body;
+                if (!slotId1 || !slotId2 || !userId || score1 === undefined || score2 === undefined) {
+                    return res.status(400).json({ message: "ข้อมูลไม่ครบ" });
+                }
+                yield gradingrecheck_service_1.gradingRecheckService.EditResetScore(Number(slotId1), Number(slotId2), Number(score1), Number(score2), Number(userId));
+                return res.json({ message: "รีเซ็ตคะแนนเรียบร้อยแล้ว", success: true });
+            }
+            catch (err) {
+                console.error(err);
+                return res
+                    .status(400)
+                    .json({ message: err.message || "Internal Server Error", success: false });
             }
         });
     }
@@ -68,7 +91,7 @@ class GradingRecheckController {
             catch (err) {
                 console.error(err);
                 return res
-                    .status(500)
+                    .status(400)
                     .json({ message: err.message || "Internal Server Error" });
             }
         });

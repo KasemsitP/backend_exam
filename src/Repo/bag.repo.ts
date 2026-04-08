@@ -408,6 +408,14 @@ async getEmptyBag(sessionId: number, conn: PoolConnection): Promise<{id: number,
     const [rows] = await conn.execute<any[]>(sql, [sessionId]);
     return rows.length > 0 ? { id: rows[0].id, bag_no: rows[0].bag_no } : null;
 }
+
+async findBagPayloadRows(bagId: number): Promise<any[]> {
+    const sql = `
+      SELECT bb.bag_no,b.random_num , b.qr_payload FROM booklets b JOIN bags bb ON bb.id = b.bag_id where bag_id = ? 
+ORDER BY random_num ASC;`;
+    const [rows] = await this.pool.execute(sql, [bagId]);
+    return rows as any[];
+}
 }
 
 const bagRepo = new BagRepo();

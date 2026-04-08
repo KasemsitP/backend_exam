@@ -11,5 +11,6 @@ gradingrecheck_controller_1.GradingRecheckController.listDisputed);
 // สแกน QR เพื่อ "เปิด slot recheck" (จริง ๆ reuse createSlotFromQr)
 gradingRecheckRouter.post("/recheck/slot-from-qr", gradingrecheck_controller_1.GradingRecheckController.createRecheckSlot);
 // reset คะแนนของข้อหนึ่ง (slotId ตัวใดตัวหนึ่งในคู่นั้นก็ได้)
-gradingRecheckRouter.post("/recheck/reset/:slotId", gradingrecheck_controller_1.GradingRecheckController.resetRecheck);
+gradingRecheckRouter.post("/recheck/reset/:slotId/:userId", gradingrecheck_controller_1.GradingRecheckController.resetRecheck);
+gradingRecheckRouter.post("/recheck/reset-score", gradingrecheck_controller_1.GradingRecheckController.ResetScore);
 exports.default = gradingRecheckRouter;

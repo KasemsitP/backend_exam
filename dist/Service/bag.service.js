@@ -15,11 +15,59 @@ var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bagService = void 0;
 const DB_1 = require("../model/DB");
+const worker_threads_1 = require("worker_threads");
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const key_service_1 = require("./key.service");
 const bag_repo_1 = __importDefault(require("../Repo/bag.repo")); // (Import Repo ที่แก้ไขแล้ว)
 const booklets_repo_1 = __importDefault(require("../Repo/booklets.repo"));
 const campaign_repo_1 = __importDefault(require("../Repo/campaign.repo"));
 class bagService {
+    /**
+     * [POST] สร้างถุง (Bulk)
+     */
+    static runPayloadWorkerTask(task, options) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve, reject) => {
+                const isTsNode = __filename.endsWith(".ts");
+                const workerPath = path_1.default.resolve(__dirname, `./bag.worker${isTsNode ? ".ts" : ".js"}`);
+                let worker;
+                if (isTsNode) {
+                    worker = new worker_threads_1.Worker(`
+          require('ts-node/register');
+          require(require('worker_threads').workerData.__workerPath);
+        `, {
+                        eval: true,
+                        workerData: { __workerPath: workerPath, task, options },
+                    });
+                }
+                else {
+                    worker = new worker_threads_1.Worker(workerPath, { workerData: { task, options } });
+                }
+                worker.on("message", (result) => __awaiter(this, void 0, void 0, function* () {
+                    if (result.status === "success") {
+                        try {
+                            const pdfBuffer = yield fs_1.default.promises.readFile(result.filePath);
+                            yield fs_1.default.promises.unlink(result.filePath).catch(() => { });
+                            resolve(pdfBuffer);
+                        }
+                        catch (err) {
+                            reject(err);
+                        }
+                    }
+                    else {
+                        reject(new Error(result.message));
+                    }
+                }));
+                worker.on("error", reject);
+                worker.on("exit", (code) => {
+                    if (code !== 0) {
+                        reject(new Error(`Worker stopped with exit code ${code}`));
+                    }
+                });
+            });
+        });
+    }
     static getBookletsInBag(params) {
         return __awaiter(this, void 0, void 0, function* () {
             const { campaignId, sessionId, bagNo } = params;
@@ -60,9 +108,6 @@ class bagService {
 }
 exports.bagService = bagService;
 _a = bagService;
-/**
- * [POST] สร้างถุง (Bulk)
- */
 bagService.bulkCreate = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     const connection = yield DB_1.DB.getInstance().getConnection();
     try {

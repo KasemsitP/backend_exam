@@ -65,6 +65,35 @@ LIMIT 1;
             return rows;
         });
     }
+    findSlotsByBookletAndQuestionAndScore(conn_1, bookletId_1, subjectId_1, questionNo_1) {
+        return __awaiter(this, arguments, void 0, function* (conn, bookletId, subjectId, questionNo, forUpdate = false) {
+            const sql = `
+SELECT 
+  gs.id,
+  gs.booklet_id,
+  gs.subject_id,
+  gs.question_no,
+  gs.grader_order,
+  gs.status,
+  gs.grader_id,
+  gsc.score
+  
+FROM grading_slots gs
+LEFT JOIN grading_scores gsc ON gsc.slot_id = gs.id
+WHERE gs.booklet_id = ? 
+  AND gs.subject_id = ? 
+  AND gs.question_no = ?
+  ORDER BY grader_order;
+      ${forUpdate ? "FOR UPDATE" : ""}
+    `;
+            const [rows] = yield conn.execute(sql, [
+                bookletId,
+                subjectId,
+                questionNo,
+            ]);
+            return rows;
+        });
+    }
     /**
      * สร้าง slot ใหม่ให้ผู้ตรวจ (status = 'ASSIGNED')
      */

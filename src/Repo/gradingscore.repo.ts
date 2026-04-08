@@ -212,7 +212,7 @@ class GradingScoreRepo {
     return rows[0] || null;
   }
 
-async FindAllRecord(
+  async FindAllRecord(
     grader_id: number
   ): Promise<GradingRecordAll[]> { // เอา | null ออกได้เลย
     const sql = `
@@ -232,7 +232,7 @@ async FindAllRecord(
       LIMIT 25 OFFSET 0;
     `;
     const [rows] = await this.pool.execute<GradingRecordAll[]>(sql, [grader_id]);
-    return rows; 
+    return rows;
   }
   /**
    * ใช้ตอน recheck:
@@ -434,20 +434,20 @@ async FindAllRecord(
   //   //   LEFT JOIN bags bg ON bk.bag_id = bg.id
   //   //   JOIN subjects subj ON subj.id = d.subject_id
   //   //   LEFT JOIN subject_questions sq ON sq.subject_id = d.subject_id AND sq.question_no = d.question_no
-      
+
   //   //   -- JOIN กลับไปหาผู้ตรวจเฉพาะรายการที่ขัดแย้งเท่านั้น
   //   //   JOIN grading_slots sl ON sl.booklet_id = d.booklet_id AND sl.subject_id = d.subject_id AND sl.question_no = d.question_no
   //   //   JOIN grading_scores gs ON gs.slot_id = sl.id
   //   //   JOIN graders gr ON gs.entered_by = gr.id
   //   //   LEFT JOIN accounts acc ON gr.account_id = acc.id
-      
+
   //   //   GROUP BY
   //   //     d.booklet_id, bg.bag_no, d.subject_id, subj.code, subj.name,
   //   //     d.question_no, sq.label, bk.random_num, d.minScore, d.maxScore, d.diff
-        
+
   //   //   ORDER BY d.diff DESC;
   //   // `;
-  
+
   //   const sql = `
   //     SELECT
   //       bk.id              AS bookletId,
@@ -478,7 +478,7 @@ async FindAllRecord(
 
   //     FROM grading_slots sl1
   //     JOIN grading_scores gs1 ON gs1.slot_id = sl1.id
-      
+
   //     --  ท่าไม้ตาย: JOIN ตารางตัวเอง เพื่อดึงคะแนนของคนที่ 2 มาแปะข้างๆ คนที่ 1
   //     JOIN grading_slots sl2 
   //       ON sl2.booklet_id = sl1.booklet_id
@@ -491,7 +491,7 @@ async FindAllRecord(
   //     JOIN booklets bk ON bk.id = sl1.booklet_id
   //     JOIN sessions sess ON bk.session_id = sess.id
   //     LEFT JOIN bags bg ON bk.bag_id = bg.id
-      
+
   //     -- JOIN ข้อมูลวิชา
   //     JOIN subjects subj ON subj.id = sl1.subject_id
   //     LEFT JOIN subject_questions sq 
@@ -705,11 +705,11 @@ async FindAllRecord(
   //   const [rows] = await this.pool.query<DisputedQuestionRow[]>(sql, [campaign_id, thresholdDiff]);
   //   return rows ? rows.length : 0;
   // }
-async findDisputedQuestionsForDashboard(
+  async findDisputedQuestionsForDashboard(
     campaign_id: number,
     thresholdDiff: number
   ): Promise<number> {
-    
+
     // 🚀 ใช้ท่า Self-Join เพื่อหาคะแนนขัดแย้ง และใช้ COUNT(1) ให้นับจาก Database เลย
     // ตัดการ JOIN ตาราง subjects, subject_questions, bags, graders, accounts ทิ้งให้หมด!
     const sql = `
@@ -737,9 +737,96 @@ async findDisputedQuestionsForDashboard(
 
     // คืนค่าเป็นตัวเลขออกมาตัวเดียวเลย ไม่ต้องเอา Array มาเปลือง RAM
     const [rows] = await this.pool.query<any[]>(sql, [campaign_id, thresholdDiff]);
-    
+
     return rows[0]?.total_disputed || 0;
   }
+
+  async InsertLogForRecheck(
+    conn: PoolConnection,
+    params: {  bookletId: number; subjectId: number; questionNo: number; slotId1: number; slotId2: number; grader1Id: number; grader2Id: number; oldScore1: number; oldScore2: number; changedBy: number }
+  ) {
+    const sql = `
+INSERT INTO grading_score_logs (
+  booklet_id,
+  subject_id,
+  question_no,
+  slot_id1,
+  slot_id2,
+  grader1_id,
+  grader2_id,
+  old_score1,
+  old_score2,
+  changed_by,
+  changed_at
+)
+VALUES (
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?
+);
+    `;
+    await conn.query(sql, [params.bookletId, params.subjectId, params.questionNo, params.slotId1, params.slotId2, params.grader1Id, params.grader2Id, params.oldScore1, params.oldScore2, params.changedBy , new Date()]);
+  }
+async getMaxScoreforQuestionBySlotId(
+  conn: PoolConnection,
+  slotId: number
+): Promise<{ slot_id : number; booklet_id: number; subject_id: number; question_no: number; question_label: string; max_score: number } | null> {
+  const sql = `
+  SELECT
+  gs.id AS slot_id,
+  gs.booklet_id,
+  gs.subject_id,
+  gs.question_no,
+  sq.label AS question_label,
+  sq.max_score
+FROM grading_slots gs
+JOIN subject_questions sq
+  ON sq.subject_id = gs.subject_id
+ AND sq.question_no = gs.question_no
+WHERE gs.id = ?;
+  `
+
+  const [rows] = await conn.query<any[]>(sql, [slotId]);
+  if (rows.length === 0) {
+    return null;
+  }
+  return rows[0];
+}
+
+async ResetScoreEdit(conn: PoolConnection, slotId1 : number, slotId2: number , score1: number, score2: number){
+const sql1 = `
+UPDATE grading_scores
+SET score = CASE
+  WHEN slot_id = ? THEN ?
+  WHEN slot_id = ? THEN ?
+  ELSE score
+END
+WHERE slot_id IN (?, ?)
+`
+
+await conn.query(sql1, [
+  slotId1, score1,
+  slotId2, score2,
+  slotId1, slotId2
+])
+
+
+const sql2 = `
+UPDATE grading_slots
+SET status = 'COMPLETED'
+WHERE id IN (?, ?)
+`
+
+await conn.query(sql2, [slotId1, slotId2])
+}
 }
 
 const gradingscoreRepo = new GradingScoreRepo();

@@ -33,6 +33,21 @@ function keyOf(sessionId: number, subjectId: number, questionNo: number) {
   return `${sessionId}:${subjectId}:${questionNo}`;
 }
 
+function formatIntPdf(value: any): string {
+  if (value == null || value === "") return "";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  return String(Math.trunc(num));
+}
+
+function formatDecimalPdf(value: any): string {
+  if (value == null || value === "") return "";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+
+  return Number.isInteger(num) ? String(num) : String(num);
+}
+
 // Logic จัดกลุ่มข้อมูลจาก DB ให้เป็นรูปแบบที่พร้อมพิมพ์
 function buildBookletBlocks(raw: any[], questionCount: number, unlock: number) {
   const byBooklet = new Map<number, any>();
@@ -204,11 +219,20 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
       const s2 = qRow?.grader2Score ?? null;
       const diff = s1 != null && s2 != null ? Math.abs(Number(s1) - Number(s2)) : null;
       const avg = s1 != null && s2 != null ? (Number(s1) + Number(s2)) / 2 : qRow?.finalScore ?? null;
-      const vals = [s1, s2, diff, avg];
+      const vals = [
+  formatIntPdf(s1),
+  formatIntPdf(s2),
+  formatIntPdf(diff),
+  formatDecimalPdf(avg), // หรือ formatAveragePdf(avg)
+];
 
       vals.forEach((val) => {
         pathRow = pathRow.rect(x, y, cwScore, rowH);
-        doc.text(val == null ? "" : Number(val).toFixed(1), x, y + 3 * scale, { width: cwScore, align: "center", ellipsis: true });
+        doc.text(val, x, y + 3 * scale, { 
+          width: cwScore, 
+          align: "center", 
+          ellipsis: true 
+        });
         x += cwScore;
       });
       if (avg != null) totalPerSubject += Number(avg);
@@ -413,14 +437,19 @@ function drawUnlockedBagScorePage(
           ? (Number(s1) + Number(s2)) / 2
           : qRow?.finalScore ?? null;
 
-      const vals = [s1, s2, diff, avg];
+     const vals = [
+  formatIntPdf(s1),
+  formatIntPdf(s2),
+  formatIntPdf(diff),
+  formatDecimalPdf(avg), // หรือ formatAveragePdf(avg)
+];
 
       vals.forEach((val) => {
         pathRow = pathRow.rect(x, y, cwScore, rowH);
-        doc.text(val == null ? "" : Number(val).toFixed(1), x, y + 3 * scale, {
-          width: cwScore,
-          align: "center",
-          ellipsis: true,
+doc.text(val, x, y + 3 * scale, { 
+          width: cwScore, 
+          align: "center", 
+          ellipsis: true 
         });
         x += cwScore;
       });

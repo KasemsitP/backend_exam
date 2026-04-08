@@ -19,8 +19,13 @@ gradingRecheckRouter.post(
 
 // reset คะแนนของข้อหนึ่ง (slotId ตัวใดตัวหนึ่งในคู่นั้นก็ได้)
 gradingRecheckRouter.post(
-  "/recheck/reset/:slotId",
+  "/recheck/reset/:slotId/:userId",
   GradingRecheckController.resetRecheck
+);
+
+gradingRecheckRouter.post(
+  "/recheck/reset-score",
+  GradingRecheckController.ResetScore
 );
 
 export default gradingRecheckRouter;

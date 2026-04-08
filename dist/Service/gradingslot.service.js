@@ -63,6 +63,7 @@ class gradingService {
                     questionNo,
                     bagId: bookletRow.bag_id,
                     bagNo: bookletRow.bag_no,
+                    random_num: bookletRow.random_num
                 };
             }
             catch (err) {

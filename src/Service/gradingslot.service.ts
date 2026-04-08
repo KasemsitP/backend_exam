@@ -32,6 +32,7 @@ export class gradingService {
     questionNo: number;
     bagId : number;
     bagNo : number;
+    random_num : number;
   }> {
     const { campaignId, graderId, questionNo } = payload;
 
@@ -100,6 +101,7 @@ export class gradingService {
         questionNo,
         bagId : bookletRow.bag_id ,
         bagNo : bookletRow.bag_no ,
+        random_num : bookletRow.random_num 
       };
     } catch (err) {
       await connection.rollback();

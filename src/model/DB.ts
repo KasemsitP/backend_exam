@@ -24,7 +24,7 @@ export class DB {
       // console.log(process.env.host, process.env.user, process.env.password, process.env.database);
 
       // // สำหรับ production (Render.com)
-      console.log(process.env.DB_HOST, process.env.DB_USER, process.env.DB_PASS, process.env.DB_NAME, process.env.DB_PORT);
+      // console.log(process.env.DB_HOST, process.env.DB_USER, process.env.DB_PASS, process.env.DB_NAME, process.env.DB_PORT);
       DB.instance = mysql.createPool({
         host: process.env.DB_HOST,    // จะดึงค่า 35.240.222.183 มาอัตโนมัติ
         user: process.env.DB_USER,
@@ -34,7 +34,6 @@ export class DB {
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0
-
       });
       // DB.instance = mysql.createPool({
       //   host: "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",

@@ -65,7 +65,7 @@ export class gradingRecheckService {
    * - ลบ grading_scores ทั้งหมดของข้อนี้
    * - เซ็ต status ของ slot ทั้งหมดเป็น OPEN
    */
-  static async resetQuestionForRecheck(params: { slotId: number }) {
+  static async resetQuestionForRecheck(params: { slotId: number, userId: number }) {
     const conn = await DB.getInstance().getConnection();
     try {
       await conn.beginTransaction();
@@ -77,7 +77,7 @@ export class gradingRecheckService {
       }
 
       // 2) ดึง slot ทั้งคู่ของเล่ม+วิชา+ข้อนี้มาก่อน
-      const slots = await gradingslotRepo.findSlotsByBookletAndQuestion(
+      const slots = await gradingslotRepo.findSlotsByBookletAndQuestionAndScore(
         conn,
         ctx.bookletId,
         ctx.subjectId,
@@ -94,6 +94,24 @@ export class gradingRecheckService {
       if (!isDisputed) {
         throw new Error("ข้อนี้ยังไม่ได้ถูก mark ว่า DISPUTED จึงยังไม่เข้าเกณฑ์ recheck");
       }
+
+
+
+      console.log("จะรีเซ็ต slotId:", params.slotId, "ของ userId:", params.userId, "ใน context:", ctx, slots);
+      // await gradingscoreRepo.InsertLogForRecheck(conn, {
+      //   slotId: params.slotId,
+      //   userId: params.userId,
+      //   bookletId: ctx.bookletId,
+      //   subjectId: ctx.subjectId,
+      //   questionNo: ctx.questionNo,
+      //   slotId1: slots[0].id,
+      //   slotId2: slots[1]?.id || 0,
+      //   grader1Id: slots[0].grader_id || 0,
+      //   grader2Id: slots[1]?.grader_id || 0,
+      //   oldScore1: slots[0].score,
+      //   oldScore2: slots[1]?.score || 0,
+      //   changedBy: params.userId,
+      // });
 
       // 4) ลบคะแนนเดิมทุกคนของข้อเดียวกัน + เล่มเดียวกัน
       await gradingscoreRepo.deleteScoresForQuestion(
@@ -153,4 +171,72 @@ export class gradingRecheckService {
     }
   }
 
+  static async EditResetScore(slotId1: number, slotId2: number, score1: number, score2: number, userId: number) {
+    const conn = await DB.getInstance().getConnection();
+    try {
+
+      const maxScoreRow = await gradingscoreRepo.getMaxScoreforQuestionBySlotId(conn, slotId1);
+      const max_score = maxScoreRow ? maxScoreRow.max_score : null;
+      if (max_score === null) {
+        throw new Error("ไม่พบคะแนนเต็มสำหรับหัวข้อนี้");
+      }
+      if( Math.abs(score1 - score2) > 4){
+        throw new Error(`ความต่างของคะแนนทั้งสอง slot ต้องไม่เกิน 4 คะแนน`);
+      }
+
+      if (score1 < 0 || score1 > max_score) {
+        throw new Error(`คะแนนต้องอยู่ระหว่าง 0 ถึง ${max_score} สำหรับหัวข้อ ${maxScoreRow?.question_label}`);
+      }
+      if (score2 < 0 || score2 > max_score) {
+        throw new Error(`คะแนนต้องอยู่ระหว่าง 0 ถึง ${max_score} สำหรับหัวข้อ ${maxScoreRow?.question_label}`);
+      }
+
+      console.log(userId)
+
+      const ctx = await gradingscoreRepo.findSlotContextById(conn, slotId1);
+      if (!ctx) {
+        throw new Error("ไม่พบ slot ที่ต้องการรีเซ็ต");
+      }
+
+      const slots = await gradingslotRepo.findSlotsByBookletAndQuestionAndScore(
+        conn,
+        ctx.bookletId,
+        ctx.subjectId,
+        ctx.questionNo,
+        false // ไม่ต้อง lock ก็ได้ในจังหวะนี้
+      );
+
+      if (!slots.length) {
+        throw new Error("ไม่พบ slot ของข้อนี้สำหรับ recheck");
+      }
+
+      const isDisputed = slots.some((s) => s.status === "DISPUTED");
+      if (!isDisputed) {
+        throw new Error("ข้อนี้ยังไม่ได้ถูก mark ว่า DISPUTED จึงยังไม่เข้าเกณฑ์ recheck");
+      }
+
+        await gradingscoreRepo.InsertLogForRecheck(conn, {
+        bookletId: ctx.bookletId,
+        subjectId: ctx.subjectId,
+        questionNo: ctx.questionNo,
+        slotId1: slots[0].id,
+        slotId2: slots[1]?.id || 0,
+        grader1Id: slots[0].grader_id || 0,
+        grader2Id: slots[1]?.grader_id || 0,
+        oldScore1: slots[0].score,
+        oldScore2: slots[1]?.score || 0,
+        changedBy: userId
+      });
+
+      await gradingscoreRepo.ResetScoreEdit(conn, slotId1, slotId2, score1, score2);
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+
+  }
 }

@@ -579,6 +579,86 @@ class GradingScoreRepo {
             return ((_a = rows[0]) === null || _a === void 0 ? void 0 : _a.total_disputed) || 0;
         });
     }
+    InsertLogForRecheck(conn, params) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+INSERT INTO grading_score_logs (
+  booklet_id,
+  subject_id,
+  question_no,
+  slot_id1,
+  slot_id2,
+  grader1_id,
+  grader2_id,
+  old_score1,
+  old_score2,
+  changed_by,
+  changed_at
+)
+VALUES (
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?,
+  ?
+);
+    `;
+            yield conn.query(sql, [params.bookletId, params.subjectId, params.questionNo, params.slotId1, params.slotId2, params.grader1Id, params.grader2Id, params.oldScore1, params.oldScore2, params.changedBy, new Date()]);
+        });
+    }
+    getMaxScoreforQuestionBySlotId(conn, slotId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+  SELECT
+  gs.id AS slot_id,
+  gs.booklet_id,
+  gs.subject_id,
+  gs.question_no,
+  sq.label AS question_label,
+  sq.max_score
+FROM grading_slots gs
+JOIN subject_questions sq
+  ON sq.subject_id = gs.subject_id
+ AND sq.question_no = gs.question_no
+WHERE gs.id = ?;
+  `;
+            const [rows] = yield conn.query(sql, [slotId]);
+            if (rows.length === 0) {
+                return null;
+            }
+            return rows[0];
+        });
+    }
+    ResetScoreEdit(conn, slotId1, slotId2, score1, score2) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql1 = `
+UPDATE grading_scores
+SET score = CASE
+  WHEN slot_id = ? THEN ?
+  WHEN slot_id = ? THEN ?
+  ELSE score
+END
+WHERE slot_id IN (?, ?)
+`;
+            yield conn.query(sql1, [
+                slotId1, score1,
+                slotId2, score2,
+                slotId1, slotId2
+            ]);
+            const sql2 = `
+UPDATE grading_slots
+SET status = 'COMPLETED'
+WHERE id IN (?, ?)
+`;
+            yield conn.query(sql2, [slotId1, slotId2]);
+        });
+    }
 }
 const gradingscoreRepo = new GradingScoreRepo();
 exports.default = gradingscoreRepo;

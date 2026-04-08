@@ -294,8 +294,8 @@ export async function findBookletQuestionStatsForBag(
       sq.label,
       sq.note       AS category,
 
-      AVG(CASE WHEN s.grader_order = 1 THEN gs.score END) AS grader1_score,
-      AVG(CASE WHEN s.grader_order = 2 THEN gs.score END) AS grader2_score,
+MAX(CASE WHEN s.grader_order = 1 THEN gs.score END) AS grader1_score,
+MAX(CASE WHEN s.grader_order = 2 THEN gs.score END) AS grader2_score,
       AVG(gs.score) AS final_score,
 
       GROUP_CONCAT(

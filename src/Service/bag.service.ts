@@ -1,4 +1,7 @@
 import { DB } from "../model/DB";
+import { Worker } from "worker_threads";
+import path from "path";
+import fs from "fs";
 import { keyService } from "./key.service";
 import userSessionsRepo from "../Repo/user-session.repo";
 import bagRepo from "../Repo/bag.repo"; // (Import Repo ที่แก้ไขแล้ว)
@@ -49,6 +52,55 @@ export class bagService {
     /**
      * [POST] สร้างถุง (Bulk)
      */
+
+    private static async runPayloadWorkerTask(task: string, options: any): Promise<Buffer> {
+        return new Promise((resolve, reject) => {
+            const isTsNode = __filename.endsWith(".ts");
+            const workerPath = path.resolve(
+                __dirname,
+                `./bag.worker${isTsNode ? ".ts" : ".js"}`
+            );
+
+            let worker: Worker;
+
+            if (isTsNode) {
+                worker = new Worker(
+                    `
+          require('ts-node/register');
+          require(require('worker_threads').workerData.__workerPath);
+        `,
+                    {
+                        eval: true,
+                        workerData: { __workerPath: workerPath, task, options },
+                    }
+                );
+            } else {
+                worker = new Worker(workerPath, { workerData: { task, options } });
+            }
+
+            worker.on("message", async (result: any) => {
+                if (result.status === "success") {
+                    try {
+                        const pdfBuffer = await fs.promises.readFile(result.filePath);
+                        await fs.promises.unlink(result.filePath).catch(() => { });
+                        resolve(pdfBuffer);
+                    } catch (err) {
+                        reject(err);
+                    }
+                } else {
+                    reject(new Error(result.message));
+                }
+            });
+
+            worker.on("error", reject);
+
+            worker.on("exit", (code) => {
+                if (code !== 0) {
+                    reject(new Error(`Worker stopped with exit code ${code}`));
+                }
+            });
+        });
+    }
     static bulkCreate = async (payload: BulkCreatePayload) => {
         const connection = await DB.getInstance().getConnection();
         try {
@@ -264,7 +316,7 @@ export class bagService {
                 } else if (booklet.session_id !== sessionId) {
                     throw new Error(`ไม่อนุญาตให้จัดข้อสอบต่างวิชา (Session) ลงในถุงเดียวกัน`);
                 }
-                
+
                 if (!sessInCamp.some(s => s.session_id === booklet.session_id)) {
                     throw new Error(`ข้อสอบที่สแกนไม่ได้อยู่ในรอบสอบปัจจุบัน`);
                 }
@@ -377,19 +429,19 @@ export class bagService {
 
             // 🛑 1️⃣ ถอดหน้ากาก (Unmask) ก่อนเพื่อเอาไปค้นหาใน DB
             const realPayloads = payload.map(qr => keyService.unmaskQrPayload(qr));
-             console.log("[CheckbookletsSubjects] unmask done", Date.now() - started, "ms");
+            console.log("[CheckbookletsSubjects] unmask done", Date.now() - started, "ms");
 
             // ==========================================
             //  เอา Parallel Decode (decryptQrPayloadBags) ออก
             // เปลี่ยนมาใช้การหาข้อมูลเล่มข้อสอบจาก Database ตรงๆ เพื่อความเป็น Blind 100%
             // ==========================================
             const existingBooklets = await bookletsRepo.findByPayloads(connection, realPayloads);
-             console.log("[CheckbookletsSubjects] findByPayloads done", Date.now() - started, "ms");
+            console.log("[CheckbookletsSubjects] findByPayloads done", Date.now() - started, "ms");
 
             if (existingBooklets.length !== realPayloads.length) {
                 throw new Error("พบ QR Code ที่ไม่ได้อยู่ในระบบ (อาจเป็นของรอบสอบอื่นหรือสแกนผิดพลาด)");
             }
-            
+
             const sessInCamp = await campaignRepo.sessioninCampaign(campaign_id, connection);
             console.log(campaign_id)
             console.log("sessInCamp:", sessInCamp);
@@ -432,7 +484,7 @@ export class bagService {
             // 3️⃣ หาเลขถุงที่แหว่งไป (แค่หาเฉยๆ ไม่สร้าง!)
             // ==========================================
             const existingBagNos = await bagRepo.getAllBagNumbersForSession(sessionId, connection);
-             console.log("[CheckbookletsSubjects] getAllBagNumbersForSession done", Date.now() - started, "ms");
+            console.log("[CheckbookletsSubjects] getAllBagNumbersForSession done", Date.now() - started, "ms");
 
             let targetBagNo = 1;
             existingBagNos.sort((a, b) => a - b);
@@ -524,6 +576,54 @@ export class bagService {
             connection.release();
         }
     }
+
+    // static async generateBagPayloadPdfByBagId(bagId: number): Promise<Buffer> {
+    //     const info = await bagRepo.findBagInfoForPayload(bagId);
+    //     const raw = await bagRepo.findBagPayloadRows(bagId);
+
+    //     const info = {
+    //         course: raw.course,
+    //         org: raw.org,
+    //         sessionText: raw.sessionText,
+    //         site: raw.site,
+    //     };
+
+    //     const bag = {
+    //         bag_no: raw[0].bag_no,
+    //         rows: raw.map((r: any) => ({
+    //             random_num: r.random_num,
+    //             qr_payload: r.qr_payload,
+    //         })),
+    //     };
+
+    //     return this.runPayloadWorkerTask("generateBagPayloadPdf", {
+    //         info,
+    //         bag,
+    //     });
+    // }
+    // static async generateBagPayloadAllPdfByCampaignId(campaignId: number): Promise<Buffer> {
+    //   const raw = await bagRepo.findAllBagPayloadRowsByCampaignId(campaignId);
+
+    //   const info = {
+    //     course: raw.course,
+    //     org: raw.org,
+    //     sessionText: raw.sessionText,
+    //     site: raw.site,
+    //   };
+
+    //   const bags = raw.bags.map((bag: any) => ({
+    //     bag_no: bag.bag_no,
+    //     rows: bag.rows.map((r: any) => ({
+    //       random_num: r.random_num,
+    //       qr_payload: r.qr_payload,
+    //     })),
+    //   }));
+
+    //   return this.runPayloadWorkerTask("generateBagPayloadAllPdf", {
+    //     info,
+    //     bags,
+    //   });
+    // }
 
 
 }

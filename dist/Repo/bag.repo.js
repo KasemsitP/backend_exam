@@ -371,6 +371,15 @@ SELECT s.name from subjects s JOIN session_subjects ss ON   ss.subject_id = s.id
             return rows.length > 0 ? { id: rows[0].id, bag_no: rows[0].bag_no } : null;
         });
     }
+    findBagPayloadRows(bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+      SELECT bb.bag_no,b.random_num , b.qr_payload FROM booklets b JOIN bags bb ON bb.id = b.bag_id where bag_id = ? 
+ORDER BY random_num ASC;`;
+            const [rows] = yield this.pool.execute(sql, [bagId]);
+            return rows;
+        });
+    }
 }
 const bagRepo = new BagRepo();
 exports.default = bagRepo;

@@ -24,6 +24,22 @@ const ranking_report_repo_1 = __importDefault(require("../Repo/ranking-report.re
 function keyOf(sessionId, subjectId, questionNo) {
     return `${sessionId}:${subjectId}:${questionNo}`;
 }
+function formatIntPdf(value) {
+    if (value == null || value === "")
+        return "";
+    const num = Number(value);
+    if (!Number.isFinite(num))
+        return "";
+    return String(Math.trunc(num));
+}
+function formatDecimalPdf(value) {
+    if (value == null || value === "")
+        return "";
+    const num = Number(value);
+    if (!Number.isFinite(num))
+        return "";
+    return Number.isInteger(num) ? String(num) : String(num);
+}
 // Logic จัดกลุ่มข้อมูลจาก DB ให้เป็นรูปแบบที่พร้อมพิมพ์
 function buildBookletBlocks(raw, questionCount, unlock) {
     var _a, _b, _c, _d;
@@ -184,10 +200,19 @@ function drawBagScorePage(doc, info, booklets, questionCount, questionLabels, un
             const s2 = (_e = qRow === null || qRow === void 0 ? void 0 : qRow.grader2Score) !== null && _e !== void 0 ? _e : null;
             const diff = s1 != null && s2 != null ? Math.abs(Number(s1) - Number(s2)) : null;
             const avg = s1 != null && s2 != null ? (Number(s1) + Number(s2)) / 2 : (_f = qRow === null || qRow === void 0 ? void 0 : qRow.finalScore) !== null && _f !== void 0 ? _f : null;
-            const vals = [s1, s2, diff, avg];
+            const vals = [
+                formatIntPdf(s1),
+                formatIntPdf(s2),
+                formatIntPdf(diff),
+                formatDecimalPdf(avg), // หรือ formatAveragePdf(avg)
+            ];
             vals.forEach((val) => {
                 pathRow = pathRow.rect(x, y, cwScore, rowH);
-                doc.text(val == null ? "" : Number(val).toFixed(1), x, y + 3 * scale, { width: cwScore, align: "center", ellipsis: true });
+                doc.text(val, x, y + 3 * scale, {
+                    width: cwScore,
+                    align: "center",
+                    ellipsis: true
+                });
                 x += cwScore;
             });
             if (avg != null)
@@ -343,13 +368,18 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
             const avg = s1 != null && s2 != null
                 ? (Number(s1) + Number(s2)) / 2
                 : (_g = qRow === null || qRow === void 0 ? void 0 : qRow.finalScore) !== null && _g !== void 0 ? _g : null;
-            const vals = [s1, s2, diff, avg];
+            const vals = [
+                formatIntPdf(s1),
+                formatIntPdf(s2),
+                formatIntPdf(diff),
+                formatDecimalPdf(avg), // หรือ formatAveragePdf(avg)
+            ];
             vals.forEach((val) => {
                 pathRow = pathRow.rect(x, y, cwScore, rowH);
-                doc.text(val == null ? "" : Number(val).toFixed(1), x, y + 3 * scale, {
+                doc.text(val, x, y + 3 * scale, {
                     width: cwScore,
                     align: "center",
-                    ellipsis: true,
+                    ellipsis: true
                 });
                 x += cwScore;
             });

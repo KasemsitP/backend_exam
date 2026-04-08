@@ -40,6 +40,7 @@ import seatplanRouter from './Routes/router.seatplan'
 import decryptRouter from './Routes/router.decrypt'
 import gradingrecheck from './Routes/router.graderrecheck'
 import settingsRouter from './Routes/router.settings';
+import gradingscorelogRouter from './Routes/router.gradingscorelog';
 
 dotenv.config()
 export const app = express();
@@ -248,6 +249,8 @@ app.use("/api", seatplanRouter)
 app.use("/api", decryptRouter)
 app.use("/api", gradingrecheck)
 app.use("/api/", settingsRouter);
+app.use("/api/", gradingscorelogRouter);
+
 
 app.get("/test", isAuthenticated, async (req: Request, res: Response) => {
   try {
