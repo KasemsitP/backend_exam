@@ -14,10 +14,13 @@ type BaseSheetInfo = {
   org?: string;
   sessionText?: string;
   site?: string;
+  start_num?: string;
+  end_num?: string;
 };
 
-type BagSheetData = {
+type BagPayloadPdfData = {
   bag_no: string | number;
+  info: BaseSheetInfo;
   rows: PayloadRow[];
 };
 
@@ -29,8 +32,8 @@ type WorkerPayload = {
   task: WorkerTask;
   options: {
     info?: BaseSheetInfo;
-    bag?: BagSheetData;
-    bags?: BagSheetData[];
+    bag?: BagPayloadPdfData;
+    bags?: BagPayloadPdfData[];
     outputPath?: string;
   };
 };
@@ -56,11 +59,17 @@ const SHEET = {
   outerHeight: 805,
 };
 
+const LAYOUT = {
+  contentLeft: 40,
+  contentRight: 40,
+  headerTop: 30,
+  footerHeight: 48,
+  footerBottomGap: 14,
+  sectionGap: 10,
+};
+
 const TABLE = {
-  x: 40,
-  width: 500,
-  headerHeight: 24,
-  rowHeight: 22,
+  headerHeight: 22,
   rowsPerPage: 30,
 };
 
@@ -87,135 +96,183 @@ function drawOuterFrame(doc: PDFKit.PDFDocument) {
     .stroke();
 }
 
+function getTableRowHeight(doc: PDFKit.PDFDocument, tableStartY: number) {
+  const footerTopY =
+    SHEET.outerY + SHEET.outerHeight - LAYOUT.footerHeight - LAYOUT.footerBottomGap;
+
+  const availableHeight = footerTopY - tableStartY;
+  const rowHeight =
+    (availableHeight - TABLE.headerHeight) / TABLE.rowsPerPage;
+
+  return {
+    footerTopY,
+    availableHeight,
+    rowHeight,
+    tableHeight: TABLE.headerHeight + rowHeight * TABLE.rowsPerPage,
+  };
+}
+
 function drawHeader(
   doc: PDFKit.PDFDocument,
   info: BaseSheetInfo,
   bagNo: string | number
-) {
-  const left = 52;
-  let y = 30;
+): number {
+  const pageWidth = doc.page.width;
+  const marginX = 52;
+  const labelX = marginX;
+  const valueX = marginX + 80;
+  let y = LAYOUT.headerTop;
 
-  doc.font("SarabunBold").fontSize(16);
+  doc.font("SarabunBold").fontSize(22);
   doc.text(`ถุงที่ ${bagNo}`, 0, y, { align: "right" });
 
-  y += 18;
+  y += 20;
 
-  doc.font("Sarabun").fontSize(14);
-  doc.text("ใบกรอกคะแนนวิชา", left, y);
-  doc.text(
-    "........................................................................",
-    left + 72,
-    y
-  );
+  doc.font("SarabunBold").fontSize(18);
+  doc.text("ใบสรุปข้อมูลถุงจัดเก็บข้อสอบ", marginX, y, {
+    width: doc.page.width - marginX * 2,
+    align: "center",
+  });
 
-  y += 18;
-  doc.text("ชื่อ", left, y);
-  doc.text("............................", left + 18, y);
-  doc.text("เลขรหัส", left + 120, y);
-  doc.text("............................", left + 160, y);
-  doc.text("ถึง", left + 285, y);
-  doc.text("............................", left + 300, y);
+  y += 30;
+
+  doc.font("Sarabun").fontSize(15);
+  doc.text("รอบสอบ :", labelX, y);
+  doc.text(info.org ?? "-", valueX, y);
+
 
   y += 18;
-  doc.text("ชื่อผู้ตรวจ", left, y);
-  doc.text(
-    "........................................................................",
-    left + 42,
-    y
-  );
+  
+  doc.text("วิชา :", labelX, y);
+  doc.text(info.course ?? "-", valueX, y);
+
+
 
   y += 18;
-  doc.text("ผู้รวบรวมชุดที่", left + 145, y, { width: 120, align: "center" });
-  doc.text("................................", left + 235, y);
 
-  const metaParts: string[] = [];
-  if (info.course) metaParts.push(`วิชา: ${info.course}`);
-  if (info.org) metaParts.push(`${info.org}`);
-  if (info.sessionText) metaParts.push(info.sessionText);
-  if (info.site) metaParts.push(`ณ ${info.site}`);
+  const startText = info.start_num ?? "-";
+  const toText = "ถึง";
+  const endText = info.end_num ?? "-";
 
-  if (metaParts.length > 0) {
-    y += 16;
-    doc.font("Sarabun").fontSize(10).fillColor("#666666");
-    doc.text(metaParts.join("   |   "), left, y, {
-      width: 460,
-      align: "center",
-    });
-    doc.fillColor("black");
+  doc.text("ลำดับจัดเก็บ :", labelX, y);
+
+  let x = valueX;
+
+  // start
+  doc.text(startText, x, y);
+  x += doc.widthOfString(startText) + 10; // gap เล็ก ๆ
+
+  // ถึง
+  doc.text(toText, x, y);
+  x += doc.widthOfString(toText) + 10;
+
+  // end
+  doc.text(endText, x, y);
+
+  if (info.site) {
+    y += 18;
+    doc.text("สถานที่ :", labelX, y);
+    doc.text(info.site, valueX, y);
   }
+
+  // const metaParts: string[] = [];
+  // if (info.org) metaParts.push(info.org);
+  // if (info.sessionText) metaParts.push(info.sessionText);
+  // if (info.site) metaParts.push(`ณ ${info.site}`);
+
+  // if (metaParts.length > 0) {
+  //   y += 20;
+  //   doc.font("Sarabun").fontSize(10).fillColor("#666666");
+  //   doc.text(metaParts.join("   |   "), marginX, y, {
+  //     width: pageWidth - marginX * 2,
+  //     align: "center",
+  //   });
+  //   doc.fillColor("black");
+  // }
+
+  return y + LAYOUT.sectionGap + 18;
 }
 
 function drawFooter(doc: PDFKit.PDFDocument) {
-  const y = 785;
+  const footerTopY =
+    SHEET.outerY + SHEET.outerHeight - LAYOUT.footerHeight - LAYOUT.footerBottomGap;
 
-  doc.font("Sarabun").fontSize(14);
-  doc.text("(.................................................................)", 0, y, {
-    align: "center",
-  });
-  doc.text("ลายมือชื่อผู้ตรวจ", 0, y + 14, {
-    align: "center",
-  });
+  // doc.font("Sarabun").fontSize(14);
+  // doc.text("(.................................................................)", 0, footerTopY, {
+  //   align: "center",
+  // });
+  // doc.text("ลายมือชื่อผู้ตรวจ", 0, footerTopY + 14, {
+  //   align: "center",
+  // });
 }
 
-function drawTable(doc: PDFKit.PDFDocument, rows: PayloadRow[]) {
-  const tableX = TABLE.x;
-  const startY = 132;
-  const tableWidth = TABLE.width;
+function drawTable(
+  doc: PDFKit.PDFDocument,
+  rows: PayloadRow[],
+  startY: number
+) {
+  const tableX = LAYOUT.contentLeft;
+  const tableWidth = doc.page.width - LAYOUT.contentLeft - LAYOUT.contentRight;
 
-  const col1 = 95;
-  const col2 = tableWidth - col1;
+  const colNoWidth = 70;
+  const colPayloadWidth = tableWidth - colNoWidth;
 
   const x1 = tableX;
-  const x2 = x1 + col1;
+  const x2 = x1 + colNoWidth;
   const x3 = x1 + tableWidth;
 
-  const tableHeight = TABLE.headerHeight + TABLE.rowsPerPage * TABLE.rowHeight;
+  const { rowHeight, tableHeight } = getTableRowHeight(doc, startY);
 
   doc.lineWidth(0.7).strokeColor("black").fillColor("black");
 
+  // Outer border
   doc.rect(x1, startY, tableWidth, tableHeight).stroke();
+
+  // Vertical separator
   doc.moveTo(x2, startY).lineTo(x2, startY + tableHeight).stroke();
 
+  // Header separator
   doc
     .moveTo(x1, startY + TABLE.headerHeight)
     .lineTo(x3, startY + TABLE.headerHeight)
     .stroke();
 
+  // Row lines
   for (let i = 1; i <= TABLE.rowsPerPage; i++) {
-    const y = startY + TABLE.headerHeight + i * TABLE.rowHeight;
+    const y = startY + TABLE.headerHeight + i * rowHeight;
     doc.moveTo(x1, y).lineTo(x3, y).stroke();
   }
 
+  // Header text
   doc.font("SarabunBold").fontSize(13);
-  doc.text("เลขที่", x1, startY + 5, {
-    width: col1,
+  doc.text("เลขที่", x1, startY + 4, {
+    width: colNoWidth,
     align: "center",
   });
-  doc.text("payload", x2, startY + 5, {
-    width: col2,
+  doc.text("Payload", x2, startY + 4, {
+    width: colPayloadWidth,
     align: "center",
   });
 
-  doc.font("Sarabun").fontSize(11);
+  // Body text
+  doc.font("Sarabun").fontSize(10);
 
   for (let i = 0; i < TABLE.rowsPerPage; i++) {
     const row = rows[i];
     if (!row) continue;
 
-    const y = startY + TABLE.headerHeight + i * TABLE.rowHeight + 4;
+    const y = startY + TABLE.headerHeight + i * rowHeight + 3;
 
-    const displayPayload =
-      String(row.qr_payload ?? "").length > 85
-        ? String(row.qr_payload).slice(0, 85) + "..."
-        : String(row.qr_payload ?? "");
+    const payloadText = String(row.qr_payload ?? "");
 
-    doc.text(String(row.random_num ?? ""), x1 + 4, y, {
-      width: col1 - 8,
+    doc.text(String(row.random_num ?? ""), x1 + 3, y, {
+      width: colNoWidth - 6,
       align: "center",
+      lineBreak: false,
     });
 
-    doc.text(displayPayload, x2 + 6, y, {
-      width: col2 - 12,
+    doc.text(payloadText, x2 + 5, y, {
+      width: colPayloadWidth - 10,
       align: "left",
       lineBreak: false,
       ellipsis: true,
@@ -225,17 +282,20 @@ function drawTable(doc: PDFKit.PDFDocument, rows: PayloadRow[]) {
 
 function addBagPages(
   doc: PDFKit.PDFDocument,
-  info: BaseSheetInfo,
-  bag: BagSheetData
+  bag: BagPayloadPdfData
 ) {
   const pages = chunk(bag.rows, TABLE.rowsPerPage);
   const safePages = pages.length > 0 ? pages : [[]];
 
   for (const pageRows of safePages) {
     doc.addPage();
-    drawOuterFrame(doc);
-    drawHeader(doc, info, bag.bag_no);
-    drawTable(doc, pageRows);
+
+    //drawOuterFrame(doc);
+
+    const tableStartY = drawHeader(doc, bag.info, bag.bag_no);
+
+    drawTable(doc, pageRows, tableStartY);
+
     drawFooter(doc);
   }
 }
@@ -271,26 +331,24 @@ async function writePdf(
 }
 
 async function generateBagPayloadPdf(options: {
-  info?: BaseSheetInfo;
-  bag: BagSheetData;
+  bag: BagPayloadPdfData;
   outputPath?: string;
 }): Promise<string> {
-  const { info = {}, bag } = options;
+  const { bag } = options;
   const outputPath =
     options.outputPath ||
     path.join(os.tmpdir(), `payload_bag_${bag.bag_no}_${Date.now()}.pdf`);
 
   return writePdf(outputPath, (doc) => {
-    addBagPages(doc, info, bag);
+    addBagPages(doc, bag);
   });
 }
 
 async function generateBagPayloadAllPdf(options: {
-  info?: BaseSheetInfo;
-  bags: BagSheetData[];
+  bags: BagPayloadPdfData[];
   outputPath?: string;
 }): Promise<string> {
-  const { info = {}, bags } = options;
+  const { bags } = options;
   const outputPath =
     options.outputPath ||
     path.join(os.tmpdir(), `payload_all_${Date.now()}.pdf`);
@@ -298,15 +356,15 @@ async function generateBagPayloadAllPdf(options: {
   return writePdf(outputPath, (doc) => {
     if (!bags || bags.length === 0) {
       doc.addPage();
-      drawOuterFrame(doc);
-      drawHeader(doc, info, "-");
-      drawTable(doc, []);
+    //  drawOuterFrame(doc);
+      const tableStartY = drawHeader(doc, {}, "-");
+      drawTable(doc, [], tableStartY);
       drawFooter(doc);
       return;
     }
 
     for (const bag of bags) {
-      addBagPages(doc, info, bag);
+      addBagPages(doc, bag);
     }
   });
 }
@@ -319,32 +377,30 @@ async function runWorkerTask() {
 
     let filePath: string;
 
-    switch (task) {
-      case "generateBagPayloadPdf":
-        if (!options?.bag) {
-          throw new Error("generateBagPayloadPdf ต้องมี options.bag");
-        }
-        filePath = await generateBagPayloadPdf({
-          info: options.info,
-          bag: options.bag,
-          outputPath: options.outputPath,
-        });
-        break;
-
-      case "generateBagPayloadAllPdf":
-        if (!options?.bags) {
-          throw new Error("generateBagPayloadAllPdf ต้องมี options.bags");
-        }
-        filePath = await generateBagPayloadAllPdf({
-          info: options.info,
-          bags: options.bags,
-          outputPath: options.outputPath,
-        });
-        break;
-
-      default:
-        throw new Error(`Unknown task: ${task}`);
+switch (task) {
+  case "generateBagPayloadPdf":
+    if (!options?.bag) {
+      throw new Error("generateBagPayloadPdf ต้องมี options.bag");
     }
+    filePath = await generateBagPayloadPdf({
+      bag: options.bag,
+      outputPath: options.outputPath,
+    });
+    break;
+
+  case "generateBagPayloadAllPdf":
+    if (!options?.bags) {
+      throw new Error("generateBagPayloadAllPdf ต้องมี options.bags");
+    }
+    filePath = await generateBagPayloadAllPdf({
+      bags: options.bags,
+      outputPath: options.outputPath,
+    });
+    break;
+
+  default:
+    throw new Error(`Unknown task: ${task}`);
+}
 
     console.timeEnd("⏱️ [Payload Worker] Total Task Time");
     parentPort?.postMessage({ status: "success", filePath });

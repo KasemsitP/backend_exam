@@ -53,6 +53,80 @@ export class bagController {
     }
   }
 
+ static createPDF = async (req: Request, res: Response) => {
+    try {
+      const { bag_id } = req.params;
+      if (!bag_id) {
+        return res
+          .status(400)
+          .json({ message: "Invalid Bag ID" });
+      }
+
+      // const course = String(req.query.course ?? "วิชาไม่ระบุ");
+      // const org = String(req.query.org ?? "");
+      // const sessionText = String(req.query.sessionText ?? "");
+
+      const pdfBuffer = await bagService.generateBagPayloadPdfByBagId(Number(bag_id));
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="signsheet_${bag_id}.pdf"`
+      );
+      res.send(pdfBuffer);
+    } catch (err) {
+      console.error("generate sign sheet pdf error:", err);
+      res.status(500).json({ message: "ไม่สามารถสร้าง PDF ได้" });
+    }
+  };
+
+static createPDFByCampaignId = async (req: Request, res: Response) => {
+  try {
+    const campaignId = req.query.campaign_id
+      ? Number(req.query.campaign_id)
+      : null;
+
+    const sessionId = req.query.session_id
+      ? Number(req.query.session_id)
+      : null;
+
+    if (!campaignId && !sessionId) {
+      return res.status(400).json({
+        message: "ต้องส่ง campaign_id หรือ session_id",
+      });
+    }
+    if (campaignId && sessionId) {
+      return res.status(400).json({
+        message: "ส่งได้แค่ campaign_id หรือ session_id อย่างใดอย่างหนึ่ง",
+      });
+    }
+
+    let pdfBuffer: Buffer;
+    let filename: string;
+
+    if (campaignId) {
+      pdfBuffer =
+        await bagService.generateBagPayloadAllPdfByCampaignId(campaignId);
+      filename = `signsheet_campaign_${campaignId}.pdf`;
+    } else {
+      pdfBuffer =
+        await bagService.generateBagPayloadAllPdfBySessionId(sessionId!);
+      filename = `signsheet_session_${sessionId}.pdf`;
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error("generate sign sheet pdf error:", err);
+    return res.status(500).json({ message: "ไม่สามารถสร้าง PDF ได้" });
+  }
+};
+
 
 
   // static InsertBooklets = async (req: Request, res: Response) => {

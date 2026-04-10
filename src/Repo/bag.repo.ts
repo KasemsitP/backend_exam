@@ -36,6 +36,30 @@ export interface BagScannedCountResult extends RowDataPacket {
   scanned_count: number;
 }
 
+export interface BagSessionDetail extends RowDataPacket {
+  bag_id: number;
+  bag_no: string;
+
+  session_id: number;
+  session_code: string;
+  exam_date: string; // หรือ Date
+
+  campaign_id: number;
+  campaign_name: string;
+  campaign_size: string;
+
+  site : string
+
+  subject_id: number;
+  subject_code: string;
+  subject_name: string;
+
+  start_at: string; // หรือ Date
+  end_at: string;   // หรือ Date
+  question_count: number;
+  order_no: number;
+}
+
 
 class BagRepo {
 
@@ -416,6 +440,123 @@ ORDER BY random_num ASC;`;
     const [rows] = await this.pool.execute(sql, [bagId]);
     return rows as any[];
 }
+
+async findBagPayloadRowsWithSubject(bagId: number): Promise<BagSessionDetail[]> {
+  const sql = `
+SELECT
+  ba.id AS bag_id,
+  ba.bag_no,
+  s.id AS session_id,
+  s.session_code,
+  s.exam_date,
+  es.id AS campaign_id,
+  es.campaign_size,
+  es.site,
+  es.name AS campaign_name,
+  sub.id AS subject_id,
+  sub.code AS subject_code,
+  sub.name AS subject_name,
+  ss.start_at,
+  ss.end_at,
+  ss.question_count,
+  ss.order_no
+FROM bags ba
+JOIN sessions s
+  ON s.id = ba.session_id
+JOIN exam_campaigns es
+  ON es.id = s.campaign_id
+JOIN session_subjects ss
+  ON ss.session_id = s.id
+JOIN subjects sub
+  ON sub.id = ss.subject_id
+WHERE ba.id = ?;`
+    const [rows] = await this.pool.execute<BagSessionDetail[]>(sql, [bagId]);
+    return rows as BagSessionDetail[];
+}
+
+async findAllBagPayloadRowsByCampaignId(campaignId: number) {
+    const connection = await DB.getInstance().getConnection();
+    try {
+        const [rows] = await connection.query(
+            `
+            SELECT
+                b.id AS bag_id,
+                b.bag_no,
+                bk.random_num,
+                bk.qr_payload,
+                s.id AS session_id,
+                s.session_code,
+                sub.name AS subject_name,
+                CONCAT(ec.campaign_size, ' ', ec.year_be) AS campaign_name,
+                ec.site,
+                CONCAT('วันสอบที่ ', s.day_no, ' / ', sub.name) AS session_label
+            FROM bags b
+            INNER JOIN sessions s
+                ON s.id = b.session_id
+            INNER JOIN exam_campaigns ec
+                ON ec.id = s.campaign_id
+            INNER JOIN booklets bk
+                ON bk.bag_id = b.id
+            INNER JOIN session_subjects ss
+                ON ss.session_id = s.id
+            INNER JOIN subjects sub
+                ON sub.id = ss.subject_id
+            WHERE ec.id = ?
+            ORDER BY b.bag_no ASC, bk.random_num ASC
+            `,
+            [campaignId]
+        );
+
+        return rows as any[];
+    } finally {
+        connection.release();
+    }
+}
+
+async findAllBagPayloadRowsBySession(sessionId: number) {
+    const connection = await DB.getInstance().getConnection();
+    try {
+        const [rows] = await connection.query(
+            `
+            SELECT
+                b.id AS bag_id,
+                b.bag_no,
+                bk.random_num,
+                bk.qr_payload,
+                s.id AS session_id,
+                s.session_code,
+                sub.name AS subject_name,
+                CONCAT(ec.campaign_size, ' ', ec.year_be) AS campaign_name,
+                ec.site,
+                CONCAT('วันสอบที่ ', s.day_no, ' / ', sub.name) AS session_label
+            FROM bags b
+            INNER JOIN sessions s
+                ON s.id = b.session_id
+            INNER JOIN exam_campaigns ec
+                ON ec.id = s.campaign_id
+            INNER JOIN booklets bk
+                ON bk.bag_id = b.id
+            INNER JOIN session_subjects ss
+                ON ss.session_id = s.id
+            INNER JOIN subjects sub
+                ON sub.id = ss.subject_id
+            WHERE s.id = ?
+            ORDER BY b.bag_no ASC, bk.random_num ASC
+            `,
+            [sessionId]
+        );
+
+        return rows as any[];
+    } finally {
+        connection.release();
+    }
+
+
+}
+
+
+
+
 }
 
 const bagRepo = new BagRepo();

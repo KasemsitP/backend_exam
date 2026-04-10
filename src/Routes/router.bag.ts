@@ -20,4 +20,7 @@ bagRouter.post("/bags/create-insert", bagController.CreateBagAndBooklets);
 bagRouter.post("/bags/check-subjects", bagController.CheckSubjectBooklets);
 
 bagRouter.get("/bags/scanned/:campaignId",bagController.getBookScannedCount)
+
+bagRouter.get("/bags/createpdf/:bag_id",bagController.createPDF)
+bagRouter.get("/bags/createpdfAll",bagController.createPDFByCampaignId)
 export default bagRouter;
