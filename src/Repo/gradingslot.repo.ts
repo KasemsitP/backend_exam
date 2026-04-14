@@ -196,18 +196,20 @@ WHERE gs.booklet_id = ?
   ) {
     const [rows] = await conn.query(
       `
-      SELECT 
+SELECT 
         ga.grader_id,
         ga.session_id,
         ga.subject_id,
         ga.subject_question_id,
         sq.question_no,
-        sq.label AS question_label
+        sq.label AS question_label,
+        s.name as subject_name
       FROM grader_assignments ga
       JOIN subject_questions sq
         ON ga.subject_question_id = sq.id
+      JOIN subjects s ON s.id = sq.subject_id
       WHERE ga.grader_id = ?
-        AND ga.session_id = ?
+        AND ga.session_id = ?;
     `,
       [graderId, sessionId]
     );
@@ -243,7 +245,186 @@ WHERE gs.booklet_id = ?
     ]);
     return rows[0] ?? null;
   }
+async countExpectedSlotsByBagId(
+  conn: PoolConnection,
+  bagId: number
+): Promise<number> {
+  const sql = `
+    SELECT COUNT(gs.id) AS total
+    FROM booklets b
+    JOIN grading_slots gs
+      ON gs.booklet_id = b.id
+    WHERE b.bag_id = ?
+  `;
 
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
+  return Number(rows[0]?.total ?? 0);
+}
+async markSlotsCompletedByBagId(
+  conn: PoolConnection,
+  bagId: number
+): Promise<void> {
+  const sql = `
+    UPDATE grading_slots gs
+    JOIN booklets b
+      ON b.id = gs.booklet_id
+    JOIN grading_score_drafts gsd
+      ON gsd.slot_id = gs.id
+    SET gs.status = 'COMPLETED'
+    WHERE b.bag_id = ?
+      AND gsd.status = 'DRAFT'
+  `;
+
+  await conn.query(sql, [bagId]);
+}
+async validateSlotsForConfirm(
+  conn: PoolConnection,
+  bagId: number,
+  graderId: number,
+  slotIds: number[]
+): Promise<boolean> {
+  if (!slotIds.length) return false;
+
+  const placeholders = slotIds.map(() => "?").join(",");
+
+  const sql = `
+    SELECT COUNT(*) AS total
+    FROM grading_slots gs
+    JOIN booklets bk
+      ON bk.id = gs.booklet_id
+    WHERE gs.id IN (${placeholders})
+      AND gs.grader_id = ?
+      AND bk.bag_id = ?
+  `;
+
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [
+    ...slotIds,
+    graderId,
+    bagId,
+  ]);
+
+  return Number(rows[0]?.total ?? 0) === slotIds.length;
+}
+async insertScoresFromDraftsByBagIdAndGraderId(
+  conn: PoolConnection,
+  bagId: number,
+  graderId: number
+): Promise<void> {
+  const sql = `
+    INSERT INTO grading_scores (
+      slot_id,
+      score,
+      entered_by,
+      entered_at
+    )
+    SELECT
+      gsd.slot_id,
+      gsd.score,
+      gsd.grader_id,
+      NOW()
+    FROM grading_score_drafts gsd
+    WHERE gsd.bag_id = ?
+      AND gsd.grader_id = ?
+      AND gsd.status = 'DRAFT'
+  `;
+
+  await conn.query(sql, [bagId, graderId]);
+}
+async markSlotsCompletedByBagIdAndGraderId(
+  conn: PoolConnection,
+  bagId: number,
+  graderId: number
+): Promise<void> {
+  const sql = `
+    UPDATE grading_slots gs
+    JOIN booklets bk
+      ON bk.id = gs.booklet_id
+    SET gs.status = 'COMPLETED'
+    WHERE bk.bag_id = ?
+      AND gs.grader_id = ?
+      AND gs.id IN (
+        SELECT gsd.slot_id
+        FROM grading_score_drafts gsd
+        WHERE gsd.bag_id = ?
+          AND gsd.grader_id = ?
+          AND gsd.status = 'DRAFT'
+      )
+  `;
+
+  await conn.query(sql, [bagId, graderId, bagId, graderId]);
+}
+
+async findActiveLockByGraderId(
+  conn: PoolConnection,
+  graderId: number
+): Promise<any | null> {
+  const sql = `
+    SELECT
+      id,
+      grader_id,
+      campaign_id,
+      bag_id,
+      question_no,
+      status,
+      locked_at
+    FROM grader_work_locks
+    WHERE grader_id = ?
+      AND status = 'ACTIVE'
+    LIMIT 1
+    FOR UPDATE
+  `;
+
+  const [rows] = await conn.query<any[]>(sql, [graderId]);
+  return rows[0] || null;
+}
+async createLock(
+  conn: PoolConnection,
+  params: {
+    graderId: number;
+    campaignId: number;
+    bagId: number;
+    questionNo: number;
+    createdBy?: number | null;
+  }
+): Promise<number> {
+  const sql = `
+    INSERT INTO grader_work_locks (
+      grader_id,
+      campaign_id,
+      bag_id,
+      question_no,
+      status,
+      locked_at,
+      created_by
+    )
+    VALUES (?, ?, ?, ?, 'ACTIVE', NOW(), ?)
+  `;
+
+  const [result] = await conn.query<ResultSetHeader>(sql, [
+    params.graderId,
+    params.campaignId,
+    params.bagId,
+    params.questionNo,
+    params.createdBy ?? null,
+  ]);
+
+  return result.insertId;
+}
+async releaseActiveLockByGraderId(
+  conn: PoolConnection,
+  graderId: number
+): Promise<void> {
+  const sql = `
+    UPDATE grader_work_locks
+    SET
+      status = 'RELEASED',
+      released_at = NOW()
+    WHERE grader_id = ?
+      AND status = 'ACTIVE'
+  `;
+
+  await conn.query(sql, [graderId]);
+}
 
 }
 

@@ -827,6 +827,70 @@ WHERE id IN (?, ?)
 
 await conn.query(sql2, [slotId1, slotId2])
 }
+
+async existsScoreBySlotId(
+  conn: PoolConnection,
+  slotId: number
+): Promise<boolean> {
+  const sql = `
+    SELECT 1
+    FROM grading_scores
+    WHERE slot_id = ?
+    LIMIT 1
+  `;
+
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [slotId]);
+  return rows.length > 0;
+}
+async insertScoresFromDraftsByBagId(
+  conn: PoolConnection,
+  bagId: number
+): Promise<void> {
+  const sql = `
+    INSERT INTO grading_scores (
+      slot_id,
+      score,
+      entered_by,
+      entered_at
+    )
+    SELECT
+      gsd.slot_id,
+      gsd.score,
+      gsd.grader_id,
+      NOW()
+    FROM grading_score_drafts gsd
+    WHERE gsd.bag_id = ?
+      AND gsd.status = 'DRAFT'
+  `;
+
+  await conn.query(sql, [bagId]);
+}
+    async insertScoresFromDraftsByBagIdAndGraderId(
+  conn: PoolConnection,
+  bagId: number,
+  graderId: number
+): Promise<void> {
+  const sql = `
+    INSERT INTO grading_scores (
+      slot_id,
+      score,
+      entered_by,
+      entered_at
+    )
+    SELECT
+      gsd.slot_id,
+      gsd.score,
+      gsd.grader_id,
+      NOW()
+    FROM grading_score_drafts gsd
+    WHERE gsd.bag_id = ?
+      AND gsd.grader_id = ?
+      AND gsd.status = 'DRAFT'
+  `;
+
+  await conn.query(sql, [bagId, graderId]);
+}
+
 }
 
 const gradingscoreRepo = new GradingScoreRepo();

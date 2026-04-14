@@ -1,6 +1,7 @@
 // src/Controller/grader.controller.ts
 import { Request, Response } from "express";
 import { graderService } from "../Service/grader.service";
+import { GraderBagReportService } from "../Service/graderbag-report.service";
 
 export class graderController {
   static getByCampaignId = async (req: Request, res: Response) => {
@@ -49,6 +50,53 @@ export class graderController {
         .send({ message: error.message ?? "Server error" });
     }
   }
+static getConfirmedBags = async (req: Request, res: Response) => {
+  try {
+    const campaignId = Number(req.params.campaignId);
+    const graderId = Number(req.params.graderId);
 
-  // create/update/delete เหมือนเดิม
+    if (!campaignId || !graderId) {
+      return res.status(400).json({ message: "ข้อมูลไม่ถูกต้อง" });
+    }
+
+    const rows = await graderService.getBagFinished(
+      campaignId,
+      graderId
+    );
+
+    return res.status(200).json(rows);
+  } catch (error: any) {
+    return res.status(500).json({
+      message: error.message || "โหลดข้อมูลไม่สำเร็จ",
+    });
+  }
+}
+  static async printBagScorePayloadPdf(req: Request, res: Response) {
+    try {
+      const bagId = Number(req.params.bagId);
+      const questionNo = Number(req.params.questionNo);
+      const graderId = Number(req.params.graderId);
+
+      console.log("HIT printBagScorePayloadPdf", { bagId, questionNo, graderId });
+      if (!bagId || !questionNo || !graderId) {
+        return res.status(400).json({
+          message: "bagId หรือ questionNo หรือ graderId ไม่ถูกต้อง",
+        });
+      }
+
+      const pdfBuffer = await GraderBagReportService.generateBagScorePayloadPdf(bagId, questionNo,graderId);
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="bag_${bagId}_question_${questionNo}_score_payload.pdf"`
+      );
+      
+      return res.send(pdfBuffer);
+    } catch (error: any) {
+      return res.status(500).json({
+        message: error.message || "ไม่สามารถสร้างรายงาน PDF ได้",
+      });
+    }
+  }
 }

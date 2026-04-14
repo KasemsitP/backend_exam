@@ -4,6 +4,7 @@ import gradingslotRepo from "../Repo/gradingslot.repo";
 import bookletsRepo from "../Repo/booklets.repo"; // 👈 เพิ่ม import นี้เพื่อหาข้อมูลเล่มข้อสอบ
 import { keyService } from "./key.service";
 import { PoolConnection } from "mysql2/promise";
+import gradingscoredraftRepo from "../Repo/gradingscoredraft.repo";
 
 interface CreateSlotFromQrPayload {
   qrPayload: string;
@@ -19,6 +20,36 @@ interface AllocateSlotParams {
   graderId: number;
 }
 
+interface CreateSlotFromQrPayload {
+  qrPayload: string;
+  campaignId: number;
+  graderId: number;
+  questionNo: number;
+}
+
+interface AllocateSlotParams {
+  bookletId: number;
+  subjectId: number;
+  questionNo: number;
+  graderId: number;
+}
+
+type PreviewStartResult = {
+  canStart: boolean;
+  bagId: number;
+  bagNo: number;
+  bookletId: number;
+  random_num: string | number;
+  examCode: string | number;
+  subjectId: number;
+  subjectName: string;
+  questionNo: number;
+  questionLabel?: string | null;
+  graderId: number;
+  totalBooklets: number;
+  message: string;
+};
+
 export class gradingService {
   static async createSlotFromQr(
     payload: CreateSlotFromQrPayload
@@ -27,12 +58,12 @@ export class gradingService {
     graderOrder: number;
     status: string;
     bookletId: number;
-    examCode: string; 
+    examCode: string;
     subjectId: number;
     questionNo: number;
-    bagId : number;
-    bagNo : number;
-    random_num : number;
+    bagId: number;
+    bagNo: number;
+    random_num: number;
   }> {
     const { campaignId, graderId, questionNo } = payload;
 
@@ -48,9 +79,19 @@ export class gradingService {
       if (!bookletRow) {
         throw new Error("ไม่พบเล่มข้อสอบนี้ในระบบ หรืออาจสแกนผิด");
       }
-      if(bookletRow.bag_no === null || bookletRow.bag_id === null){
+      if (bookletRow.bag_no === null || bookletRow.bag_id === null) {
         throw new Error("เล่มข้อสอบนี้ยังไม่ถูกจัดลงถุง ไม่สามารถสแกนได้");
-       }
+      }
+      const activeBag = await gradingscoredraftRepo.findActiveBagByGraderId(
+        connection,
+        graderId
+      );
+
+      if (activeBag && activeBag.bag_id !== Number(bookletRow.bag_id)) {
+        throw new Error(
+          `คุณกำลังตรวจถุงที่ ${activeBag.bag_no} อยู่ กรุณาตรวจถุงเดิมให้เสร็จก่อน`
+        );
+      }
 
       // 2)  ได้ session_id มาจากตัวกระดาษคำตอบเลย
       const sid = bookletRow.session_id;
@@ -62,7 +103,7 @@ export class gradingService {
           graderId,
           sid
         );
-      
+
       if (!assignment || assignment.length === 0) {
         throw new Error(
           "ผู้ตรวจคนนี้ไม่ได้ถูกมอบหมายให้ตรวจข้อสอบในรอบนี้"
@@ -78,11 +119,41 @@ export class gradingService {
         throw new Error("ข้อที่เลือกไม่ได้ถูกมอบหมายให้คุณตรวจ");
       }
 
+      const activeLock = await gradingslotRepo.findActiveLockByGraderId(
+        connection,
+        graderId
+      );
+
+      if (!activeLock) {
+        await gradingslotRepo.createLock(connection, {
+          graderId,
+          campaignId,
+          bagId: Number(bookletRow.bag_id),
+          questionNo: Number(questionNo),
+          createdBy: null,
+        });
+      } else {
+        const sameBag = Number(activeLock.bag_id) === Number(bookletRow.bag_id);
+        const sameQuestion = Number(activeLock.question_no) === Number(questionNo);
+
+        if (!sameBag) {
+          throw new Error(
+            `คุณกำลังตรวจถุง ${activeLock.bag_id} อยู่ กรุณาตรวจถุงเดิมให้เสร็จก่อน`
+          );
+        }
+
+        if (!sameQuestion) {
+          throw new Error(
+            `คุณกำลังตรวจข้อ ${activeLock.question_no} อยู่ กรุณาตรวจข้อนี้ให้เสร็จก่อน`
+          );
+        }
+      }
+
       // 4) จอง slot ตามวิชากับข้อที่ assign ไว้
       const slot = await gradingService.allocateSlotForQuestion(
         {
           bookletId: bookletRow.id, // ใช้ id จาก booklets
-          subjectId :  question.subject_id,
+          subjectId: question.subject_id,
           questionNo: question.question_no,
           graderId,
         },
@@ -96,12 +167,12 @@ export class gradingService {
         graderOrder: slot.graderOrder,
         status: slot.status,
         bookletId: bookletRow.id,
-        examCode: bookletRow.random_num , // ส่งเลขสุ่มกลับไป
-        subjectId : question.subject_id,
+        examCode: bookletRow.random_num, // ส่งเลขสุ่มกลับไป
+        subjectId: question.subject_id,
         questionNo,
-        bagId : bookletRow.bag_id ,
-        bagNo : bookletRow.bag_no ,
-        random_num : bookletRow.random_num 
+        bagId: bookletRow.bag_id,
+        bagNo: bookletRow.bag_no,
+        random_num: bookletRow.random_num
       };
     } catch (err) {
       await connection.rollback();
@@ -130,7 +201,7 @@ export class gradingService {
 
     try {
       console.log(bookletId, subjectId, questionNo, graderId);
-      const unscoredSlot = await gradingslotRepo.findUnscoredSlotForGrader(
+      const unscoredSlot = await gradingscoredraftRepo.findUnscoredSlotForGrader(
         connection,
         bookletId,
         subjectId,
@@ -214,4 +285,211 @@ export class gradingService {
       }
     }
   }
+    static async previewStartFromQr(
+    payload: CreateSlotFromQrPayload
+  ): Promise<PreviewStartResult> {
+    const { campaignId, graderId, questionNo } = payload;
+    const connection = await DB.getInstance().getConnection();
+
+    try {
+      const qrPayload = keyService.unmaskQrPayload(payload.qrPayload);
+
+      const bookletRow = await bookletsRepo.findBookletsbyQRpayload(
+        connection,
+        qrPayload
+      );
+
+      if (!bookletRow) {
+        throw new Error("ไม่พบเล่มข้อสอบนี้ในระบบ หรืออาจสแกนผิด");
+      }
+
+      if (bookletRow.bag_no === null || bookletRow.bag_id === null) {
+        throw new Error("เล่มข้อสอบนี้ยังไม่ถูกจัดลงถุง ไม่สามารถสแกนได้");
+      }
+
+      const sid = bookletRow.session_id;
+
+      const assignment = await gradingslotRepo.findAssignmentForGraderInSession(
+        connection,
+        graderId,
+        sid
+      );
+
+      if (!assignment || assignment.length === 0) {
+        throw new Error("ผู้ตรวจคนนี้ไม่ได้ถูกมอบหมายให้ตรวจข้อสอบในรอบนี้");
+      }
+
+      const qNo = Number(questionNo);
+      const question = assignment.find((a) => a.question_no === qNo);
+
+      if (!question) {
+        throw new Error("ข้อที่เลือกไม่ได้ถูกมอบหมายให้คุณตรวจ");
+      }
+
+      // เช็ค lock งานปัจจุบัน
+      const activeLock = await gradingslotRepo.findActiveLockByGraderId(
+        connection,
+        graderId
+      );
+
+      if (activeLock) {
+        const sameBag = Number(activeLock.bag_id) === Number(bookletRow.bag_id);
+        const sameQuestion =
+          Number(activeLock.question_no) === Number(question.question_no);
+
+        if (!sameBag) {
+          throw new Error(
+            `คุณกำลังตรวจถุงที่ ${activeLock.bag_id} อยู่ กรุณาตรวจถุงเดิมให้เสร็จก่อน`
+          );
+        }
+
+        if (!sameQuestion) {
+          throw new Error(
+            `คุณกำลังตรวจข้อ ${activeLock.question_no} อยู่ กรุณาตรวจข้อนี้ให้เสร็จก่อน`
+          );
+        }
+      }
+
+      const totalBooklets = await bookletsRepo.countByBagId(
+        connection,
+        Number(bookletRow.bag_id)
+      );
+
+      return {
+        canStart: true,
+        bagId: Number(bookletRow.bag_id),
+        bagNo: Number(bookletRow.bag_no),
+        bookletId: Number(bookletRow.id),
+        random_num: bookletRow.random_num,
+        examCode: bookletRow.random_num,
+        subjectId: Number(question.subject_id),
+        subjectName: question.subject_name ?? "-",
+        questionNo: Number(question.question_no),
+        questionLabel: question.question_label ?? null,
+        graderId,
+        totalBooklets: Number(totalBooklets ?? 0),
+        message: "พร้อมเริ่มตรวจถุงนี้",
+      };
+    } finally {
+      connection.release();
+    }
+  }
+
+  static async confirmStartFromQr(
+    payload: CreateSlotFromQrPayload
+  ): Promise<{
+    slotId: number;
+    graderOrder: number;
+    status: string;
+    bookletId: number;
+    examCode: string | number;
+    subjectId: number;
+    questionNo: number;
+    bagId: number;
+    bagNo: number;
+    random_num: string | number;
+  }> {
+    const { campaignId, graderId, questionNo } = payload;
+    const connection = await DB.getInstance().getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const qrPayload = keyService.unmaskQrPayload(payload.qrPayload);
+
+      const bookletRow = await bookletsRepo.findBookletsbyQRpayload(
+        connection,
+        qrPayload
+      );
+
+      if (!bookletRow) {
+        throw new Error("ไม่พบเล่มข้อสอบนี้ในระบบ หรืออาจสแกนผิด");
+      }
+
+      if (bookletRow.bag_no === null || bookletRow.bag_id === null) {
+        throw new Error("เล่มข้อสอบนี้ยังไม่ถูกจัดลงถุง ไม่สามารถสแกนได้");
+      }
+
+      const sid = bookletRow.session_id;
+
+      const assignment = await gradingslotRepo.findAssignmentForGraderInSession(
+        connection,
+        graderId,
+        sid
+      );
+
+      if (!assignment || assignment.length === 0) {
+        throw new Error("ผู้ตรวจคนนี้ไม่ได้ถูกมอบหมายให้ตรวจข้อสอบในรอบนี้");
+      }
+
+      const qNo = Number(questionNo);
+      const question = assignment.find((a) => a.question_no === qNo);
+
+      if (!question) {
+        throw new Error("ข้อที่เลือกไม่ได้ถูกมอบหมายให้คุณตรวจ");
+      }
+
+      // เช็ค / สร้าง lock
+      const activeLock = await gradingslotRepo.findActiveLockByGraderId(
+        connection,
+        graderId
+      );
+
+      if (!activeLock) {
+        await gradingslotRepo.createLock(connection, {
+          graderId,
+          campaignId,
+          bagId: Number(bookletRow.bag_id),
+          questionNo: Number(question.question_no),
+        });
+      } else {
+        const sameBag = Number(activeLock.bag_id) === Number(bookletRow.bag_id);
+        const sameQuestion =
+          Number(activeLock.question_no) === Number(question.question_no);
+
+        if (!sameBag) {
+          throw new Error(
+            `คุณกำลังตรวจถุงที่ ${activeLock.bag_id} อยู่ กรุณาตรวจถุงเดิมให้เสร็จก่อน`
+          );
+        }
+
+        if (!sameQuestion) {
+          throw new Error(
+            `คุณกำลังตรวจข้อ ${activeLock.question_no} อยู่ กรุณาตรวจข้อนี้ให้เสร็จก่อน`
+          );
+        }
+      }
+
+      const slot = await gradingService.allocateSlotForQuestion(
+        {
+          bookletId: Number(bookletRow.id),
+          subjectId: Number(question.subject_id),
+          questionNo: Number(question.question_no),
+          graderId,
+        },
+        connection
+      );
+
+      await connection.commit();
+
+      return {
+        slotId: slot.slotId,
+        graderOrder: slot.graderOrder,
+        status: slot.status,
+        bookletId: Number(bookletRow.id),
+        examCode: bookletRow.random_num,
+        subjectId: Number(question.subject_id),
+        questionNo: Number(question.question_no),
+        bagId: Number(bookletRow.bag_id),
+        bagNo: Number(bookletRow.bag_no),
+        random_num: bookletRow.random_num,
+      };
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  }
+
 }

@@ -9,7 +9,7 @@ import bookletsRepo from "../Repo/booklets.repo";
 import { DbBookletInBagRow } from "../Repo/booklets.repo";
 import { BagScannedCountResult } from "../Repo/bag.repo";
 import campaignRepo from "../Repo/campaign.repo";
-import { info } from "console";
+
 
 // (Interface จาก Frontend)
 interface BulkCreatePayload {
@@ -374,6 +374,7 @@ export class bagService {
                 const nextRandomNum = `${dataNo}${paddedRunning}`;
                 const seq = i + 1;
                 const status = 'PACKAGED';
+                console.log("TEST", seq, " : ", nextRandomNum)
 
                 updatePromises.push(
                     bookletsRepo.updateBagInfoByPayload(
@@ -386,6 +387,15 @@ export class bagService {
                         datetime[i]
                     )
                 );
+                // await bookletsRepo.updateBagInfoByPayload(
+                //     connection,
+                //     realPayloads[i],
+                //     bagId,
+                //     i + 1,
+                //     'PACKAGED',
+                //     nextRandomNum,
+                //     datetime[i]
+                // );
             }
 
             await Promise.all(updatePromises);
@@ -399,6 +409,7 @@ export class bagService {
 
         } catch (error: any) {
             await connection.rollback();
+            console.log("Service Error (CreateBagAndUpdateBooklets):", error);
             throw error;
         } finally {
             connection.release();
@@ -578,125 +589,126 @@ export class bagService {
         }
     }
 
-static async generateBagPayloadPdfByBagId(bagId: number): Promise<Buffer> {
-    const infoCamp = await bagRepo.findBagPayloadRowsWithSubject(bagId);
-    const raw = await bagRepo.findBagPayloadRows(bagId);
+    static async generateBagPayloadPdfByBagId(bagId: number): Promise<Buffer> {
+        const infoCamp = await bagRepo.findBagPayloadRowsWithSubject(bagId);
+        const raw = await bagRepo.findBagPayloadRows(bagId);
 
-    if (!raw || raw.length === 0) {
-        throw new Error("ไม่พบข้อมูลข้อสอบในถุง");
-    }
-
-    if (!infoCamp || infoCamp.length === 0) {
-        throw new Error("ไม่พบข้อมูลหัวกระดาษของถุง");
-    }
-
-    const dataInfo = infoCamp[0];
-    const start_num = raw[0].random_num;
-    const end_num = raw[raw.length - 1].random_num;
-
-    const bag = {
-        bag_no: raw[0].bag_no,
-        info: {
-            course: dataInfo.subject_name,
-            org: dataInfo.campaign_name,
-            sessionText: dataInfo.session_label ?? dataInfo.subject_name,
-            site: dataInfo.site,
-            start_num,
-            end_num,
-        },
-        rows: raw.map((r: any) => ({
-            random_num: r.random_num,
-            qr_payload: r.qr_payload,
-        })),
-    };
-
-    return this.runPayloadWorkerTask("generateBagPayloadPdf", {
-        bag,
-    });
-}
-static async generateBagPayloadAllPdfByCampaignId(campaignId: number): Promise<Buffer> {
-    const raw = await bagRepo.findAllBagPayloadRowsByCampaignId(campaignId);
-    console.log(raw);
-
-    if (!raw || raw.length === 0) {
-        throw new Error("ไม่พบข้อมูลถุงในรอบสอบนี้");
-    }
-
-    const bagMap = new Map<number, any>();
-
-    for (const row of raw) {
-        if (!bagMap.has(row.bag_id)) {
-            bagMap.set(row.bag_id, {
-                bag_no: row.bag_no,
-                info: {
-                    course: row.subject_name,
-                    org: row.campaign_name,
-                    sessionText: row.session_label ?? row.subject_name,
-                    site: row.site,
-                    start_num: row.random_num,
-                    end_num: row.random_num,
-                },
-                rows: [],
-            });
+        if (!raw || raw.length === 0) {
+            throw new Error("ไม่พบข้อมูลข้อสอบในถุง");
         }
 
-        const bag = bagMap.get(row.bag_id);
-
-        bag.rows.push({
-            random_num: row.random_num,
-            qr_payload: row.qr_payload,
-        });
-
-        bag.info.end_num = row.random_num;
-    }
-
-    const bags = Array.from(bagMap.values());
-
-    return this.runPayloadWorkerTask("generateBagPayloadAllPdf", {
-        bags,
-    });
-}
-static async generateBagPayloadAllPdfBySessionId(sessionId: number): Promise<Buffer> {
-    const raw = await bagRepo.findAllBagPayloadRowsBySession(sessionId);
-    console.log(raw);
-
-    if (!raw || raw.length === 0) {
-        throw new Error("ไม่พบข้อมูลถุงในวันที่สอบนี้");
-    }
-
-    const bagMap = new Map<number, any>();
-
-    for (const row of raw) {
-        if (!bagMap.has(row.bag_id)) {
-            bagMap.set(row.bag_id, {
-                bag_no: row.bag_no,
-                info: {
-                    course: row.subject_name,
-                    org: row.campaign_name,
-                    sessionText: row.session_label ?? row.subject_name,
-                    site: row.site,
-                    start_num: row.random_num,
-                    end_num: row.random_num,
-                },
-                rows: [],
-            });
+        if (!infoCamp || infoCamp.length === 0) {
+            throw new Error("ไม่พบข้อมูลหัวกระดาษของถุง");
         }
 
-        const bag = bagMap.get(row.bag_id);
+        const dataInfo = infoCamp[0];
+        const start_num = raw[0].random_num;
+        const end_num = raw[raw.length - 1].random_num;
 
-        bag.rows.push({
-            random_num: row.random_num,
-            qr_payload: row.qr_payload,
+        const bag = {
+            bag_no: raw[0].bag_no,
+            info: {
+                course: dataInfo.subject_name,
+                org: dataInfo.campaign_name,
+                sessionText: dataInfo.session_label ?? dataInfo.subject_name,
+                site: dataInfo.site,
+                start_num,
+                end_num,
+            },
+            rows: raw.map((r: any) => ({
+                random_num: r.random_num,
+                qr_payload: keyService.maskQrPayload(r.qr_payload), // (ใส่ Mask ก่อนส่งไปให้ Worker เพื่อความปลอดภัยของข้อมูล)
+            })),
+        };
+
+        return this.runPayloadWorkerTask("generateBagPayloadPdf", {
+            bag,
         });
-
-        bag.info.end_num = row.random_num;
     }
+    static async generateBagPayloadAllPdfByCampaignId(campaignId: number): Promise<Buffer> {
+        const raw = await bagRepo.findAllBagPayloadRowsByCampaignId(campaignId);
+        console.log(raw);
 
-    const bags = Array.from(bagMap.values());
+        if (!raw || raw.length === 0) {
+            throw new Error("ไม่พบข้อมูลถุงในรอบสอบนี้");
+        }
 
-    return this.runPayloadWorkerTask("generateBagPayloadAllPdf", {
-        bags,
-    });
-}
+        const bagMap = new Map<number, any>();
+
+        for (const row of raw) {
+            if (!bagMap.has(row.bag_id)) {
+                bagMap.set(row.bag_id, {
+                    bag_no: row.bag_no,
+                    info: {
+                        course: row.subject_name,
+                        org: row.campaign_name,
+                        sessionText: row.session_label ?? row.subject_name,
+                        site: row.site,
+                        start_num: row.random_num,
+                        end_num: row.random_num,
+                    },
+                    rows: [],
+                });
+            }
+
+            const bag = bagMap.get(row.bag_id);
+
+            bag.rows.push({
+                random_num: row.random_num,
+                qr_payload: keyService.maskQrPayload(row.qr_payload), // (ใส่ Mask ก่อนส่งไปให้ Worker เพื่อความปลอดภัยของข้อมูล)
+            });
+
+            bag.info.end_num = row.random_num;
+        }
+
+        const bags = Array.from(bagMap.values());
+
+        return this.runPayloadWorkerTask("generateBagPayloadAllPdf", {
+            bags,
+        });
+    }
+    static async generateBagPayloadAllPdfBySessionId(sessionId: number): Promise<Buffer> {
+        const raw = await bagRepo.findAllBagPayloadRowsBySession(sessionId);
+        console.log(raw);
+
+        if (!raw || raw.length === 0) {
+            throw new Error("ไม่พบข้อมูลถุงในวันที่สอบนี้");
+        }
+
+        const bagMap = new Map<number, any>();
+
+        for (const row of raw) {
+            if (!bagMap.has(row.bag_id)) {
+                bagMap.set(row.bag_id, {
+                    bag_no: row.bag_no,
+                    info: {
+                        course: row.subject_name,
+                        org: row.campaign_name,
+                        sessionText: row.session_label ?? row.subject_name,
+                        site: row.site,
+                        start_num: row.random_num,
+                        end_num: row.random_num,
+                    },
+                    rows: [],
+                });
+            }
+
+            const bag = bagMap.get(row.bag_id);
+
+            bag.rows.push({
+                random_num: row.random_num,
+                qr_payload: keyService.maskQrPayload(row.qr_payload), // (ใส่ Mask ก่อนส่งไปให้ Worker เพื่อความปลอดภัยของข้อมูล)
+            });
+
+            bag.info.end_num = row.random_num;
+        }
+
+        const bags = Array.from(bagMap.values());
+        console.log(bags);
+
+        return this.runPayloadWorkerTask("generateBagPayloadAllPdf", {
+            bags,
+        });
+    }
 }
 

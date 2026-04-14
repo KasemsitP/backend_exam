@@ -12,5 +12,11 @@ graderRouter.get(
   graderController.getAssignmentByAccountId
 );
 
+graderRouter.get(
+  "/graders/confirmed-bags/:campaignId/:graderId",
+  graderController.getConfirmedBags
+);
+
+graderRouter.get("/graders/bags/:bagId/score-payload/:questionNo/:graderId/pdf", graderController.printBagScorePayloadPdf);
 
 export default graderRouter;

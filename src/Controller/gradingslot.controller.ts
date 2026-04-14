@@ -32,4 +32,53 @@ export class gradingslotController {
       res.status(400).send({ message: error.message });
     }
   };
+    static previewStartFromQr = async (req: Request, res: Response) => {
+    try {
+      const { qrPayload, campaignId, graderId, questionNo } = req.body;
+
+      if (!qrPayload || !campaignId || !graderId || !questionNo) {
+        return res.status(400).json({
+          message: "ข้อมูลไม่ครบ",
+        });
+      }
+
+      const result = await gradingService.previewStartFromQr({
+        qrPayload,
+        campaignId: Number(campaignId),
+        graderId: Number(graderId),
+        questionNo: Number(questionNo),
+      });
+
+      return res.status(200).json(result);
+    } catch (error: any) {
+      return res.status(500).json({
+        message: error.message || "ไม่สามารถ preview การเริ่มตรวจได้",
+      });
+    }
+  };
+
+  static confirmStartFromQr = async (req: Request, res: Response) => {
+    try {
+      const { qrPayload, campaignId, graderId, questionNo } = req.body;
+
+      if (!qrPayload || !campaignId || !graderId || !questionNo) {
+        return res.status(400).json({
+          message: "ข้อมูลไม่ครบ",
+        });
+      }
+
+      const result = await gradingService.confirmStartFromQr({
+        qrPayload,
+        campaignId: Number(campaignId),
+        graderId: Number(graderId),
+        questionNo: Number(questionNo),
+      });
+
+      return res.status(200).json(result);
+    } catch (error: any) {
+      return res.status(500).json({
+        message: error.message || "ไม่สามารถยืนยันเริ่มตรวจได้",
+      });
+    }
+  };
 }

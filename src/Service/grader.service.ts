@@ -70,6 +70,15 @@ export class graderService {
       const result = await graderRepo.getAssignmentByAccountId(campaign_id , account_id)
       return result;
   }
+  static  getBagFinished = async(campaign_id : number , grader_id : number)=>{
+      const conn = await DB.getInstance().getConnection();
+      try {
+        const result = await graderRepo.findConfirmedBagsByCampaignAndGrader(conn,campaign_id , grader_id)
+        return result;
+      } finally {
+        conn.release();
+      }
+  }
 
 
   static create = async (payload: {

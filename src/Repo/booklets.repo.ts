@@ -212,20 +212,20 @@ SELECT
     return rows[0] || null;
   }
 
-  async getLatestRandomNumForUpdate(connection: any, sessionId: string | number) {
-    const query = `
-        SELECT random_num 
-        FROM booklets 
-        WHERE session_id = ? AND random_num IS NOT NULL
-        ORDER BY id DESC 
-        LIMIT 1 
-        FOR UPDATE
-    `;
+async getLatestRandomNumForUpdate(connection: any, sessionId: string | number) {
+  const query = `
+    SELECT random_num
+    FROM booklets
+    WHERE session_id = ?
+      AND random_num IS NOT NULL
+    ORDER BY CAST(RIGHT(random_num, 4) AS UNSIGNED) DESC
+    LIMIT 1
+    FOR UPDATE
+  `;
 
-    const [rows] = await connection.query(query, [sessionId]);
-
-    return rows.length > 0 ? rows[0] : null;
-  }
+  const [rows] = await connection.query(query, [sessionId]);
+  return rows.length > 0 ? rows[0] : null;
+}
   async insertMany(conn: PoolConnection, values: any[][]): Promise<void> {
     const sql = `
         INSERT INTO booklets 
@@ -368,6 +368,18 @@ async bulkUpdateUnblindBooklets(
 
     await conn.query(sql, finalParams);
   }
+  async countByBagId(
+  conn: PoolConnection,
+  bagId: number
+): Promise<number> {
+  const sql = `
+    SELECT COUNT(*) AS total
+    FROM booklets
+    WHERE bag_id = ?
+  `;
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
+  return Number(rows[0]?.total ?? 0);
+}
 
 }
 

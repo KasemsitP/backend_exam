@@ -10,4 +10,7 @@ gradingslotRouter.post(
   gradingslotController.CreateSlot
 );
 
+gradingslotRouter.post("/gradingslots/preview-start", gradingslotController.previewStartFromQr);
+gradingslotRouter.post("/gradingslots/confirm-start", gradingslotController.confirmStartFromQr);
+
 export default gradingslotRouter;
