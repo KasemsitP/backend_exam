@@ -153,7 +153,7 @@ function drawHeader(
   // บรรทัด 2
   y += 16;
   doc.text(
-    `ข้อ ${info.question_no || ""}   เลขรหัส ${info.start_num || ""}   ถึง ${info.end_num || ""}`,
+    `ข้อที่ ${info.question_no || ""}   เลขรหัส ${info.start_num || ""}   ถึง ${info.end_num || ""}`,
     0,
     y,
     { align: "center" }
@@ -226,7 +226,7 @@ for (let i = 1; i <= actualRows; i++) {
 
   // หัวตาราง
   doc.font("SarabunBold").fontSize(11.5);
-  doc.text("เลขที่", x1, startY + 4, {
+  doc.text("ลำดับจัดเก็บ", x1, startY + 4, {
     width: colNoWidth,
     align: "center",
   });

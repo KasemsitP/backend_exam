@@ -48,6 +48,8 @@ type PreviewStartResult = {
   graderId: number;
   totalBooklets: number;
   message: string;
+  min_random?: number | null;
+  max_random?: number | null;
 };
 
 export class gradingService {
@@ -285,7 +287,7 @@ export class gradingService {
       }
     }
   }
-    static async previewStartFromQr(
+  static async previewStartFromQr(
     payload: CreateSlotFromQrPayload
   ): Promise<PreviewStartResult> {
     const { campaignId, graderId, questionNo } = payload;
@@ -326,6 +328,22 @@ export class gradingService {
         throw new Error("ข้อที่เลือกไม่ได้ถูกมอบหมายให้คุณตรวจ");
       }
 
+      const activeLockByBagQuestion =
+        await gradingslotRepo.findActiveLockByBagAndQuestion(
+          connection,
+          Number(bookletRow.bag_id),
+          Number(question.question_no)
+        );
+
+      if (
+        activeLockByBagQuestion &&
+        Number(activeLockByBagQuestion.grader_id) !== Number(graderId)
+      ) {
+        throw new Error(
+          "มีผู้ตรวจคนอื่นกำลังตรวจข้อสอบถุงนี้อยู่ กรุณาติดต่อเจ้าหน้าที่"
+        );
+      }
+
       // เช็ค lock งานปัจจุบัน
       const activeLock = await gradingslotRepo.findActiveLockByGraderId(
         connection,
@@ -355,6 +373,17 @@ export class gradingService {
         Number(bookletRow.bag_id)
       );
 
+      const randomNums = await bookletsRepo.findRandomNumsByBagId(
+  connection,
+  Number(bookletRow.bag_id)
+);
+
+const min_random =
+  randomNums.length > 0 ? Math.min(...randomNums) : null;
+
+const max_random =
+  randomNums.length > 0 ? Math.max(...randomNums) : null;
+
       return {
         canStart: true,
         bagId: Number(bookletRow.bag_id),
@@ -368,6 +397,8 @@ export class gradingService {
         questionLabel: question.question_label ?? null,
         graderId,
         totalBooklets: Number(totalBooklets ?? 0),
+        min_random,
+        max_random,
         message: "พร้อมเริ่มตรวจถุงนี้",
       };
     } finally {

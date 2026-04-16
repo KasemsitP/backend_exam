@@ -3,6 +3,7 @@ import gradingscoredraftRepo from "../Repo/gradingscoredraft.repo";
 import gradingscoreRepo from "../Repo/gradingscore.repo";
 import gradingslotRepo from "../Repo/gradingslot.repo";
 import { keyService } from "./key.service";
+import { gradingRecheckService } from "./gradingrecheck.service";
 
 class GradingScoreDraftService {
   static async saveDraftScore(params: {
@@ -129,7 +130,8 @@ class GradingScoreDraftService {
       const isSameContext = validRows.every(d =>
         d.bag_id === validRows[0].bag_id &&
         d.subject_id === validRows[0].subject_id &&
-        d.question_no === validRows[0].question_no
+        d.question_no === validRows[0].question_no &&
+        d.bag_no === validRows[0].bag_no
       );
 
       if (!isSameContext) {
@@ -144,8 +146,22 @@ class GradingScoreDraftService {
           : null
       }));
 
+      // หา random_num min / max
+      const randomNums = drafts
+        .map(d => Number(d.random_num))
+        .filter(n => Number.isFinite(n));
+
+      const min_random =
+        randomNums.length > 0 ? Math.min(...randomNums) : null;
+
+      const max_random =
+        randomNums.length > 0 ? Math.max(...randomNums) : null;
+
       return {
         bag_id: first.bag_id,
+        bag_no: first.bag_no,
+        min_random,
+        max_random,
         subject_name: validRows[0].subject_name,
         question_label: validRows[0].question_label,
         question_no: validRows[0].question_no,
@@ -225,26 +241,36 @@ class GradingScoreDraftService {
         );
       }
 
-      // 4) insert คะแนนจริงจาก draft
       await gradingscoreRepo.insertScoresFromDraftsByBagIdAndGraderId(
         conn,
         params.bagId,
         params.graderId
       );
 
-      // 5) update slot status
+      // 5) ตั้งต้น slot ของ grader นี้เป็น COMPLETED ก่อน
       await gradingslotRepo.markSlotsCompletedByBagIdAndGraderId(
         conn,
         params.bagId,
         params.graderId
       );
 
-      // 6) mark draft confirmed
+
+      for (const item of params.scores) {
+        await gradingRecheckService.checkAndMarkDisputedIfNeeded(
+          conn,
+          item.slot_id,
+          4
+        );
+      }
+
+      // 7) mark draft confirmed
       await gradingscoredraftRepo.markDraftsConfirmedByBagIdAndGraderId(
         conn,
         params.bagId,
         params.graderId
       );
+
+      // 8) release lock
       await gradingslotRepo.releaseActiveLockByGraderId(
         conn,
         params.graderId

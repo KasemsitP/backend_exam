@@ -613,6 +613,7 @@ SELECT
   bk.random_num,
   bk.qr_payload AS payload,
 
+
   gs.id AS slot_id,
   gs.subject_id,
   s.name AS subject_name,         

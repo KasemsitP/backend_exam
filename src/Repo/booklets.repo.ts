@@ -380,6 +380,21 @@ async bulkUpdateUnblindBooklets(
   const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
   return Number(rows[0]?.total ?? 0);
 }
+async findRandomNumsByBagId(
+  conn: PoolConnection,
+  bagId: number
+): Promise<number[]> {
+  const sql = `
+    SELECT random_num
+    FROM booklets
+    WHERE bag_id = ?
+      AND random_num IS NOT NULL
+    ORDER BY CAST(random_num AS UNSIGNED)
+  `;
+
+  const [rows] = await conn.query<any[]>(sql, [bagId]);
+  return rows.map(r => Number(r.random_num));
+}
 
 }
 

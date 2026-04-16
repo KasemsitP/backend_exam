@@ -714,7 +714,7 @@ async function buildPassListPdf(options: any, writeStream: fs.WriteStream) {
 async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
   const examInfo = await rankingRepo.getExamInfo(options.campaignId);
   const rawData = await rankingRepo.getRankingRawRows({ campaignId: options.campaignId, subjectIds: options.subjectIds });
-  //console.log(`Raw data rows: ${rawData}`);
+  console.log(`Raw data rows: ${rawData}`);
 
   const usersMap = new Map<string, any>();
   for (const row of rawData) {
@@ -741,7 +741,19 @@ async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
   }
 
   let rankingList = Array.from(usersMap.values());
-  rankingList = rankingList.filter(u => u.totalScore >= 50);
+  rankingList = rankingList.filter(u => u.totalScore >= 0);
+
+console.log("usersMap size =", usersMap.size);
+console.log("rankingList before filter =", Array.from(usersMap.values()).map(u => ({
+  userCode: u.userCode,
+  totalScore: u.totalScore,
+  isCompleted: u.isCompleted
+})));
+
+rankingList = rankingList.filter(u => u.totalScore >= 50);
+
+console.log("rankingList after >=50 filter =", rankingList.length);
+
   if (options.onlyCompleted) rankingList = rankingList.filter((u) => u.isCompleted);
 
   const sortBy = (options.sortBy || "TOTAL_DESC") as SortBy;

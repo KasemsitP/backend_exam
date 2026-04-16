@@ -426,6 +426,32 @@ async releaseActiveLockByGraderId(
   await conn.query(sql, [graderId]);
 }
 
+async findActiveLockByBagAndQuestion(
+  conn: PoolConnection,
+  bagId: number,
+  questionNo: number
+): Promise<any | null> {
+  const sql = `
+    SELECT
+      id,
+      grader_id,
+      campaign_id,
+      bag_id,
+      question_no,
+      locked_at
+    FROM grader_work_locks
+    WHERE bag_id = ?
+      AND status = 'ACTIVE'
+    LIMIT 1
+    FOR UPDATE
+  `;
+
+  const [rows] = await conn.query<any[]>(sql, [bagId]);
+  return rows[0] || null;
+}
+
+
+
 }
 
 

@@ -10,6 +10,7 @@ export class gradingScoreLogController {
                 return res.status(400).json({ message: "bagId ต้องเป็นตัวเลขบวก" });
             }
             const scoreLog = await gradingScoreLogService.getScoreLogByBagId(bagId);
+            console.log("Score Log for bagId", bagId, ":", scoreLog);
             res.status(200).json(scoreLog);
         } catch (error: any) {
             console.error("Controller Error (gradingScoreLogController.getScoreLogByBagId):", error);
