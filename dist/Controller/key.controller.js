@@ -190,3 +190,17 @@ keyController.TestMask = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.log("Error  controller:", error);
     }
 });
+keyController.TestUnMask = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { payload } = req.body;
+        if (!payload) {
+            return res.status(400).send({ message: "Missing payload" });
+        }
+        const result = yield key_service_1.keyService.unmaskQrPayload(payload);
+        res.status(200).send({ success: true, message: "ทดสอบpayload", data: result });
+    }
+    catch (error) {
+        res.status(500).send({ message: error.message });
+        console.log("Error  controller:", error);
+    }
+});

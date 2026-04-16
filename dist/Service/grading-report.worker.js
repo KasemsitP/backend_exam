@@ -657,14 +657,14 @@ function buildRankingPdf(options, writeStream) {
             });
         }
         let rankingList = Array.from(usersMap.values());
-        rankingList = rankingList.filter(u => u.totalScore >= 0);
+        rankingList = rankingList.filter(u => u.totalScore >= 0); //เดิม 50 
         console.log("usersMap size =", usersMap.size);
         console.log("rankingList before filter =", Array.from(usersMap.values()).map(u => ({
             userCode: u.userCode,
             totalScore: u.totalScore,
             isCompleted: u.isCompleted
         })));
-        rankingList = rankingList.filter(u => u.totalScore >= 50);
+        rankingList = rankingList.filter(u => u.totalScore >= 0); //เดิม 50
         console.log("rankingList after >=50 filter =", rankingList.length);
         if (options.onlyCompleted)
             rankingList = rankingList.filter((u) => u.isCompleted);

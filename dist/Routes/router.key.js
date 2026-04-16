@@ -13,4 +13,5 @@ keyRouter.post("/keys/test-decrypt", key_controller_1.keyController.testDecrypt)
 keyRouter.post("/keys/forget", key_controller_1.keyController.forgetKey);
 keyRouter.get("/keys/dashboard/:campaignId", key_controller_1.keyController.getDashboard);
 keyRouter.post("/keys/test-mask", key_controller_1.keyController.TestMask);
+keyRouter.post("/keys/test-unmask", key_controller_1.keyController.TestUnMask);
 exports.default = keyRouter;

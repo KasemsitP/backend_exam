@@ -741,7 +741,7 @@ async function buildRankingPdf(options: any, writeStream: fs.WriteStream) {
   }
 
   let rankingList = Array.from(usersMap.values());
-  rankingList = rankingList.filter(u => u.totalScore >= 0);
+  rankingList = rankingList.filter(u => u.totalScore >= 0);   //เดิม 50 
 
 console.log("usersMap size =", usersMap.size);
 console.log("rankingList before filter =", Array.from(usersMap.values()).map(u => ({
@@ -750,7 +750,7 @@ console.log("rankingList before filter =", Array.from(usersMap.values()).map(u =
   isCompleted: u.isCompleted
 })));
 
-rankingList = rankingList.filter(u => u.totalScore >= 50);
+rankingList = rankingList.filter(u => u.totalScore >= 0);   //เดิม 50
 
 console.log("rankingList after >=50 filter =", rankingList.length);
 

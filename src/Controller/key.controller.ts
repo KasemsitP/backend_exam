@@ -190,4 +190,18 @@ export class keyController {
        console.log("Error  controller:", error);
     }
   }
+  static TestUnMask = async (req: Request, res: Response) => {
+    try{
+    const { payload } = req.body;
+    if (!payload) {
+      return res.status(400).send({ message: "Missing payload" });
+    }
+
+      const result = await keyService.unmaskQrPayload(payload);
+      res.status(200).send({ success: true, message: "ทดสอบpayload", data: result });
+    } catch (error: any) {
+      res.status(500).send({ message: error.message });
+       console.log("Error  controller:", error);
+    }
+  }
 }

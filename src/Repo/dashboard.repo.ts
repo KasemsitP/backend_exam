@@ -467,21 +467,22 @@ ORDER BY e.session_id, e.subject_id;
 
   async getCountBookletsBySession(campaign_id: number): Promise<{ session_id: number; session_code: string; subject_name: string; count: number }[]> {
     const sql = `
-      SELECT 
-        sess.id as session_id,
-        s.name as subject_name,
-        sess.session_code,
-        COUNT(DISTINCT b.id) AS count
-      FROM subjects s
-      JOIN session_subjects ss 
-        ON s.id = ss.subject_id
-      JOIN sessions sess 
-        ON sess.id = ss.session_id 
-       AND sess.campaign_id = ?
-      LEFT JOIN booklets b 
-        ON b.session_id = sess.id
-      GROUP BY s.name, sess.day_no , sess.id
-      ORDER BY sess.day_no;
+SELECT 
+  sess.id AS session_id,
+  s.name AS subject_name,
+  sess.session_code,
+  COUNT(DISTINCT b.id) AS count
+FROM subjects s
+JOIN session_subjects ss 
+  ON s.id = ss.subject_id
+JOIN sessions sess 
+  ON sess.id = ss.session_id 
+ AND sess.campaign_id = ?
+LEFT JOIN booklets b 
+  ON b.session_id = sess.id
+ AND b.status IN ('PACKAGED')
+GROUP BY s.name, sess.day_no, sess.id, sess.session_code
+ORDER BY sess.day_no;
     `;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
     return rows.map((row) => ({
