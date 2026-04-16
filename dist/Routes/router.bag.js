@@ -12,4 +12,7 @@ bagRouter.get("/bags/:bagNo/booklets", bag_controller_1.bagController.getBooklet
 bagRouter.post("/bags/create-insert", bag_controller_1.bagController.CreateBagAndBooklets);
 bagRouter.post("/bags/check-subjects", bag_controller_1.bagController.CheckSubjectBooklets);
 bagRouter.get("/bags/scanned/:campaignId", bag_controller_1.bagController.getBookScannedCount);
+bagRouter.get("/bags/createpdf/:bag_id", bag_controller_1.bagController.createPDF);
+bagRouter.get("/bags/createpdfAll", bag_controller_1.bagController.createPDFByCampaignId);
+bagRouter.get("/bags/grader/active/:campaignId", bag_controller_1.bagController.getBagActiveGrader);
 exports.default = bagRouter;

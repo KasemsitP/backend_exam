@@ -24,6 +24,7 @@ gradingScoreLogController.getScoreLogByBagId = (req, res) => __awaiter(void 0, v
             return res.status(400).json({ message: "bagId ต้องเป็นตัวเลขบวก" });
         }
         const scoreLog = yield grading_score_log_service_1.gradingScoreLogService.getScoreLogByBagId(bagId);
+        console.log("Score Log for bagId", bagId, ":", scoreLog);
         res.status(200).json(scoreLog);
     }
     catch (error) {

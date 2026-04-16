@@ -13,6 +13,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GradingReportController = void 0;
 const grading_report_service_1 = require("../Service/grading-report.service");
 const grader_report_service_1 = require("../Service/grader-report.service");
+const grading_report_repo_1 = require("../Repo/grading-report.repo");
+const DB_1 = require("../model/DB");
 function asInt(v, fallback = 0) {
     const n = Number(v);
     return Number.isFinite(n) ? Math.trunc(n) : fallback;
@@ -237,10 +239,31 @@ class GradingReportController {
 }
 exports.GradingReportController = GradingReportController;
 _a = GradingReportController;
+// static ReportScorePDF = async (req: Request, res: Response) => {
+//   const bagId = Number(req.params.bagId);
+//   try {
+//     const buf = await GradingReportService.generateBagScorePdf(bagId);
+//     res.setHeader("Content-Type", "application/pdf");
+//     res.setHeader(
+//       "Content-Disposition",
+//       `inline; filename="bag-${bagId}-scores.pdf"`
+//     );
+//     res.send(buf);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+//   }
+// }
 GradingReportController.ReportScorePDF = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _b, _c;
     const bagId = Number(req.params.bagId);
+    const conn = yield DB_1.DB.getInstance().getConnection();
     try {
-        const buf = yield grading_report_service_1.GradingReportService.generateBagScorePdf(bagId);
+        const result = yield (0, grading_report_repo_1.getUnlockCampaignByBagId)(conn, bagId);
+        const unlock = (_c = (_b = result[0]) === null || _b === void 0 ? void 0 : _b.is_unlock) !== null && _c !== void 0 ? _c : 0;
+        const buf = unlock === 1
+            ? yield grading_report_service_1.GradingReportService.generateUnlockedBagScorePdfUser({ bagId })
+            : yield grading_report_service_1.GradingReportService.generateBagScorePdf(bagId);
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `inline; filename="bag-${bagId}-scores.pdf"`);
         res.send(buf);
@@ -248,6 +271,9 @@ GradingReportController.ReportScorePDF = (req, res) => __awaiter(void 0, void 0,
     catch (err) {
         console.error(err);
         res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+    }
+    finally {
+        conn.release();
     }
 });
 GradingReportController.ReportScoreUserIFUnlock = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -263,18 +289,40 @@ GradingReportController.ReportScoreUserIFUnlock = (req, res) => __awaiter(void 0
         res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
     }
 });
+// static ReportScoreAllPDF = async (req: Request, res: Response) => {
+//   const { campaign_id } = req.params
+//   // console.log(campaign_id)
+//   try {
+//     const buf = await GradingReportService.generateCampaignBagScoresPdf(Number(campaign_id));
+//     res.setHeader("Content-Type", "application/pdf");
+//     res.setHeader(
+//       "Content-Disposition",
+//       `inline; filename="campaign-${campaign_id}-scores.pdf"`
+//     );
+//     res.send(buf);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+//   }
+// }
 GradingReportController.ReportScoreAllPDF = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { campaign_id } = req.params;
-    // console.log(campaign_id)
+    const campaignId = Number(req.params.campaign_id);
+    const conn = yield DB_1.DB.getInstance().getConnection();
     try {
-        const buf = yield grading_report_service_1.GradingReportService.generateCampaignBagScoresPdf(Number(campaign_id));
+        const unlock = yield (0, grading_report_repo_1.getCampaignUnlock)(conn, campaignId);
+        const buf = unlock === 1
+            ? yield grading_report_service_1.GradingReportService.generateUnlockedCampaignBagScoresPdf(campaignId)
+            : yield grading_report_service_1.GradingReportService.generateCampaignBagScoresPdf(campaignId);
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `inline; filename="campaign-${campaign_id}-scores.pdf"`);
+        res.setHeader("Content-Disposition", `inline; filename="campaign-${campaignId}-scores.pdf"`);
         res.send(buf);
     }
     catch (err) {
         console.error(err);
         res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+    }
+    finally {
+        conn.release();
     }
 });
 GradingReportController.ReportScoreGraders = (req, res) => __awaiter(void 0, void 0, void 0, function* () {

@@ -152,7 +152,7 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
   const colCodeWidth = 60, colPerScoreWidth = 22, colsPerQuestion = 4, colSumWidth = 40;
   const baseRowH1 = 42, baseRowH2 = 18, baseRowH = 16;
   const totalQuestionCols = questionCount * colsPerQuestion;
-  const usedWidth = colCodeWidth + totalQuestionCols * colPerScoreWidth + colSumWidth * 2;
+  const usedWidth = colCodeWidth + totalQuestionCols * colPerScoreWidth + colSumWidth;
 
   const widthScale = usedWidth > contentWidth ? contentWidth / usedWidth : 1;
   const availableTableHeight = pageHeight - bottom - y;
@@ -180,9 +180,9 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
     doc.text(`ข้อ ${q}\n${labelMap.get(q) ?? ""}`, x, y + 4 * scale, { width: groupW, align: "center", ellipsis: true });
     x += groupW;
   }
-  p = p.rect(x, y, cwSum, rowH1 + rowH2);
-  doc.text("รวม", x, y + 6 * scale, { width: cwSum, align: "center" });
-  x += cwSum;
+  // p = p.rect(x, y, cwSum, rowH1 + rowH2);
+  // doc.text("รวม", x, y + 6 * scale, { width: cwSum, align: "center" });
+  // x += cwSum;
   p = p.rect(x, y, cwSum, rowH1 + rowH2);
   doc.text("รวมทั้งหมด", x, y + 6 * scale, { width: cwSum, align: "center" });
   p.stroke();
@@ -238,9 +238,9 @@ function drawBagScorePage(doc: any, info: any, booklets: any[], questionCount: n
       if (avg != null) totalPerSubject += Number(avg);
     }
 
-    pathRow = pathRow.rect(x, y, cwSum, rowH);
-    doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, { width: cwSum, align: "center" });
-    x += cwSum;
+    // pathRow = pathRow.rect(x, y, cwSum, rowH);
+    // doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, { width: cwSum, align: "center" });
+    // x += cwSum;
     pathRow = pathRow.rect(x, y, cwSum, rowH);
     doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, { width: cwSum, align: "center" });
     pathRow.stroke(); // วาดเส้นทีเดียว
@@ -363,9 +363,9 @@ function drawUnlockedBagScorePage(
     x += groupW;
   }
 
-  p = p.rect(x, y, cwSum, rowH1 + rowH2);
-  doc.text("รวม", x, y + 6 * scale, { width: cwSum, align: "center" });
-  x += cwSum;
+  // p = p.rect(x, y, cwSum, rowH1 + rowH2);
+  // doc.text("รวม", x, y + 6 * scale, { width: cwSum, align: "center" });
+  // x += cwSum;
 
   p = p.rect(x, y, cwSum, rowH1 + rowH2);
   doc.text("รวมทั้งหมด", x, y + 6 * scale, { width: cwSum, align: "center" });
@@ -457,12 +457,12 @@ doc.text(val, x, y + 3 * scale, {
       if (avg != null) totalPerSubject += Number(avg);
     }
 
-    pathRow = pathRow.rect(x, y, cwSum, rowH);
-    doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, {
-      width: cwSum,
-      align: "center",
-    });
-    x += cwSum;
+    // pathRow = pathRow.rect(x, y, cwSum, rowH);
+    // doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, {
+    //   width: cwSum,
+    //   align: "center",
+    // });
+    // x += cwSum;
 
     pathRow = pathRow.rect(x, y, cwSum, rowH);
     doc.text(bk ? totalPerSubject.toFixed(1) : "", x, y + 3 * scale, {
@@ -973,6 +973,54 @@ console.log("rankingList after >=50 filter =", rankingList.length);
   doc.end();
 }
 
+async function buildUnlockedCampaignBagScoresPdf(
+  options: { campaignId: number },
+  writeStream: fs.WriteStream
+) {
+  const conn = await DB.getInstance().getConnection();
+  try {
+    const bagRows = await getAllBags(conn, options.campaignId);
+
+    if (!bagRows.length) throw new Error("ไม่พบถุงใด ๆ ในแคมเปญนี้");
+
+    const doc = new PDFDocument({
+      size: "A4",
+      layout: "landscape",
+      margins: { top: 40, bottom: 40, left: 40, right: 40 },
+      autoFirstPage: false,
+      bufferPages: false,
+    });
+    doc.pipe(writeStream);
+
+    for (let i = 0; i < bagRows.length; i++) {
+      const bagId = bagRows[i].bag_id;
+      doc.addPage();
+
+      const info = await getInfomation(bagId);
+      const questionCount =
+        (await findQuestionCountForBagSubject(conn, bagId, 0)) ?? 0;
+      const questionLabels = await findQuestionLabelForBagSubject(conn, bagId, 0);
+      const rawPerBooklet = await findBookletQuestionStatsForBag(conn, bagId, 0);
+
+      const booklets = buildUnlockedBookletBlocks(rawPerBooklet, questionCount);
+
+      drawUnlockedBagScorePage(
+        doc,
+        info,
+        booklets,
+        questionCount,
+        questionLabels ?? []
+      );
+
+      if (i % 5 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    doc.end();
+  } finally {
+    conn.release();
+  }
+}
+
 // =========================================================
 // Main Dispatcher
 // =========================================================
@@ -989,6 +1037,7 @@ async function runTask() {
     else if (task === 'generatePassListPdf') await buildPassListPdf(options, writeStream);
     else if (task === 'generateRankingPdf') await buildRankingPdf(options, writeStream);
     else if (task === 'generateUnlockedBagScorePdf') await buildUnlockedBagScorePdf(options, writeStream);
+    else if (task === 'generateUnlockedCampaignBagScoresPdf') await buildUnlockedCampaignBagScoresPdf(options, writeStream);
 
     writeStream.on('finish', () => { parentPort?.postMessage({ status: 'success', filePath }); });
     writeStream.on('error', (err) => { throw err; });

@@ -659,6 +659,61 @@ WHERE id IN (?, ?)
             yield conn.query(sql2, [slotId1, slotId2]);
         });
     }
+    existsScoreBySlotId(conn, slotId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT 1
+    FROM grading_scores
+    WHERE slot_id = ?
+    LIMIT 1
+  `;
+            const [rows] = yield conn.query(sql, [slotId]);
+            return rows.length > 0;
+        });
+    }
+    insertScoresFromDraftsByBagId(conn, bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    INSERT INTO grading_scores (
+      slot_id,
+      score,
+      entered_by,
+      entered_at
+    )
+    SELECT
+      gsd.slot_id,
+      gsd.score,
+      gsd.grader_id,
+      NOW()
+    FROM grading_score_drafts gsd
+    WHERE gsd.bag_id = ?
+      AND gsd.status = 'DRAFT'
+  `;
+            yield conn.query(sql, [bagId]);
+        });
+    }
+    insertScoresFromDraftsByBagIdAndGraderId(conn, bagId, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    INSERT INTO grading_scores (
+      slot_id,
+      score,
+      entered_by,
+      entered_at
+    )
+    SELECT
+      gsd.slot_id,
+      gsd.score,
+      gsd.grader_id,
+      NOW()
+    FROM grading_score_drafts gsd
+    WHERE gsd.bag_id = ?
+      AND gsd.grader_id = ?
+      AND gsd.status = 'DRAFT'
+  `;
+            yield conn.query(sql, [bagId, graderId]);
+        });
+    }
 }
 const gradingscoreRepo = new GradingScoreRepo();
 exports.default = gradingscoreRepo;

@@ -160,13 +160,14 @@ SELECT
     getLatestRandomNumForUpdate(connection, sessionId) {
         return __awaiter(this, void 0, void 0, function* () {
             const query = `
-        SELECT random_num 
-        FROM booklets 
-        WHERE session_id = ? AND random_num IS NOT NULL
-        ORDER BY id DESC 
-        LIMIT 1 
-        FOR UPDATE
-    `;
+    SELECT random_num
+    FROM booklets
+    WHERE session_id = ?
+      AND random_num IS NOT NULL
+    ORDER BY CAST(RIGHT(random_num, 4) AS UNSIGNED) DESC
+    LIMIT 1
+    FOR UPDATE
+  `;
             const [rows] = yield connection.query(query, [sessionId]);
             return rows.length > 0 ? rows[0] : null;
         });
@@ -288,6 +289,31 @@ SELECT
             sql += `${campaignCases} ${codeCases} WHERE id IN (${ids.join(",")})`;
             const finalParams = [...campaignParams, ...codeParams];
             yield conn.query(sql, finalParams);
+        });
+    }
+    countByBagId(conn, bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b;
+            const sql = `
+    SELECT COUNT(*) AS total
+    FROM booklets
+    WHERE bag_id = ?
+  `;
+            const [rows] = yield conn.query(sql, [bagId]);
+            return Number((_b = (_a = rows[0]) === null || _a === void 0 ? void 0 : _a.total) !== null && _b !== void 0 ? _b : 0);
+        });
+    }
+    findRandomNumsByBagId(conn, bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT random_num
+    FROM booklets
+    WHERE bag_id = ?
+      AND random_num IS NOT NULL
+    ORDER BY CAST(random_num AS UNSIGNED)
+  `;
+            const [rows] = yield conn.query(sql, [bagId]);
+            return rows.map(r => Number(r.random_num));
         });
     }
 }

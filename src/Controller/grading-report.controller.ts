@@ -2,6 +2,8 @@
 import { Request, Response } from "express";
 import { GradingReportService } from "../Service/grading-report.service";
 import { GraderReportService } from "../Service/grader-report.service";
+import { getCampaignUnlock, getUnlockCampaignByBagId } from "../Repo/grading-report.repo";
+import { DB } from "../model/DB";
 
 
 function asInt(v: any, fallback = 0) {
@@ -66,21 +68,47 @@ export class GradingReportController {
         .json({ message: err?.message ?? "Internal server error" });
     }
   }
-  static ReportScorePDF = async (req: Request, res: Response) => {
-    const bagId = Number(req.params.bagId);
-    try {
-      const buf = await GradingReportService.generateBagScorePdf(bagId);
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `inline; filename="bag-${bagId}-scores.pdf"`
-      );
-      res.send(buf);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
-    }
+  // static ReportScorePDF = async (req: Request, res: Response) => {
+  //   const bagId = Number(req.params.bagId);
+  //   try {
+  //     const buf = await GradingReportService.generateBagScorePdf(bagId);
+  //     res.setHeader("Content-Type", "application/pdf");
+  //     res.setHeader(
+  //       "Content-Disposition",
+  //       `inline; filename="bag-${bagId}-scores.pdf"`
+  //     );
+  //     res.send(buf);
+  //   } catch (err) {
+  //     console.error(err);
+  //     res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+  //   }
+  // }
+static ReportScorePDF = async (req: Request, res: Response) => {
+  const bagId = Number(req.params.bagId);
+  const conn = await DB.getInstance().getConnection();
+
+  try {
+    const result = await getUnlockCampaignByBagId(conn, bagId);
+    const unlock = result[0]?.is_unlock ?? 0;
+
+    const buf =
+      unlock === 1
+        ? await GradingReportService.generateUnlockedBagScorePdfUser({ bagId })
+        : await GradingReportService.generateBagScorePdf(bagId);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="bag-${bagId}-scores.pdf"`
+    );
+    res.send(buf);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+  } finally {
+    conn.release();
   }
+};
 
   static ReportScoreUserIFUnlock = async (req: Request, res: Response) => {
     const bagId = Number(req.params.bagId);
@@ -97,22 +125,47 @@ export class GradingReportController {
       res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
     }
   }
+  // static ReportScoreAllPDF = async (req: Request, res: Response) => {
+  //   const { campaign_id } = req.params
+  //   // console.log(campaign_id)
+  //   try {
+  //     const buf = await GradingReportService.generateCampaignBagScoresPdf(Number(campaign_id));
+  //     res.setHeader("Content-Type", "application/pdf");
+  //     res.setHeader(
+  //       "Content-Disposition",
+  //       `inline; filename="campaign-${campaign_id}-scores.pdf"`
+  //     );
+  //     res.send(buf);
+  //   } catch (err) {
+  //     console.error(err);
+  //     res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+  //   }
+  // }
   static ReportScoreAllPDF = async (req: Request, res: Response) => {
-    const { campaign_id } = req.params
-    // console.log(campaign_id)
-    try {
-      const buf = await GradingReportService.generateCampaignBagScoresPdf(Number(campaign_id));
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `inline; filename="campaign-${campaign_id}-scores.pdf"`
-      );
-      res.send(buf);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
-    }
+  const campaignId = Number(req.params.campaign_id);
+  const conn = await DB.getInstance().getConnection();
+
+  try {
+    const unlock = await getCampaignUnlock(conn, campaignId);
+
+    const buf =
+      unlock === 1
+        ? await GradingReportService.generateUnlockedCampaignBagScoresPdf(campaignId)
+        : await GradingReportService.generateCampaignBagScoresPdf(campaignId);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="campaign-${campaignId}-scores.pdf"`
+    );
+    res.send(buf);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "สร้าง PDF ไม่สำเร็จ" });
+  } finally {
+    conn.release();
   }
+};
 
   static ReportScoreGraders = async (req: Request, res: Response) => {
     const { bag_id, grader_id } = req.params

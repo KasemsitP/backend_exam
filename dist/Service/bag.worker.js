@@ -32,11 +32,16 @@ const SHEET = {
     outerWidth: 565,
     outerHeight: 805,
 };
+const LAYOUT = {
+    contentLeft: 40,
+    contentRight: 40,
+    headerTop: 30,
+    footerHeight: 48,
+    footerBottomGap: 14,
+    sectionGap: 10,
+};
 const TABLE = {
-    x: 40,
-    width: 500,
-    headerHeight: 24,
-    rowHeight: 22,
+    headerHeight: 22,
     rowsPerPage: 30,
 };
 const FONT_PATHS = {
@@ -54,117 +59,147 @@ function drawOuterFrame(doc) {
         .rect(SHEET.outerX, SHEET.outerY, SHEET.outerWidth, SHEET.outerHeight)
         .stroke();
 }
+function getTableRowHeight(doc, tableStartY) {
+    const footerTopY = SHEET.outerY + SHEET.outerHeight - LAYOUT.footerHeight - LAYOUT.footerBottomGap;
+    const availableHeight = footerTopY - tableStartY;
+    const rowHeight = (availableHeight - TABLE.headerHeight) / TABLE.rowsPerPage;
+    return {
+        footerTopY,
+        availableHeight,
+        rowHeight,
+        tableHeight: TABLE.headerHeight + rowHeight * TABLE.rowsPerPage,
+    };
+}
 function drawHeader(doc, info, bagNo) {
-    const left = 52;
-    let y = 30;
-    doc.font("SarabunBold").fontSize(16);
+    var _a, _b, _c, _d;
+    const pageWidth = doc.page.width;
+    const marginX = 52;
+    const labelX = marginX;
+    const valueX = marginX + 80;
+    let y = LAYOUT.headerTop;
+    doc.font("SarabunBold").fontSize(22);
     doc.text(`ถุงที่ ${bagNo}`, 0, y, { align: "right" });
+    y += 20;
+    doc.font("SarabunBold").fontSize(18);
+    doc.text("ใบสรุปข้อมูลถุงจัดเก็บข้อสอบ", marginX, y, {
+        width: doc.page.width - marginX * 2,
+        align: "center",
+    });
+    y += 30;
+    doc.font("Sarabun").fontSize(15);
+    doc.text("รอบสอบ :", labelX, y);
+    doc.text((_a = info.org) !== null && _a !== void 0 ? _a : "-", valueX, y);
     y += 18;
-    doc.font("Sarabun").fontSize(14);
-    doc.text("ใบกรอกคะแนนวิชา", left, y);
-    doc.text("........................................................................", left + 72, y);
+    doc.text("วิชา :", labelX, y);
+    doc.text((_b = info.course) !== null && _b !== void 0 ? _b : "-", valueX, y);
     y += 18;
-    doc.text("ชื่อ", left, y);
-    doc.text("............................", left + 18, y);
-    doc.text("เลขรหัส", left + 120, y);
-    doc.text("............................", left + 160, y);
-    doc.text("ถึง", left + 285, y);
-    doc.text("............................", left + 300, y);
-    y += 18;
-    doc.text("ชื่อผู้ตรวจ", left, y);
-    doc.text("........................................................................", left + 42, y);
-    y += 18;
-    doc.text("ผู้รวบรวมชุดที่", left + 145, y, { width: 120, align: "center" });
-    doc.text("................................", left + 235, y);
-    const metaParts = [];
-    if (info.course)
-        metaParts.push(`วิชา: ${info.course}`);
-    if (info.org)
-        metaParts.push(`${info.org}`);
-    if (info.sessionText)
-        metaParts.push(info.sessionText);
-    if (info.site)
-        metaParts.push(`ณ ${info.site}`);
-    if (metaParts.length > 0) {
-        y += 16;
-        doc.font("Sarabun").fontSize(10).fillColor("#666666");
-        doc.text(metaParts.join("   |   "), left, y, {
-            width: 460,
-            align: "center",
-        });
-        doc.fillColor("black");
+    const startText = (_c = info.start_num) !== null && _c !== void 0 ? _c : "-";
+    const toText = "ถึง";
+    const endText = (_d = info.end_num) !== null && _d !== void 0 ? _d : "-";
+    doc.text("ลำดับจัดเก็บ :", labelX, y);
+    let x = valueX;
+    // start
+    doc.text(startText, x, y);
+    x += doc.widthOfString(startText) + 10; // gap เล็ก ๆ
+    // ถึง
+    doc.text(toText, x, y);
+    x += doc.widthOfString(toText) + 10;
+    // end
+    doc.text(endText, x, y);
+    if (info.site) {
+        y += 18;
+        doc.text("สถานที่ :", labelX, y);
+        doc.text(info.site, valueX, y);
     }
+    // const metaParts: string[] = [];
+    // if (info.org) metaParts.push(info.org);
+    // if (info.sessionText) metaParts.push(info.sessionText);
+    // if (info.site) metaParts.push(`ณ ${info.site}`);
+    // if (metaParts.length > 0) {
+    //   y += 20;
+    //   doc.font("Sarabun").fontSize(10).fillColor("#666666");
+    //   doc.text(metaParts.join("   |   "), marginX, y, {
+    //     width: pageWidth - marginX * 2,
+    //     align: "center",
+    //   });
+    //   doc.fillColor("black");
+    // }
+    return y + LAYOUT.sectionGap + 18;
 }
 function drawFooter(doc) {
-    const y = 785;
-    doc.font("Sarabun").fontSize(14);
-    doc.text("(.................................................................)", 0, y, {
-        align: "center",
-    });
-    doc.text("ลายมือชื่อผู้ตรวจ", 0, y + 14, {
-        align: "center",
-    });
+    const footerTopY = SHEET.outerY + SHEET.outerHeight - LAYOUT.footerHeight - LAYOUT.footerBottomGap;
+    // doc.font("Sarabun").fontSize(14);
+    // doc.text("(.................................................................)", 0, footerTopY, {
+    //   align: "center",
+    // });
+    // doc.text("ลายมือชื่อผู้ตรวจ", 0, footerTopY + 14, {
+    //   align: "center",
+    // });
 }
-function drawTable(doc, rows) {
-    var _a, _b, _c;
-    const tableX = TABLE.x;
-    const startY = 132;
-    const tableWidth = TABLE.width;
-    const col1 = 95;
-    const col2 = tableWidth - col1;
+function drawTable(doc, rows, startY) {
+    var _a, _b;
+    const tableX = LAYOUT.contentLeft;
+    const tableWidth = doc.page.width - LAYOUT.contentLeft - LAYOUT.contentRight;
+    const colNoWidth = 70;
+    const colPayloadWidth = tableWidth - colNoWidth;
     const x1 = tableX;
-    const x2 = x1 + col1;
+    const x2 = x1 + colNoWidth;
     const x3 = x1 + tableWidth;
-    const tableHeight = TABLE.headerHeight + TABLE.rowsPerPage * TABLE.rowHeight;
+    const { rowHeight, tableHeight } = getTableRowHeight(doc, startY);
     doc.lineWidth(0.7).strokeColor("black").fillColor("black");
+    // Outer border
     doc.rect(x1, startY, tableWidth, tableHeight).stroke();
+    // Vertical separator
     doc.moveTo(x2, startY).lineTo(x2, startY + tableHeight).stroke();
+    // Header separator
     doc
         .moveTo(x1, startY + TABLE.headerHeight)
         .lineTo(x3, startY + TABLE.headerHeight)
         .stroke();
+    // Row lines
     for (let i = 1; i <= TABLE.rowsPerPage; i++) {
-        const y = startY + TABLE.headerHeight + i * TABLE.rowHeight;
+        const y = startY + TABLE.headerHeight + i * rowHeight;
         doc.moveTo(x1, y).lineTo(x3, y).stroke();
     }
+    // Header text
     doc.font("SarabunBold").fontSize(13);
-    doc.text("เลขที่", x1, startY + 5, {
-        width: col1,
+    doc.text("เลขที่", x1, startY + 4, {
+        width: colNoWidth,
         align: "center",
     });
-    doc.text("payload", x2, startY + 5, {
-        width: col2,
+    doc.text("Payload", x2, startY + 4, {
+        width: colPayloadWidth,
         align: "center",
     });
-    doc.font("Sarabun").fontSize(11);
+    // Body text
+    doc.font("Sarabun").fontSize(10);
     for (let i = 0; i < TABLE.rowsPerPage; i++) {
         const row = rows[i];
         if (!row)
             continue;
-        const y = startY + TABLE.headerHeight + i * TABLE.rowHeight + 4;
-        const displayPayload = String((_a = row.qr_payload) !== null && _a !== void 0 ? _a : "").length > 85
-            ? String(row.qr_payload).slice(0, 85) + "..."
-            : String((_b = row.qr_payload) !== null && _b !== void 0 ? _b : "");
-        doc.text(String((_c = row.random_num) !== null && _c !== void 0 ? _c : ""), x1 + 4, y, {
-            width: col1 - 8,
+        const y = startY + TABLE.headerHeight + i * rowHeight + 3;
+        const payloadText = String((_a = row.qr_payload) !== null && _a !== void 0 ? _a : "");
+        doc.text(String((_b = row.random_num) !== null && _b !== void 0 ? _b : ""), x1 + 3, y, {
+            width: colNoWidth - 6,
             align: "center",
+            lineBreak: false,
         });
-        doc.text(displayPayload, x2 + 6, y, {
-            width: col2 - 12,
+        doc.text(payloadText, x2 + 5, y, {
+            width: colPayloadWidth - 10,
             align: "left",
             lineBreak: false,
             ellipsis: true,
         });
     }
 }
-function addBagPages(doc, info, bag) {
+function addBagPages(doc, bag) {
     const pages = chunk(bag.rows, TABLE.rowsPerPage);
     const safePages = pages.length > 0 ? pages : [[]];
     for (const pageRows of safePages) {
         doc.addPage();
-        drawOuterFrame(doc);
-        drawHeader(doc, info, bag.bag_no);
-        drawTable(doc, pageRows);
+        //drawOuterFrame(doc);
+        const tableStartY = drawHeader(doc, bag.info, bag.bag_no);
+        drawTable(doc, pageRows, tableStartY);
         drawFooter(doc);
     }
 }
@@ -194,30 +229,30 @@ function writePdf(outputPath, drawFn) {
 }
 function generateBagPayloadPdf(options) {
     return __awaiter(this, void 0, void 0, function* () {
-        const { info = {}, bag } = options;
+        const { bag } = options;
         const outputPath = options.outputPath ||
             path_1.default.join(os_1.default.tmpdir(), `payload_bag_${bag.bag_no}_${Date.now()}.pdf`);
         return writePdf(outputPath, (doc) => {
-            addBagPages(doc, info, bag);
+            addBagPages(doc, bag);
         });
     });
 }
 function generateBagPayloadAllPdf(options) {
     return __awaiter(this, void 0, void 0, function* () {
-        const { info = {}, bags } = options;
+        const { bags } = options;
         const outputPath = options.outputPath ||
             path_1.default.join(os_1.default.tmpdir(), `payload_all_${Date.now()}.pdf`);
         return writePdf(outputPath, (doc) => {
             if (!bags || bags.length === 0) {
                 doc.addPage();
-                drawOuterFrame(doc);
-                drawHeader(doc, info, "-");
-                drawTable(doc, []);
+                //  drawOuterFrame(doc);
+                const tableStartY = drawHeader(doc, {}, "-");
+                drawTable(doc, [], tableStartY);
                 drawFooter(doc);
                 return;
             }
             for (const bag of bags) {
-                addBagPages(doc, info, bag);
+                addBagPages(doc, bag);
             }
         });
     });
@@ -234,7 +269,6 @@ function runWorkerTask() {
                         throw new Error("generateBagPayloadPdf ต้องมี options.bag");
                     }
                     filePath = yield generateBagPayloadPdf({
-                        info: options.info,
                         bag: options.bag,
                         outputPath: options.outputPath,
                     });
@@ -244,7 +278,6 @@ function runWorkerTask() {
                         throw new Error("generateBagPayloadAllPdf ต้องมี options.bags");
                     }
                     filePath = yield generateBagPayloadAllPdf({
-                        info: options.info,
                         bags: options.bags,
                         outputPath: options.outputPath,
                     });

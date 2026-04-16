@@ -199,11 +199,11 @@ class DashboardService {
      */
     static getCampaignDashboardSlotCoverage(campaignId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return cached(`dash:slotCoverage:${campaignId}`, 5 * 60000, () => __awaiter(this, void 0, void 0, function* () {
+            return cached(`dash:slotCoverage:${campaignId}`, 60000, () => __awaiter(this, void 0, void 0, function* () {
                 const rawStatus = yield dashboard_repo_1.default.getStatus(campaignId);
                 return { rawStatus };
             }));
         });
-    }
+    } //5 * 60_000 = 5 นาที
 }
 exports.DashboardService = DashboardService;

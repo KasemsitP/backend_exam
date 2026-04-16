@@ -56,6 +56,7 @@ const router_decrypt_1 = __importDefault(require("./Routes/router.decrypt"));
 const router_graderrecheck_1 = __importDefault(require("./Routes/router.graderrecheck"));
 const router_settings_1 = __importDefault(require("./Routes/router.settings"));
 const router_gradingscorelog_1 = __importDefault(require("./Routes/router.gradingscorelog"));
+const router_gradingscoredraft_1 = __importDefault(require("./Routes/router.gradingscoredraft"));
 dotenv_1.default.config();
 exports.app = (0, express_1.default)();
 exports.app.set('trust proxy', 1);
@@ -234,6 +235,7 @@ exports.app.use("/api", router_decrypt_1.default);
 exports.app.use("/api", router_graderrecheck_1.default);
 exports.app.use("/api/", router_settings_1.default);
 exports.app.use("/api/", router_gradingscorelog_1.default);
+exports.app.use("/api/", router_gradingscoredraft_1.default);
 exports.app.get("/test", authentication_1.isAuthenticated, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const conn = DB_1.DB.getInstance();

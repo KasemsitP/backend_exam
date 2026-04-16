@@ -175,10 +175,16 @@ export class GradingReportService {
   static async generateBagScorePdf(bagId: number): Promise<Buffer> {
     return this.runWorkerTask('generateBagScorePdf', { bagId });
   }
+  static async generateUnlockedBagScorePdf(bagId: number): Promise<Buffer> {
+  return this.runWorkerTask("generateUnlockedBagScorePdf", { bagId });
+}
 
   static async generateCampaignBagScoresPdf(campaignId: number): Promise<Buffer> {
     return this.runWorkerTask('generateCampaignBagScoresPdf', { campaignId });
   }
+  static async generateUnlockedCampaignBagScoresPdf(campaignId: number): Promise<Buffer> {
+  return this.runWorkerTask("generateUnlockedCampaignBagScoresPdf", { campaignId });
+}
 
   static async generateGraderBagSummaryPdf(bagId: number, graderId: number, graderName: string): Promise<Buffer> {
     return this.runWorkerTask('generateGraderBagSummaryPdf', { bagId, graderId, graderName });

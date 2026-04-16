@@ -42,3 +42,47 @@ gradingslotController.CreateSlot = (req, res) => __awaiter(void 0, void 0, void 
         res.status(400).send({ message: error.message });
     }
 });
+gradingslotController.previewStartFromQr = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { qrPayload, campaignId, graderId, questionNo } = req.body;
+        if (!qrPayload || !campaignId || !graderId || !questionNo) {
+            return res.status(400).json({
+                message: "ข้อมูลไม่ครบ",
+            });
+        }
+        const result = yield gradingslot_service_1.gradingService.previewStartFromQr({
+            qrPayload,
+            campaignId: Number(campaignId),
+            graderId: Number(graderId),
+            questionNo: Number(questionNo),
+        });
+        return res.status(200).json(result);
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: error.message || "ไม่สามารถ preview การเริ่มตรวจได้",
+        });
+    }
+});
+gradingslotController.confirmStartFromQr = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { qrPayload, campaignId, graderId, questionNo } = req.body;
+        if (!qrPayload || !campaignId || !graderId || !questionNo) {
+            return res.status(400).json({
+                message: "ข้อมูลไม่ครบ",
+            });
+        }
+        const result = yield gradingslot_service_1.gradingService.confirmStartFromQr({
+            qrPayload,
+            campaignId: Number(campaignId),
+            graderId: Number(graderId),
+            questionNo: Number(questionNo),
+        });
+        return res.status(200).json(result);
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: error.message || "ไม่สามารถยืนยันเริ่มตรวจได้",
+        });
+    }
+});

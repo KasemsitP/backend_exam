@@ -1,1 +1,0 @@
-import{a as o,c as u,bq as a,br as c,j as r}from"./index-CwbY3Q1w.js";function g({permission:t,anyOf:e,fallback:n=null,children:l}){const s=o(u)?.roles;return(t?a(s,t):e&&e.length>0?c(s,e):!!s?.length)?r.jsx(r.Fragment,{children:l}):r.jsx(r.Fragment,{children:n})}export{g as S};

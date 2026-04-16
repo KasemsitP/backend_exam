@@ -215,9 +215,9 @@ export class DashboardService {
    * OPTIONAL: heavy debug endpoint (ควร cache นาน + เรียกเฉพาะตอนกดดู)
    */
   static async getCampaignDashboardSlotCoverage(campaignId: number) {
-    return cached(`dash:slotCoverage:${campaignId}`, 5 * 60_000, async () => {
+    return cached(`dash:slotCoverage:${campaignId}`, 60_000, async () => {
       const rawStatus = await dashboardRepo.getStatus(campaignId);
       return { rawStatus };
     });
-  }
+  }//5 * 60_000 = 5 นาที
 }

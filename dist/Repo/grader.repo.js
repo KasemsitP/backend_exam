@@ -190,6 +190,66 @@ ORDER BY sq.question_no ASC;
             return (_a = rows[0]) !== null && _a !== void 0 ? _a : null;
         });
     }
+    findConfirmedBagsByCampaignAndGrader(conn, campaignId, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT
+      b.id AS bagId,
+      b.bag_no AS bagNo,
+      sub.id AS subjectId,
+      sub.code AS subjectCode,
+      sub.name AS subjectName,
+      sq.question_no AS questionNo,
+      sq.label AS questionLabel,
+      COUNT(DISTINCT gsc.id) AS totalScored,
+      MAX(gsc.entered_at) AS confirmedAt
+    FROM bags b
+    JOIN sessions sess
+      ON sess.id = b.session_id
+    JOIN booklets bk
+      ON bk.bag_id = b.id
+
+    JOIN grader_assignments ga
+      ON ga.session_id = sess.id
+     AND ga.grader_id = ?
+
+    JOIN subject_questions sq
+      ON sq.id = ga.subject_question_id
+
+    JOIN subjects sub
+      ON sub.id = ga.subject_id
+
+    LEFT JOIN grading_slots gs
+      ON gs.booklet_id = bk.id
+     AND gs.subject_id = ga.subject_id
+     AND gs.question_no = sq.question_no
+     AND gs.grader_id = ga.grader_id
+
+    LEFT JOIN grading_scores gsc
+      ON gsc.slot_id = gs.id
+
+    WHERE sess.campaign_id = ?
+
+    GROUP BY
+      b.id,
+      b.bag_no,
+      sub.id,
+      sub.code,
+      sub.name,
+      sq.question_no,
+      sq.label
+
+    HAVING COUNT(DISTINCT gsc.id) = COUNT(DISTINCT bk.id)
+
+    ORDER BY b.bag_no, sub.code, sq.question_no
+  `;
+            const [rows] = yield conn.query(sql, [
+                graderId,
+                campaignId,
+            ]);
+            return rows;
+        });
+    }
 }
 const graderRepo = new GraderRepo();
 exports.default = graderRepo;

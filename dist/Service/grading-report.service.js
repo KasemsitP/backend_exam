@@ -161,9 +161,19 @@ class GradingReportService {
             return this.runWorkerTask('generateBagScorePdf', { bagId });
         });
     }
+    static generateUnlockedBagScorePdf(bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.runWorkerTask("generateUnlockedBagScorePdf", { bagId });
+        });
+    }
     static generateCampaignBagScoresPdf(campaignId) {
         return __awaiter(this, void 0, void 0, function* () {
             return this.runWorkerTask('generateCampaignBagScoresPdf', { campaignId });
+        });
+    }
+    static generateUnlockedCampaignBagScoresPdf(campaignId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.runWorkerTask("generateUnlockedCampaignBagScoresPdf", { campaignId });
         });
     }
     static generateGraderBagSummaryPdf(bagId, graderId, graderName) {

@@ -23,4 +23,5 @@ bagRouter.get("/bags/scanned/:campaignId",bagController.getBookScannedCount)
 
 bagRouter.get("/bags/createpdf/:bag_id",bagController.createPDF)
 bagRouter.get("/bags/createpdfAll",bagController.createPDFByCampaignId)
+bagRouter.get("/bags/grader/active/:campaignId",bagController.getBagActiveGrader)
 export default bagRouter;

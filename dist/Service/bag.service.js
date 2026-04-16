@@ -105,6 +105,115 @@ class bagService {
             }
         });
     }
+    static generateBagPayloadPdfByBagId(bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _b;
+            const infoCamp = yield bag_repo_1.default.findBagPayloadRowsWithSubject(bagId);
+            const raw = yield bag_repo_1.default.findBagPayloadRows(bagId);
+            if (!raw || raw.length === 0) {
+                throw new Error("ไม่พบข้อมูลข้อสอบในถุง");
+            }
+            if (!infoCamp || infoCamp.length === 0) {
+                throw new Error("ไม่พบข้อมูลหัวกระดาษของถุง");
+            }
+            const dataInfo = infoCamp[0];
+            const start_num = raw[0].random_num;
+            const end_num = raw[raw.length - 1].random_num;
+            const bag = {
+                bag_no: raw[0].bag_no,
+                info: {
+                    course: dataInfo.subject_name,
+                    org: dataInfo.campaign_name,
+                    sessionText: (_b = dataInfo.session_label) !== null && _b !== void 0 ? _b : dataInfo.subject_name,
+                    site: dataInfo.site,
+                    start_num,
+                    end_num,
+                },
+                rows: raw.map((r) => ({
+                    random_num: r.random_num,
+                    qr_payload: key_service_1.keyService.maskQrPayload(r.qr_payload), // (ใส่ Mask ก่อนส่งไปให้ Worker เพื่อความปลอดภัยของข้อมูล)
+                })),
+            };
+            return this.runPayloadWorkerTask("generateBagPayloadPdf", {
+                bag,
+            });
+        });
+    }
+    static generateBagPayloadAllPdfByCampaignId(campaignId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _b;
+            const raw = yield bag_repo_1.default.findAllBagPayloadRowsByCampaignId(campaignId);
+            console.log(raw);
+            if (!raw || raw.length === 0) {
+                throw new Error("ไม่พบข้อมูลถุงในรอบสอบนี้");
+            }
+            const bagMap = new Map();
+            for (const row of raw) {
+                if (!bagMap.has(row.bag_id)) {
+                    bagMap.set(row.bag_id, {
+                        bag_no: row.bag_no,
+                        info: {
+                            course: row.subject_name,
+                            org: row.campaign_name,
+                            sessionText: (_b = row.session_label) !== null && _b !== void 0 ? _b : row.subject_name,
+                            site: row.site,
+                            start_num: row.random_num,
+                            end_num: row.random_num,
+                        },
+                        rows: [],
+                    });
+                }
+                const bag = bagMap.get(row.bag_id);
+                bag.rows.push({
+                    random_num: row.random_num,
+                    qr_payload: key_service_1.keyService.maskQrPayload(row.qr_payload), // (ใส่ Mask ก่อนส่งไปให้ Worker เพื่อความปลอดภัยของข้อมูล)
+                });
+                bag.info.end_num = row.random_num;
+            }
+            const bags = Array.from(bagMap.values());
+            return this.runPayloadWorkerTask("generateBagPayloadAllPdf", {
+                bags,
+            });
+        });
+    }
+    static generateBagPayloadAllPdfBySessionId(sessionId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _b;
+            const raw = yield bag_repo_1.default.findAllBagPayloadRowsBySession(sessionId);
+            console.log(raw);
+            if (!raw || raw.length === 0) {
+                throw new Error("ไม่พบข้อมูลถุงในวันที่สอบนี้");
+            }
+            const bagMap = new Map();
+            for (const row of raw) {
+                if (!bagMap.has(row.bag_id)) {
+                    bagMap.set(row.bag_id, {
+                        bag_no: row.bag_no,
+                        info: {
+                            course: row.subject_name,
+                            org: row.campaign_name,
+                            sessionText: (_b = row.session_label) !== null && _b !== void 0 ? _b : row.subject_name,
+                            site: row.site,
+                            start_num: row.random_num,
+                            end_num: row.random_num,
+                        },
+                        rows: [],
+                    });
+                }
+                const bag = bagMap.get(row.bag_id);
+                bag.rows.push({
+                    random_num: row.random_num,
+                    qr_payload: key_service_1.keyService.maskQrPayload(row.qr_payload), // (ใส่ Mask ก่อนส่งไปให้ Worker เพื่อความปลอดภัยของข้อมูล)
+                });
+                bag.info.end_num = row.random_num;
+            }
+            const bags = Array.from(bagMap.values());
+            console.log(bags);
+            return this.runPayloadWorkerTask("generateBagPayloadAllPdf", {
+                bags,
+            });
+        });
+    }
 }
 exports.bagService = bagService;
 _a = bagService;
@@ -344,8 +453,18 @@ datetime, expected_bag_no) => __awaiter(void 0, void 0, void 0, function* () {
             const nextRandomNum = `${dataNo}${paddedRunning}`;
             const seq = i + 1;
             const status = 'PACKAGED';
+            console.log("TEST", seq, " : ", nextRandomNum);
             updatePromises.push(booklets_repo_1.default.updateBagInfoByPayload(connection, rawQrPayload, // ส่งตัวจริงไป Update
             bagId, seq, status, nextRandomNum, datetime[i]));
+            // await bookletsRepo.updateBagInfoByPayload(
+            //     connection,
+            //     realPayloads[i],
+            //     bagId,
+            //     i + 1,
+            //     'PACKAGED',
+            //     nextRandomNum,
+            //     datetime[i]
+            // );
         }
         yield Promise.all(updatePromises);
         yield connection.commit();
@@ -357,6 +476,7 @@ datetime, expected_bag_no) => __awaiter(void 0, void 0, void 0, function* () {
     }
     catch (error) {
         yield connection.rollback();
+        console.log("Service Error (CreateBagAndUpdateBooklets):", error);
         throw error;
     }
     finally {

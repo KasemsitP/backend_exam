@@ -374,7 +374,7 @@ WITH booklets_in_campaign AS (
   SELECT b.id AS booklet_id, b.session_id
   FROM booklets b
   JOIN sessions s ON s.id = b.session_id -- ✅ แก้ไขการเชื่อมต่อเป็น sessions โดยตรง
-  WHERE s.campaign_id = ?
+  WHERE s.campaign_id = ? AND b.status IN ('PACKAGED')
 ),
 booklet_counts AS (
   SELECT session_id, COUNT(*) AS booklet_count

@@ -55,6 +55,16 @@ graderService.getAssignmentByAccountId = (campaign_id, account_id) => __awaiter(
     const result = yield grader_repo_1.default.getAssignmentByAccountId(campaign_id, account_id);
     return result;
 });
+graderService.getBagFinished = (campaign_id, grader_id) => __awaiter(void 0, void 0, void 0, function* () {
+    const conn = yield DB_1.DB.getInstance().getConnection();
+    try {
+        const result = yield grader_repo_1.default.findConfirmedBagsByCampaignAndGrader(conn, campaign_id, grader_id);
+        return result;
+    }
+    finally {
+        conn.release();
+    }
+});
 graderService.create = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     var _b;
     const connection = yield DB_1.DB.getInstance().getConnection();

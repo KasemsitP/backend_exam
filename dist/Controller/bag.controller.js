@@ -12,6 +12,7 @@ var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bagController = void 0;
 const bag_service_1 = require("../Service/bag.service");
+const grader_work_lock_service_1 = require("../Service/grader-work-lock.service");
 class bagController {
 }
 exports.bagController = bagController;
@@ -56,6 +57,66 @@ bagController.CheckSubjectBooklets = (req, res) => __awaiter(void 0, void 0, voi
     }
     catch (error) {
         res.status(500).send({ message: error.message });
+    }
+});
+bagController.createPDF = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { bag_id } = req.params;
+        if (!bag_id) {
+            return res
+                .status(400)
+                .json({ message: "Invalid Bag ID" });
+        }
+        // const course = String(req.query.course ?? "วิชาไม่ระบุ");
+        // const org = String(req.query.org ?? "");
+        // const sessionText = String(req.query.sessionText ?? "");
+        const pdfBuffer = yield bag_service_1.bagService.generateBagPayloadPdfByBagId(Number(bag_id));
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="signsheet_${bag_id}.pdf"`);
+        res.send(pdfBuffer);
+    }
+    catch (err) {
+        console.error("generate sign sheet pdf error:", err);
+        res.status(500).json({ message: "ไม่สามารถสร้าง PDF ได้" });
+    }
+});
+bagController.createPDFByCampaignId = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const campaignId = req.query.campaign_id
+            ? Number(req.query.campaign_id)
+            : null;
+        const sessionId = req.query.session_id
+            ? Number(req.query.session_id)
+            : null;
+        if (!campaignId && !sessionId) {
+            return res.status(400).json({
+                message: "ต้องส่ง campaign_id หรือ session_id",
+            });
+        }
+        if (campaignId && sessionId) {
+            return res.status(400).json({
+                message: "ส่งได้แค่ campaign_id หรือ session_id อย่างใดอย่างหนึ่ง",
+            });
+        }
+        let pdfBuffer;
+        let filename;
+        if (campaignId) {
+            pdfBuffer =
+                yield bag_service_1.bagService.generateBagPayloadAllPdfByCampaignId(campaignId);
+            filename = `signsheet_campaign_${campaignId}.pdf`;
+        }
+        else {
+            pdfBuffer =
+                yield bag_service_1.bagService.generateBagPayloadAllPdfBySessionId(sessionId);
+            filename = `signsheet_session_${sessionId}.pdf`;
+        }
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        return res.send(pdfBuffer);
+    }
+    catch (err) {
+        console.error("generate sign sheet pdf error:", err);
+        return res.status(500).json({ message: "ไม่สามารถสร้าง PDF ได้" });
     }
 });
 // static InsertBooklets = async (req: Request, res: Response) => {
@@ -137,6 +198,19 @@ bagController.getBookScannedCount = (req, res) => __awaiter(void 0, void 0, void
     }
     catch (err) {
         //  console.error("Controller Error (getBookletsInBag):", err);
+        res.status(500).send({ message: err.message || "เกิดข้อผิดพลาด" });
+    }
+});
+bagController.getBagActiveGrader = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const campaignId = Number(req.params.campaignId);
+        if (!campaignId) {
+            return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
+        }
+        const list = yield grader_work_lock_service_1.GraderWorkLockSerivce.getBagActiveGrader(campaignId);
+        return res.status(200).json(list);
+    }
+    catch (err) {
         res.status(500).send({ message: err.message || "เกิดข้อผิดพลาด" });
     }
 });

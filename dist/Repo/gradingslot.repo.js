@@ -134,18 +134,20 @@ WHERE gs.booklet_id = ?
         return __awaiter(this, void 0, void 0, function* () {
             var _a;
             const [rows] = yield conn.query(`
-      SELECT 
+SELECT 
         ga.grader_id,
         ga.session_id,
         ga.subject_id,
         ga.subject_question_id,
         sq.question_no,
-        sq.label AS question_label
+        sq.label AS question_label,
+        s.name as subject_name
       FROM grader_assignments ga
       JOIN subject_questions sq
         ON ga.subject_question_id = sq.id
+      JOIN subjects s ON s.id = sq.subject_id
       WHERE ga.grader_id = ?
-        AND ga.session_id = ?
+        AND ga.session_id = ?;
     `, [graderId, sessionId]);
             // กรณี 1 grader มีได้แค่ 1 ข้อใน 1 session (ตามที่คุณเลือก)
             return (_a = rows) !== null && _a !== void 0 ? _a : null;
@@ -174,6 +176,179 @@ WHERE gs.booklet_id = ?
                 graderId,
             ]);
             return (_a = rows[0]) !== null && _a !== void 0 ? _a : null;
+        });
+    }
+    countExpectedSlotsByBagId(conn, bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b;
+            const sql = `
+    SELECT COUNT(gs.id) AS total
+    FROM booklets b
+    JOIN grading_slots gs
+      ON gs.booklet_id = b.id
+    WHERE b.bag_id = ?
+  `;
+            const [rows] = yield conn.query(sql, [bagId]);
+            return Number((_b = (_a = rows[0]) === null || _a === void 0 ? void 0 : _a.total) !== null && _b !== void 0 ? _b : 0);
+        });
+    }
+    markSlotsCompletedByBagId(conn, bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    UPDATE grading_slots gs
+    JOIN booklets b
+      ON b.id = gs.booklet_id
+    JOIN grading_score_drafts gsd
+      ON gsd.slot_id = gs.id
+    SET gs.status = 'COMPLETED'
+    WHERE b.bag_id = ?
+      AND gsd.status = 'DRAFT'
+  `;
+            yield conn.query(sql, [bagId]);
+        });
+    }
+    validateSlotsForConfirm(conn, bagId, graderId, slotIds) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b;
+            if (!slotIds.length)
+                return false;
+            const placeholders = slotIds.map(() => "?").join(",");
+            const sql = `
+    SELECT COUNT(*) AS total
+    FROM grading_slots gs
+    JOIN booklets bk
+      ON bk.id = gs.booklet_id
+    WHERE gs.id IN (${placeholders})
+      AND gs.grader_id = ?
+      AND bk.bag_id = ?
+  `;
+            const [rows] = yield conn.query(sql, [
+                ...slotIds,
+                graderId,
+                bagId,
+            ]);
+            return Number((_b = (_a = rows[0]) === null || _a === void 0 ? void 0 : _a.total) !== null && _b !== void 0 ? _b : 0) === slotIds.length;
+        });
+    }
+    insertScoresFromDraftsByBagIdAndGraderId(conn, bagId, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    INSERT INTO grading_scores (
+      slot_id,
+      score,
+      entered_by,
+      entered_at
+    )
+    SELECT
+      gsd.slot_id,
+      gsd.score,
+      gsd.grader_id,
+      NOW()
+    FROM grading_score_drafts gsd
+    WHERE gsd.bag_id = ?
+      AND gsd.grader_id = ?
+      AND gsd.status = 'DRAFT'
+  `;
+            yield conn.query(sql, [bagId, graderId]);
+        });
+    }
+    markSlotsCompletedByBagIdAndGraderId(conn, bagId, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    UPDATE grading_slots gs
+    JOIN booklets bk
+      ON bk.id = gs.booklet_id
+    SET gs.status = 'COMPLETED'
+    WHERE bk.bag_id = ?
+      AND gs.grader_id = ?
+      AND gs.id IN (
+        SELECT gsd.slot_id
+        FROM grading_score_drafts gsd
+        WHERE gsd.bag_id = ?
+          AND gsd.grader_id = ?
+          AND gsd.status = 'DRAFT'
+      )
+  `;
+            yield conn.query(sql, [bagId, graderId, bagId, graderId]);
+        });
+    }
+    findActiveLockByGraderId(conn, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT
+      id,
+      grader_id,
+      campaign_id,
+      bag_id,
+      question_no,
+      status,
+      locked_at
+    FROM grader_work_locks
+    WHERE grader_id = ?
+      AND status = 'ACTIVE'
+    LIMIT 1
+    FOR UPDATE
+  `;
+            const [rows] = yield conn.query(sql, [graderId]);
+            return rows[0] || null;
+        });
+    }
+    createLock(conn, params) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            const sql = `
+    INSERT INTO grader_work_locks (
+      grader_id,
+      campaign_id,
+      bag_id,
+      question_no,
+      status,
+      locked_at,
+      created_by
+    )
+    VALUES (?, ?, ?, ?, 'ACTIVE', NOW(), ?)
+  `;
+            const [result] = yield conn.query(sql, [
+                params.graderId,
+                params.campaignId,
+                params.bagId,
+                params.questionNo,
+                (_a = params.createdBy) !== null && _a !== void 0 ? _a : null,
+            ]);
+            return result.insertId;
+        });
+    }
+    releaseActiveLockByGraderId(conn, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    UPDATE grader_work_locks
+    SET
+      status = 'RELEASED',
+      released_at = NOW()
+    WHERE grader_id = ?
+      AND status = 'ACTIVE'
+  `;
+            yield conn.query(sql, [graderId]);
+        });
+    }
+    findActiveLockByBagAndQuestion(conn, bagId, questionNo) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT
+      id,
+      grader_id,
+      campaign_id,
+      bag_id,
+      question_no,
+      locked_at
+    FROM grader_work_locks
+    WHERE bag_id = ?
+      AND status = 'ACTIVE'
+    LIMIT 1
+    FOR UPDATE
+  `;
+            const [rows] = yield conn.query(sql, [bagId]);
+            return rows[0] || null;
         });
     }
 }

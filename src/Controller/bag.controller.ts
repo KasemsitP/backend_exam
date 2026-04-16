@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { bagService } from "../Service/bag.service";
-
+import { GraderWorkLockSerivce } from "../Service/grader-work-lock.service";
 
 export class bagController {
 
@@ -213,6 +213,21 @@ static createPDFByCampaignId = async (req: Request, res: Response) => {
       res.json(list);
     } catch (err: any) {
       //  console.error("Controller Error (getBookletsInBag):", err);
+      res.status(500).send({ message: err.message || "เกิดข้อผิดพลาด" });
+    }
+  };
+
+  static getBagActiveGrader = async (req: Request, res: Response) => {
+    try {
+      const campaignId = Number(req.params.campaignId);
+
+      if (!campaignId) {
+        return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
+      }
+
+      const list = await GraderWorkLockSerivce.getBagActiveGrader(campaignId);
+      return res.status(200).json(list);
+    } catch (err: any) {
       res.status(500).send({ message: err.message || "เกิดข้อผิดพลาด" });
     }
   };
