@@ -163,7 +163,7 @@ function drawTable(doc, rows, startY) {
     }
     // Header text
     doc.font("SarabunBold").fontSize(13);
-    doc.text("เลขที่", x1, startY + 4, {
+    doc.text("ลำดับจัดเก็บ", x1, startY + 4, {
         width: colNoWidth,
         align: "center",
     });
