@@ -96,6 +96,21 @@ class SessionRepo {
             }));
         });
     }
+    update(payload_1) {
+        return __awaiter(this, arguments, void 0, function* (payload, dbClient = this.pool) {
+            const sql = `
+      UPDATE sessions
+      SET  exam_date = ?
+      WHERE id = ?
+    `;
+            const params = [
+                payload.exam_date,
+                payload.id,
+            ];
+            yield dbClient.execute(sql, params);
+            return this.findById(payload.id);
+        });
+    }
 }
 const sessionRepo = new SessionRepo();
 exports.default = sessionRepo;

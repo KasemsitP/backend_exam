@@ -124,6 +124,27 @@ async delete(id: number): Promise<boolean> {
       id: row.id,
     }));
   }
+
+  
+    async update(
+    payload: { id: number; exam_date: Date },
+      dbClient: DbClient = this.pool
+    ): Promise<ApiSession> {
+      const sql = `
+      UPDATE sessions
+      SET  exam_date = ?
+      WHERE id = ?
+    `;
+      const params = [
+        payload.exam_date,
+        payload.id,
+      ];
+  
+      await dbClient.execute<any>(sql, params);
+  
+      return this.findById(payload.id);
+    }
+  
 }
 
 const sessionRepo = new SessionRepo();

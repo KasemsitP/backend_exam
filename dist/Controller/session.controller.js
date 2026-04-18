@@ -26,6 +26,21 @@ sessionController.create = (req, res) => __awaiter(void 0, void 0, void 0, funct
         res.status(400).send({ message: error.message });
     }
 });
+sessionController.update = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { exam_date } = req.body;
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            return res.status(400).send({ message: "Invalid ID format" });
+        }
+        console.log(exam_date, id);
+        const newSession = yield session_service_1.sessionService.update(exam_date, id);
+        res.status(201).json(newSession);
+    }
+    catch (error) {
+        res.status(400).send({ message: error.message });
+    }
+});
 sessionController.delete = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const id = parseInt(req.params.id, 10);

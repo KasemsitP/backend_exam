@@ -13,6 +13,11 @@ export class sessionService {
     return newSession;
   };
 
+    static update = async (exam_date: Date, session_id: number): Promise<ApiSession> => {
+    const updatedSession = await sessionRepo.update({ exam_date, id: session_id });
+    return updatedSession;
+  };
+
   static delete = async (id: number): Promise<boolean> => {
     const result = await sessionRepo.delete(id);
     console.log("lnwwwadawdwad")

@@ -28,6 +28,10 @@ sessionService.create = (payload) => __awaiter(void 0, void 0, void 0, function*
     const newSession = yield session_repo_1.default.create(payload);
     return newSession;
 });
+sessionService.update = (exam_date, session_id) => __awaiter(void 0, void 0, void 0, function* () {
+    const updatedSession = yield session_repo_1.default.update({ exam_date, id: session_id });
+    return updatedSession;
+});
 sessionService.delete = (id) => __awaiter(void 0, void 0, void 0, function* () {
     const result = yield session_repo_1.default.delete(id);
     console.log("lnwwwadawdwad");
