@@ -459,7 +459,7 @@ ORDER BY e.session_id, e.subject_id;
       SELECT COUNT(b.id) AS count
       FROM booklets b
       JOIN sessions s ON s.id = b.session_id
-      WHERE s.campaign_id = ?
+      WHERE s.campaign_id = ? and b.bag_id is not null
     `;
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, [campaign_id]);
     return Number(rows[0]?.count ?? 0);

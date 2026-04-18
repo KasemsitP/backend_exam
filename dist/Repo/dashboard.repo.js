@@ -436,7 +436,7 @@ ORDER BY e.session_id, e.subject_id;
       SELECT COUNT(b.id) AS count
       FROM booklets b
       JOIN sessions s ON s.id = b.session_id
-      WHERE s.campaign_id = ?
+      WHERE s.campaign_id = ? and b.bag_id is not null
     `;
             const [rows] = yield this.pool.execute(sql, [campaign_id]);
             return Number((_b = (_a = rows[0]) === null || _a === void 0 ? void 0 : _a.count) !== null && _b !== void 0 ? _b : 0);
