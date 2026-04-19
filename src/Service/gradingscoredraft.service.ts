@@ -203,7 +203,29 @@ class GradingScoreDraftService {
         throw new Error("พบ slot ที่ไม่ตรงกับถุงหรือไม่ใช่ของผู้ตรวจคนนี้");
       }
 
-      // 2) update draft ตามคะแนนล่าสุดจาก frontend
+
+
+      for (const item of params.scores) {
+        const qInfo = await gradingscoredraftRepo.checkScoreInfo(conn, {
+          slotId: item.slot_id,
+          graderId: params.graderId,
+          questionNo: item.question_no,
+        });
+
+        if (!qInfo) {
+          throw new Error(`ไม่พบข้อมูลข้อสอบของ slot ${item.slot_id}`);
+        }
+
+        if (item.score < 0 || item.score > Number(qInfo.max_score)) {
+          throw new Error(
+            `คะแนนต้องอยู่ระหว่าง 0 - ${qInfo.max_score}`
+          );
+        }
+        if (!Number.isInteger(Number(item.score))) {
+          throw new Error("คะแนนต้องเป็นจำนวนเต็มเท่านั้น");
+        }
+      }
+
       for (const item of params.scores) {
         await gradingscoredraftRepo.updateDraftScoreBySlotId(
           conn,
