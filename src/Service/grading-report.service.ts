@@ -10,6 +10,7 @@ import {
   findQuestionLabelForBagSubject,
   RawQuestionAverageRow,
 } from "../Repo/grading-report.repo";
+import { random } from "lodash";
 
 // =========================================================
 // Interfaces
@@ -135,7 +136,7 @@ export class GradingReportService {
       for (const r of rawPerBooklet) {
         let block = byBooklet.get(r.booklet_id);
         if (!block) {
-          block = { bookletId: r.booklet_id, examCode: unlock === 1 ? r.exam_code : String(r.random_num),
+          block = { bookletId: r.booklet_id, examCode: unlock === 1 ? r.exam_code : String(r.random_num), randomNum: r.random_num,
                 candidateName: unlock === 1 
       ? `${r.title ?? ''}${r.full_name ?? ''}`.trim()
       : null,

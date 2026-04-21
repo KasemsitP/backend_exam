@@ -890,7 +890,33 @@ async insertScoresFromDraftsByBagId(
 
   await conn.query(sql, [bagId, graderId]);
 }
+async existsScoreBySlotGroupAndGrader(
+  conn: PoolConnection,
+  bookletId: number,
+  subjectId: number,
+  questionNo: number,
+  graderId: number
+): Promise<boolean> {
+  const sql = `
+    SELECT 1
+    FROM grading_scores gs
+    JOIN grading_slots s ON s.id = gs.slot_id
+    WHERE s.booklet_id = ?
+      AND s.subject_id = ?
+      AND s.question_no = ?
+      AND s.grader_id = ?
+    LIMIT 1
+  `;
 
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [
+    bookletId,
+    subjectId,
+    questionNo,
+    graderId,
+  ]);
+
+  return rows.length > 0;
+}
 }
 
 const gradingscoreRepo = new GradingScoreRepo();

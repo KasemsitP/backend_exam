@@ -5,6 +5,7 @@ import bookletsRepo from "../Repo/booklets.repo"; // 👈 เพิ่ม import
 import { keyService } from "./key.service";
 import { PoolConnection } from "mysql2/promise";
 import gradingscoredraftRepo from "../Repo/gradingscoredraft.repo";
+import gradingscoreRepo from "../Repo/gradingscore.repo";
 
 interface CreateSlotFromQrPayload {
   qrPayload: string;
@@ -66,6 +67,7 @@ export class gradingService {
     bagId: number;
     bagNo: number;
     random_num: number;
+    isUpdate: boolean;
   }> {
     const { campaignId, graderId, questionNo } = payload;
 
@@ -174,7 +176,8 @@ export class gradingService {
         questionNo,
         bagId: bookletRow.bag_id,
         bagNo: bookletRow.bag_no,
-        random_num: bookletRow.random_num
+        random_num: bookletRow.random_num,
+        isUpdate: slot.isUpdate,
       };
     } catch (err) {
       await connection.rollback();
@@ -190,7 +193,7 @@ export class gradingService {
   static async allocateSlotForQuestion(
     params: AllocateSlotParams,
     conn?: PoolConnection
-  ): Promise<{ slotId: number; graderOrder: number; status: string }> {
+  ): Promise<{ slotId: number; graderOrder: number; status: string, isUpdate: boolean }> {
     const { bookletId, subjectId, questionNo, graderId } = params;
 
     const connection = conn || (await DB.getInstance().getConnection());
@@ -202,6 +205,30 @@ export class gradingService {
     }
 
     try {
+      const existingDraftSlot =
+        await gradingscoredraftRepo.findDraftSlotForGrader(
+          connection,
+          bookletId,
+          subjectId,
+          questionNo,
+          graderId
+        );
+
+      if (existingDraftSlot) {
+        console.log("Reuse existing draft slot:", existingDraftSlot.id);
+
+        if (createdConnection) {
+          await connection.commit();
+        }
+
+        return {
+          slotId: existingDraftSlot.id,
+          graderOrder: existingDraftSlot.grader_order ?? 1,
+          status: existingDraftSlot.status,
+          isUpdate: true,
+        };
+      }
+
       console.log(bookletId, subjectId, questionNo, graderId);
       const unscoredSlot = await gradingscoredraftRepo.findUnscoredSlotForGrader(
         connection,
@@ -213,7 +240,6 @@ export class gradingService {
       console.log("Unscored Slot Check:", unscoredSlot);
 
       if (unscoredSlot) {
-        // เคส: สแกนซ้ำ / หน้าเด้ง แต่ยังไม่เคยบันทึก score
         if (createdConnection) {
           await connection.commit();
         }
@@ -221,6 +247,7 @@ export class gradingService {
           slotId: unscoredSlot.id,
           graderOrder: unscoredSlot.grader_order ?? 1,
           status: unscoredSlot.status,
+          isUpdate: false,
         };
       }
       // ดึง slot เดิมของเล่มนี้ + วิชานี้ + ข้อนี้ (LOCK)
@@ -233,12 +260,24 @@ export class gradingService {
           true
         );
 
-      const alreadyHasThisGrader = existingSlots.some(
-        (s) => s.grader_id === graderId
-      );
-      console.log("Existing Slots for this Question:", existingSlots);
-      if (alreadyHasThisGrader) {
-        throw new Error("คุณเคยตรวจข้อสอบเล่มนี้แล้ว! ไม่สามารถตรวจซ้ำได้");
+      // const alreadyHasThisGrader = existingSlots.some(
+      //   (s) => s.grader_id === graderId
+      // );
+      // console.log("Existing Slots for this Question:", existingSlots);
+      // if (alreadyHasThisGrader) {
+      //   throw new Error("คุณเคยตรวจข้อสอบเล่มนี้แล้ว! ไม่สามารถตรวจซ้ำได้");
+      // }
+      const alreadyHasConfirmed =
+        await gradingscoreRepo.existsScoreBySlotGroupAndGrader(
+          connection,
+          bookletId,
+          subjectId,
+          questionNo,
+          graderId
+        );
+
+      if (alreadyHasConfirmed) {
+        throw new Error("ข้อนี้ถูกยืนยันคะแนนแล้ว ไม่สามารถแก้ไขได้");
       }
 
       if (existingSlots.length >= 2) {
@@ -275,6 +314,7 @@ export class gradingService {
         slotId: newSlot.id,
         graderOrder: newSlot.grader_order,
         status: newSlot.status,
+        isUpdate: false,
       };
     } catch (err) {
       if (createdConnection) {
@@ -374,15 +414,15 @@ export class gradingService {
       );
 
       const randomNums = await bookletsRepo.findRandomNumsByBagId(
-  connection,
-  Number(bookletRow.bag_id)
-);
+        connection,
+        Number(bookletRow.bag_id)
+      );
 
-const min_random =
-  randomNums.length > 0 ? Math.min(...randomNums) : null;
+      const min_random =
+        randomNums.length > 0 ? Math.min(...randomNums) : null;
 
-const max_random =
-  randomNums.length > 0 ? Math.max(...randomNums) : null;
+      const max_random =
+        randomNums.length > 0 ? Math.max(...randomNums) : null;
 
       return {
         canStart: true,
@@ -419,6 +459,7 @@ const max_random =
     bagId: number;
     bagNo: number;
     random_num: string | number;
+    isUpdate: boolean;
   }> {
     const { campaignId, graderId, questionNo } = payload;
     const connection = await DB.getInstance().getConnection();
@@ -514,6 +555,7 @@ const max_random =
         bagId: Number(bookletRow.bag_id),
         bagNo: Number(bookletRow.bag_no),
         random_num: bookletRow.random_num,
+        isUpdate: slot.isUpdate,
       };
     } catch (err) {
       await connection.rollback();

@@ -137,8 +137,10 @@ export class keyController {
       if (!ciphertext || !campaignId) {
         return res.status(400).send({ message: "Missing ciphertext or campaignId" });
       }
+      const unmasked = await keyService.unmaskQrPayload(ciphertext);
+      //console.log("Unmasked Payload:", unmasked);
 
-      const decrypted = await keyService.decryptPayloadStaff(ciphertext, campaignId);
+      const decrypted = await keyService.decryptPayloadStaff(unmasked, campaignId);
       res.status(200).json(decrypted);
     } catch (error: any) {
       res.status(500).send({ message: error.message });

@@ -226,6 +226,7 @@ static createPDFByCampaignId = async (req: Request, res: Response) => {
       }
 
       const list = await GraderWorkLockSerivce.getBagActiveGrader(campaignId);
+      //console.log(list)
       return res.status(200).json(list);
     } catch (err: any) {
       res.status(500).send({ message: err.message || "เกิดข้อผิดพลาด" });

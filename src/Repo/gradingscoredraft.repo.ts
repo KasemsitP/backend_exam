@@ -672,6 +672,38 @@ ORDER BY bk.random_num, gs.question_no;
   const [rows] = await conn.query<getScoreDraftForGrader[]>(sql, [graderId]);
   return rows;
 }
+
+//ใหม่เพื่อสำหรับการสแกนซ้ำ
+async findDraftSlotForGrader(
+  conn: PoolConnection,
+  bookletId: number,
+  subjectId: number,
+  questionNo: number,
+  graderId: number
+): Promise<GradingSlotRow | null> {
+  const sql = `
+    SELECT s.*
+    FROM grading_slots s
+    JOIN grading_score_drafts d
+      ON d.slot_id = s.id
+     AND d.status = 'DRAFT'
+    WHERE s.booklet_id = ?
+      AND s.subject_id = ?
+      AND s.question_no = ?
+      AND s.grader_id = ?
+    LIMIT 1
+    FOR UPDATE
+  `;
+
+  const [rows] = await conn.query<GradingSlotRow[]>(sql, [
+    bookletId,
+    subjectId,
+    questionNo,
+    graderId,
+  ]);
+
+  return rows[0] ?? null;
+}
 }
 
 
