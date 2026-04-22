@@ -529,6 +529,32 @@ ORDER BY bk.random_num, gs.question_no;
             return rows;
         });
     }
+    //ใหม่เพื่อสำหรับการสแกนซ้ำ
+    findDraftSlotForGrader(conn, bookletId, subjectId, questionNo, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            const sql = `
+    SELECT s.*
+    FROM grading_slots s
+    JOIN grading_score_drafts d
+      ON d.slot_id = s.id
+     AND d.status = 'DRAFT'
+    WHERE s.booklet_id = ?
+      AND s.subject_id = ?
+      AND s.question_no = ?
+      AND s.grader_id = ?
+    LIMIT 1
+    FOR UPDATE
+  `;
+            const [rows] = yield conn.query(sql, [
+                bookletId,
+                subjectId,
+                questionNo,
+                graderId,
+            ]);
+            return (_a = rows[0]) !== null && _a !== void 0 ? _a : null;
+        });
+    }
 }
 const gradingscoredraftRepo = new GradingScoreDraftRepo();
 exports.default = gradingscoredraftRepo;

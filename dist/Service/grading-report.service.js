@@ -118,7 +118,7 @@ class GradingReportService {
                 for (const r of rawPerBooklet) {
                     let block = byBooklet.get(r.booklet_id);
                     if (!block) {
-                        block = { bookletId: r.booklet_id, examCode: unlock === 1 ? r.exam_code : String(r.random_num),
+                        block = { bookletId: r.booklet_id, examCode: unlock === 1 ? r.exam_code : String(r.random_num), randomNum: r.random_num,
                             candidateName: unlock === 1
                                 ? `${(_d = r.title) !== null && _d !== void 0 ? _d : ''}${(_e = r.full_name) !== null && _e !== void 0 ? _e : ''}`.trim()
                                 : null,

@@ -208,6 +208,7 @@ bagController.getBagActiveGrader = (req, res) => __awaiter(void 0, void 0, void 
             return res.status(400).send({ message: "ข้อมูลไม่ครบ" });
         }
         const list = yield grader_work_lock_service_1.GraderWorkLockSerivce.getBagActiveGrader(campaignId);
+        //console.log(list)
         return res.status(200).json(list);
     }
     catch (err) {

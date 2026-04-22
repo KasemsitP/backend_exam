@@ -139,7 +139,9 @@ keyController.testDecrypt = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!ciphertext || !campaignId) {
             return res.status(400).send({ message: "Missing ciphertext or campaignId" });
         }
-        const decrypted = yield key_service_1.keyService.decryptPayloadStaff(ciphertext, campaignId);
+        const unmasked = yield key_service_1.keyService.unmaskQrPayload(ciphertext);
+        //console.log("Unmasked Payload:", unmasked);
+        const decrypted = yield key_service_1.keyService.decryptPayloadStaff(unmasked, campaignId);
         res.status(200).json(decrypted);
     }
     catch (error) {

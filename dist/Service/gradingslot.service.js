@@ -19,6 +19,7 @@ const gradingslot_repo_1 = __importDefault(require("../Repo/gradingslot.repo"));
 const booklets_repo_1 = __importDefault(require("../Repo/booklets.repo")); // 👈 เพิ่ม import นี้เพื่อหาข้อมูลเล่มข้อสอบ
 const key_service_1 = require("./key.service");
 const gradingscoredraft_repo_1 = __importDefault(require("../Repo/gradingscoredraft.repo"));
+const gradingscore_repo_1 = __importDefault(require("../Repo/gradingscore.repo"));
 class gradingService {
     static createSlotFromQr(payload) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -88,7 +89,8 @@ class gradingService {
                     questionNo,
                     bagId: bookletRow.bag_id,
                     bagNo: bookletRow.bag_no,
-                    random_num: bookletRow.random_num
+                    random_num: bookletRow.random_num,
+                    isUpdate: slot.isUpdate,
                 };
             }
             catch (err) {
@@ -106,7 +108,7 @@ class gradingService {
      */
     static allocateSlotForQuestion(params, conn) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a;
+            var _a, _b;
             const { bookletId, subjectId, questionNo, graderId } = params;
             const connection = conn || (yield DB_1.DB.getInstance().getConnection());
             let createdConnection = false;
@@ -115,26 +117,45 @@ class gradingService {
                 yield connection.beginTransaction();
             }
             try {
+                const existingDraftSlot = yield gradingscoredraft_repo_1.default.findDraftSlotForGrader(connection, bookletId, subjectId, questionNo, graderId);
+                if (existingDraftSlot) {
+                    console.log("Reuse existing draft slot:", existingDraftSlot.id);
+                    if (createdConnection) {
+                        yield connection.commit();
+                    }
+                    return {
+                        slotId: existingDraftSlot.id,
+                        graderOrder: (_a = existingDraftSlot.grader_order) !== null && _a !== void 0 ? _a : 1,
+                        status: existingDraftSlot.status,
+                        isUpdate: true,
+                    };
+                }
                 console.log(bookletId, subjectId, questionNo, graderId);
                 const unscoredSlot = yield gradingscoredraft_repo_1.default.findUnscoredSlotForGrader(connection, bookletId, subjectId, questionNo, graderId);
                 console.log("Unscored Slot Check:", unscoredSlot);
                 if (unscoredSlot) {
-                    // เคส: สแกนซ้ำ / หน้าเด้ง แต่ยังไม่เคยบันทึก score
                     if (createdConnection) {
                         yield connection.commit();
                     }
                     return {
                         slotId: unscoredSlot.id,
-                        graderOrder: (_a = unscoredSlot.grader_order) !== null && _a !== void 0 ? _a : 1,
+                        graderOrder: (_b = unscoredSlot.grader_order) !== null && _b !== void 0 ? _b : 1,
                         status: unscoredSlot.status,
+                        isUpdate: false,
                     };
                 }
                 // ดึง slot เดิมของเล่มนี้ + วิชานี้ + ข้อนี้ (LOCK)
                 const existingSlots = yield gradingslot_repo_1.default.findSlotsByBookletAndQuestion(connection, bookletId, subjectId, questionNo, true);
-                const alreadyHasThisGrader = existingSlots.some((s) => s.grader_id === graderId);
-                console.log("Existing Slots for this Question:", existingSlots);
-                if (alreadyHasThisGrader) {
-                    throw new Error("คุณเคยตรวจข้อสอบเล่มนี้แล้ว! ไม่สามารถตรวจซ้ำได้");
+                // const alreadyHasThisGrader = existingSlots.some(
+                //   (s) => s.grader_id === graderId
+                // );
+                // console.log("Existing Slots for this Question:", existingSlots);
+                // if (alreadyHasThisGrader) {
+                //   throw new Error("คุณเคยตรวจข้อสอบเล่มนี้แล้ว! ไม่สามารถตรวจซ้ำได้");
+                // }
+                const alreadyHasConfirmed = yield gradingscore_repo_1.default.existsScoreBySlotGroupAndGrader(connection, bookletId, subjectId, questionNo, graderId);
+                if (alreadyHasConfirmed) {
+                    throw new Error("ข้อนี้ถูกยืนยันคะแนนแล้ว ไม่สามารถแก้ไขได้");
                 }
                 if (existingSlots.length >= 2) {
                     throw new Error("ข้อนี้มีผู้ตรวจครบ 2 คนแล้ว");
@@ -158,6 +179,7 @@ class gradingService {
                     slotId: newSlot.id,
                     graderOrder: newSlot.grader_order,
                     status: newSlot.status,
+                    isUpdate: false,
                 };
             }
             catch (err) {
@@ -303,6 +325,7 @@ class gradingService {
                     bagId: Number(bookletRow.bag_id),
                     bagNo: Number(bookletRow.bag_no),
                     random_num: bookletRow.random_num,
+                    isUpdate: slot.isUpdate,
                 };
             }
             catch (err) {

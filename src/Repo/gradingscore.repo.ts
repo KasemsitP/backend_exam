@@ -29,6 +29,7 @@ export interface DisputedQuestionRow extends RowDataPacket {
   subjectId: number;
   random_num: string;
   questionNo: number;
+  qr_payload: string;
 
   bagId: number | null;
   bagNo: number | null;
@@ -523,14 +524,14 @@ class GradingScoreRepo {
     thresholdDiff: number
   ): Promise<DisputedQuestionRow[]> {
     const sql = `
-      -- 🛑 1. หากลุ่มเล่มข้อสอบของ Campaign นี้ก่อน (ลด Scope ข้อมูล)
+      --  1. หากลุ่มเล่มข้อสอบของ Campaign นี้ก่อน (ลด Scope ข้อมูล)
       WITH TargetBooklets AS (
-        SELECT b.id AS booklet_id, b.bag_id, b.random_num
+        SELECT b.id AS booklet_id, b.bag_id, b.random_num , b.qr_payload
         FROM sessions s
         JOIN booklets b ON b.session_id = s.id
         WHERE s.campaign_id = ?
       ),
-      -- 🛑 2. หาเฉพาะ "ข้อที่มีปัญหา" ล้วนๆ (คำนวณแต่ตัวเลข เร็วที่สุด)
+      --  2. หาเฉพาะ "ข้อที่มีปัญหา" ล้วนๆ (คำนวณแต่ตัวเลข เร็วที่สุด)
       ConflictingScores AS (
         SELECT 
             sl1.booklet_id, sl1.subject_id, sl1.question_no,
@@ -549,7 +550,7 @@ class GradingScoreRepo {
         JOIN grading_scores gs2 ON gs2.slot_id = sl2.id
         WHERE ABS(gs1.score - gs2.score) > ?
       )
-      -- 🛑 3. เอาข้อที่มีปัญหา (ซึ่งมีน้อยมาก) มาแปะชื่อวิชา และชื่อคนตรวจ
+      --  3. เอาข้อที่มีปัญหา (ซึ่งมีน้อยมาก) มาแปะชื่อวิชา และชื่อคนตรวจ
       SELECT 
         cs.booklet_id AS bookletId,
         bg.bag_no AS bagNo,
@@ -559,6 +560,7 @@ class GradingScoreRepo {
         cs.question_no AS questionNo,
         sq.label AS questionLabel,
         tb.random_num,
+        tb.qr_payload,
         cs.minScore, cs.maxScore, cs.diff,
         
         cs.slotId1, cs.score1, cs.graderId1,
