@@ -93,6 +93,7 @@ function buildUnlockedBookletBlocks(raw: any[], questionCount: number) {
     if (!block) {
       block = {
         bookletId: r.booklet_id,
+        randomNum: String(r.random_num ?? ""),
         examCode: r.exam_code ?? String(r.random_num),
         // ดึงชื่อมาด้วย (ต้องแน่ใจว่า SQL ใน Repo มีการ SELECT full_name หรือ title, first_name, last_name มาให้แล้ว)
         fullName:
@@ -291,7 +292,8 @@ function drawUnlockedBagScorePage(
 
   const totalRows = 30;
 
-  // ✅ เพิ่มคอลัมน์ชื่อ
+  // ✅ เพิ่มคอลัมน์ชื่อ + ลำดับจัดเก็บ
+  const colSeqWidth = 50;
   const colCodeWidth = 50;
   const colNameWidth = 100;
   const colPerScoreWidth = 22;
@@ -304,6 +306,7 @@ function drawUnlockedBagScorePage(
 
   const totalQuestionCols = questionCount * colsPerQuestion;
   const usedWidth =
+    colSeqWidth +
     colCodeWidth +
     colNameWidth +
     totalQuestionCols * colPerScoreWidth +
@@ -317,6 +320,7 @@ function drawUnlockedBagScorePage(
 
   const scale = Math.min(widthScale, heightScale, 1);
 
+  const cwSeq = colSeqWidth * scale;
   const cwCode = colCodeWidth * scale;
   const cwName = colNameWidth * scale;
   const cwScore = colPerScoreWidth * scale;
@@ -340,7 +344,14 @@ function drawUnlockedBagScorePage(
   doc.font(FONT_BOLD).fontSize(fontHeaderSize);
 
   // รวบเส้น header ชั้นบน
-  let p = doc.rect(x, y, cwCode, rowH1 + rowH2);
+  let p = doc.rect(x, y, cwSeq, rowH1 + rowH2);
+  doc.text("ลำดับจัดเก็บ", x, y + 6 * scale, {
+    width: cwSeq,
+    align: "center",
+  });
+  x += cwSeq;
+
+  p = p.rect(x, y, cwCode, rowH1 + rowH2);
   doc.text("รหัสประจำตัว\nสอบ", x, y + 4 * scale, {
     width: cwCode,
     align: "center",
@@ -374,7 +385,7 @@ function drawUnlockedBagScorePage(
 
   // แถวล่าง: หัวคอลัมน์ย่อย
   y += rowH1;
-  x = startX + cwCode + cwName;
+  x = startX + cwSeq + cwCode + cwName;
 
   const subHeads = ["ค.1", "ค.2", "ต่าง", "เฉลี่ย"];
   p = doc.lineWidth(0.5); // เริ่ม path ใหม่
@@ -403,7 +414,17 @@ function drawUnlockedBagScorePage(
     x = startX;
 
     //  รวบเส้น body ต่อ 1 แถว
-    let pathRow = doc.rect(x, y, cwCode, rowH);
+    let pathRow = doc.rect(x, y, cwSeq, rowH);
+    if (bk) {
+      doc.text(bk.randomNum ?? "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
+        width: cwSeq - 4 * scale,
+        align: "center",
+        ellipsis: true,
+      });
+    }
+    x += cwSeq;
+
+    pathRow = pathRow.rect(x, y, cwCode, rowH);
     if (bk) {
       doc.text(bk.examCode ?? "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
         width: cwCode - 4 * scale,
