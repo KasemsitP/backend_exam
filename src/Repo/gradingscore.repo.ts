@@ -859,7 +859,7 @@ async insertScoresFromDraftsByBagId(
       gsd.slot_id,
       gsd.score,
       gsd.grader_id,
-      NOW()
+      CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00')
     FROM grading_score_drafts gsd
     WHERE gsd.bag_id = ?
       AND gsd.status = 'DRAFT'
@@ -883,7 +883,7 @@ async insertScoresFromDraftsByBagId(
       gsd.slot_id,
       gsd.score,
       gsd.grader_id,
-      NOW()
+      CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00')
     FROM grading_score_drafts gsd
     WHERE gsd.bag_id = ?
       AND gsd.grader_id = ?

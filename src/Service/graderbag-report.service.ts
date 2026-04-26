@@ -176,7 +176,7 @@ export class GraderBagReportService {
       
 
 
-      const subjectQuestions = await graderReportRepo.getDerivedSubjestQuestionfromBagID(conn, bagId);
+      const subjectQuestions = await graderReportRepo.getDerivedSubjestQuestionfromBagID(conn, bagId , graderId);
       if (!subjectQuestions.length) {
         throw new Error("ไม่พบรายการข้อของวิชาในถุงนี้");
       }

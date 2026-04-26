@@ -321,7 +321,7 @@ async insertScoresFromDraftsByBagIdAndGraderId(
       gsd.slot_id,
       gsd.score,
       gsd.grader_id,
-      NOW()
+      CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00')
     FROM grading_score_drafts gsd
     WHERE gsd.bag_id = ?
       AND gsd.grader_id = ?
@@ -397,7 +397,7 @@ async createLock(
       locked_at,
       created_by
     )
-    VALUES (?, ?, ?, ?, 'ACTIVE', NOW(), ?)
+    VALUES (?, ?, ?, ?, 'ACTIVE', CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00'), ?)
   `;
 
   const [result] = await conn.query<ResultSetHeader>(sql, [
@@ -418,7 +418,7 @@ async releaseActiveLockByGraderId(
     UPDATE grader_work_locks
     SET
       status = 'RELEASED',
-      released_at = NOW()
+      released_at = CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00')
     WHERE grader_id = ?
       AND status = 'ACTIVE'
   `;

@@ -134,38 +134,42 @@ export class GraderReportRepo {
 
 async getDerivedSubjestQuestionfromBagID(
   conn: PoolConnection,
-  bagId: number
+  bagId: number,
+  graderId: number
 ): Promise<DerivedSubjectQuestionRow[]> {
   const sql = `
-    SELECT
-      b.id AS bag_id,
-      b.bag_no,
+SELECT
+  b.id AS bag_id,
+  b.bag_no,
 
-      s.id AS subject_id,
-      s.code,
-      s.name,
+  s.id AS subject_id,
+  s.code,
+  s.name,
 
-      sq.question_no,
-      sq.label
+  sq.question_no,
+  sq.label
 
-    FROM bags b
-    JOIN sessions sess
-      ON sess.id = b.session_id
+FROM bags b
+JOIN sessions sess
+  ON sess.id = b.session_id
 
-    JOIN session_subjects ss
-      ON ss.session_id = sess.id  
+JOIN grader_assignments ga
+  ON ga.session_id = sess.id
+ AND ga.grader_id = ?
 
-    JOIN subjects s
-      ON s.id = ss.subject_id
+JOIN subjects s
+  ON s.id = ga.subject_id
 
-    JOIN subject_questions sq
-      ON sq.subject_id = s.id
+JOIN subject_questions sq
+  ON sq.id = ga.subject_question_id
+ AND sq.subject_id = s.id
 
-    WHERE b.id = ?
-    ORDER BY s.code, sq.question_no;
+WHERE b.id = ?
+
+ORDER BY s.code, sq.question_no;
   `;
 
-  const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [ graderId , bagId ]);
 
   if (!rows?.length) {
     throw new Error("ไม่พบ subject/question ของถุงนี้");

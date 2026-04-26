@@ -276,7 +276,7 @@ for (let i = 1; i <= actualRows; i++) {
 
     const payloadText = String(row.qr_payload ?? "");
     const displayPayload =
-      payloadText.length > 72 ? payloadText.slice(0, 72) + "..." : payloadText;
+      payloadText.length > 100 ? payloadText.slice(0, 100) + "..." : payloadText;
 
     doc.text(String(row.random_num ?? ""), x1 + 3, y, {
       width: colNoWidth - 6,
@@ -364,7 +364,7 @@ function truncatePayloadFor(
   if (doc.widthOfString(payload) <= maxWidth) return payload;
   if (payload.length <= 8) return payload;
   // return payload.slice(0, 4) + "........................" + payload.slice(-4);
-  return payload.slice(0, 60) + "...";
+  return payload.slice(0, 80) + "...";
 }
 
 function drawManualHeader(
@@ -529,7 +529,7 @@ function drawManualTableV2(
   const qCount = Math.max(questions.length, 1);
 
   const colNoWidth = 70;
-  const colPayloadWidth = 210;
+  const colPayloadWidth = 280;
   const remainWidth = tableWidth - colNoWidth - colPayloadWidth;
   const qWidth = remainWidth / qCount;
 
@@ -604,13 +604,13 @@ function drawManualTableV2(
       lineBreak: false,
     });
 
-    // doc.font("Sarabun").fontSize(7.2);
-    // doc.text(shortText(q?.label, 16), x + 2, startY + headerH1 + 12, {
-    //   width: qWidth - 4,
-    //   align: "center",
-    //   lineBreak: false,
-    //   ellipsis: true,
-    // });
+    doc.font("Sarabun").fontSize(7.2);
+    doc.text(shortText(q?.label, 30), x + 2, startY + headerH1 + 12, {
+      width: qWidth - 4,
+      align: "center",
+      lineBreak: false,
+      ellipsis: true,
+    });
 
     doc.font("SarabunBold").fontSize(8.5);
   }

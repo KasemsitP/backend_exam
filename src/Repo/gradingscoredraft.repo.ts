@@ -210,7 +210,7 @@ class GradingScoreDraftRepo {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT', NOW(), NOW())
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT', CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00'), CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00'))
     `;
 
         const [result] = await conn.execute<ResultSetHeader>(sql, [
@@ -236,7 +236,7 @@ class GradingScoreDraftRepo {
       SET
         score = ?,
         status = 'DRAFT',
-        updated_at = NOW()
+        updated_at = CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00')
       WHERE slot_id = ?
     `;
 
@@ -323,7 +323,7 @@ class GradingScoreDraftRepo {
       UPDATE grading_score_drafts
       SET
         status = 'CANCELLED',
-        updated_at = NOW()
+        updated_at = CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00')
       WHERE slot_id = ?
         AND status = 'DRAFT'
     `;
@@ -339,7 +339,7 @@ class GradingScoreDraftRepo {
       UPDATE grading_score_drafts
       SET
         status = 'CONFIRMED',
-        updated_at = NOW()
+        updated_at = CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00')
       WHERE bag_id = ?
         AND status = 'DRAFT'
     `;
@@ -535,7 +535,7 @@ async markDraftsConfirmedByBagIdAndGraderId(
     UPDATE grading_score_drafts
     SET
       status = 'CONFIRMED',
-      updated_at = NOW()
+      updated_at = CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+07:00')
     WHERE bag_id = ?
       AND grader_id = ?
       AND status = 'DRAFT'
