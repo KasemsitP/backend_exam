@@ -21,6 +21,11 @@ export interface BagReportScoreRow extends RowDataPacket {
     grader_order: number | null;
 }
 
+export interface BagBookletRow extends RowDataPacket {
+    random_num: string;
+    qr_payload: string | null;
+}
+
 class GraderBagReportRepo {
     async findBagReportHeader(
         conn: PoolConnection,
@@ -99,6 +104,49 @@ ORDER BY CAST(bk.random_num AS UNSIGNED);
         const [rows] = await conn.query<BagReportScoreRow[]>(sql, [bagId, questionNo, graderId]);
         return rows;
     }
+
+    async findBookletsByBagId(
+        conn: PoolConnection,
+        bagId: number
+    ): Promise<BagBookletRow[]> {
+        const sql = `
+            SELECT
+                bk.random_num,
+                bk.qr_payload
+            FROM booklets bk
+            WHERE bk.bag_id = ?
+            ORDER BY CAST(bk.random_num AS UNSIGNED);
+        `;
+
+        const [rows] = await conn.query<BagBookletRow[]>(sql, [bagId]);
+        return rows;
+    }
+    async findGraderOrderInBag(
+  conn: PoolConnection,
+  bagId: number,
+  graderId: number,
+  questionNo: number
+): Promise<number | null> {
+  const sql = `
+    SELECT
+      gs.grader_order
+    FROM grading_slots gs
+    JOIN booklets bk
+      ON bk.id = gs.booklet_id
+    WHERE bk.bag_id = ?
+      AND gs.grader_id = ?
+      AND gs.question_no = ?
+    LIMIT 1
+  `;
+
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [
+    bagId,
+    graderId,
+    questionNo,
+  ]);
+
+  return rows.length ? Number(rows[0].grader_order) : null;
+}
 }
 
 const graderBagReportRepo = new GraderBagReportRepo();

@@ -71,6 +71,33 @@ static getConfirmedBags = async (req: Request, res: Response) => {
     });
   }
 }
+  static async printBagManualPayloadPdf(req: Request, res: Response) {
+    try {
+      const bagId = Number(req.params.bagId);
+      const graderId = Number(req.params.graderId);
+
+      if (!bagId || !graderId) {
+        return res.status(400).json({
+          message: "bagId หรือ graderId ไม่ถูกต้อง",
+        });
+      }
+
+      const pdfBuffer = await GraderBagReportService.generateBagManualPayloadPdf(bagId, graderId);
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="bag_${bagId}_grader_${graderId}_manual.pdf"`
+      );
+
+      return res.send(pdfBuffer);
+    } catch (error: any) {
+      return res.status(500).json({
+        message: error.message || "ไม่สามารถสร้างรายงาน PDF ได้",
+      });
+    }
+  }
+
   static async printBagScorePayloadPdf(req: Request, res: Response) {
     try {
       const bagId = Number(req.params.bagId);

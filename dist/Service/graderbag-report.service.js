@@ -17,6 +17,7 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const worker_threads_1 = require("worker_threads");
 const graderbag_report_repo_1 = __importDefault(require("../Repo/graderbag-report.repo"));
+const grader_report_repo_1 = __importDefault(require("../Repo/grader-report.repo"));
 const DB_1 = require("../model/DB");
 const key_service_1 = require("./key.service");
 class GraderBagReportService {
@@ -115,6 +116,71 @@ class GraderBagReportService {
             }
             catch (error) {
                 console.log("Service Error (GraderBagReportService.generateBagScorePayloadPdf):", error);
+                throw error;
+            }
+            finally {
+                conn.release();
+            }
+        });
+    }
+    static generateBagManualPayloadPdf(bagId, graderId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+            const conn = yield DB_1.DB.getInstance().getConnection();
+            try {
+                const header = yield graderbag_report_repo_1.default.findBagReportHeader(conn, bagId);
+                if (!header) {
+                    throw new Error("ไม่พบข้อมูลถุงที่ต้องการสร้างรายงาน");
+                }
+                const graderInfo = yield graderbag_report_repo_1.default.findGraderInfoByBagId(conn, graderId);
+                if (!graderInfo) {
+                    throw new Error("ไม่พบข้อมูลผู้ตรวจของถุงนี้");
+                }
+                const subjectQuestions = yield grader_report_repo_1.default.getDerivedSubjestQuestionfromBagID(conn, bagId);
+                if (!subjectQuestions.length) {
+                    throw new Error("ไม่พบรายการข้อของวิชาในถุงนี้");
+                }
+                const booklets = yield graderbag_report_repo_1.default.findBookletsByBagId(conn, bagId);
+                if (!booklets.length) {
+                    throw new Error("ไม่พบเล่มข้อสอบในถุงนี้");
+                }
+                const rows = booklets.map((b) => ({
+                    random_num: b.random_num,
+                    qr_payload: b.qr_payload ? key_service_1.keyService.maskQrPayload(b.qr_payload) : null,
+                }));
+                const questions = subjectQuestions.map((q) => {
+                    var _a;
+                    return ({
+                        question_no: q.question_no,
+                        label: (_a = q.label) !== null && _a !== void 0 ? _a : null,
+                    });
+                });
+                const subjectName = (_c = (_b = (_a = subjectQuestions[0]) === null || _a === void 0 ? void 0 : _a.name) !== null && _b !== void 0 ? _b : header.subject_name) !== null && _c !== void 0 ? _c : "-";
+                const questionNo = (_d = subjectQuestions[0]) === null || _d === void 0 ? void 0 : _d.question_no;
+                const graderOrder = questionNo
+                    ? yield graderbag_report_repo_1.default.findGraderOrderInBag(conn, bagId, graderId, questionNo)
+                    : null;
+                const manualBag = {
+                    bag_no: header.bag_no,
+                    info: {
+                        org: (_e = header.campaign_name) !== null && _e !== void 0 ? _e : "-",
+                        course: subjectName,
+                        site: (_f = header.site) !== null && _f !== void 0 ? _f : "-",
+                        start_num: (_g = header.start_num) !== null && _g !== void 0 ? _g : "-",
+                        end_num: (_h = header.end_num) !== null && _h !== void 0 ? _h : "-",
+                        grader_order: graderOrder,
+                        full_name: (_j = graderInfo.full_name) !== null && _j !== void 0 ? _j : "-",
+                    },
+                    rows,
+                    questions,
+                };
+                const pdfBuffer = yield this.runWorkerTask("generateBagManualPayloadPdf", {
+                    manualBag,
+                });
+                return pdfBuffer;
+            }
+            catch (error) {
+                console.log("Service Error (GraderBagReportService.generateBagManualPayloadPdf):", error);
                 throw error;
             }
             finally {

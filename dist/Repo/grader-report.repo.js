@@ -56,6 +56,54 @@ class GraderReportRepo {
             return Number(rows[0].subject_id);
         });
     }
+    getDerivedSubjestQuestionfromBagID(conn, bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT
+      b.id AS bag_id,
+      b.bag_no,
+
+      s.id AS subject_id,
+      s.code,
+      s.name,
+
+      sq.question_no,
+      sq.label
+
+    FROM bags b
+    JOIN sessions sess
+      ON sess.id = b.session_id
+
+    JOIN session_subjects ss
+      ON ss.session_id = sess.id  
+
+    JOIN subjects s
+      ON s.id = ss.subject_id
+
+    JOIN subject_questions sq
+      ON sq.subject_id = s.id
+
+    WHERE b.id = ?
+    ORDER BY s.code, sq.question_no;
+  `;
+            const [rows] = yield conn.query(sql, [bagId]);
+            if (!(rows === null || rows === void 0 ? void 0 : rows.length)) {
+                throw new Error("ไม่พบ subject/question ของถุงนี้");
+            }
+            return rows.map((r) => {
+                var _a;
+                return ({
+                    bag_id: Number(r.bag_id),
+                    bag_no: Number(r.bag_no),
+                    subject_id: Number(r.subject_id),
+                    code: String(r.code),
+                    name: String(r.name),
+                    question_no: Number(r.question_no),
+                    label: String((_a = r.label) !== null && _a !== void 0 ? _a : ""),
+                });
+            });
+        });
+    }
     // async getQuestionCountForBagSubject(conn: PoolConnection, bagId: number, subjectId: number): Promise<number> {
     //   const sql = `
     //       SELECT ss.question_count

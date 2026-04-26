@@ -79,6 +79,41 @@ ORDER BY CAST(bk.random_num AS UNSIGNED);
             return rows;
         });
     }
+    findBookletsByBagId(conn, bagId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+            SELECT
+                bk.random_num,
+                bk.qr_payload
+            FROM booklets bk
+            WHERE bk.bag_id = ?
+            ORDER BY CAST(bk.random_num AS UNSIGNED);
+        `;
+            const [rows] = yield conn.query(sql, [bagId]);
+            return rows;
+        });
+    }
+    findGraderOrderInBag(conn, bagId, graderId, questionNo) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const sql = `
+    SELECT
+      gs.grader_order
+    FROM grading_slots gs
+    JOIN booklets bk
+      ON bk.id = gs.booklet_id
+    WHERE bk.bag_id = ?
+      AND gs.grader_id = ?
+      AND gs.question_no = ?
+    LIMIT 1
+  `;
+            const [rows] = yield conn.query(sql, [
+                bagId,
+                graderId,
+                questionNo,
+            ]);
+            return rows.length ? Number(rows[0].grader_order) : null;
+        });
+    }
 }
 const graderBagReportRepo = new GraderBagReportRepo();
 exports.default = graderBagReportRepo;

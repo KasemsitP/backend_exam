@@ -14,6 +14,28 @@ exports.graderController = void 0;
 const grader_service_1 = require("../Service/grader.service");
 const graderbag_report_service_1 = require("../Service/graderbag-report.service");
 class graderController {
+    static printBagManualPayloadPdf(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const bagId = Number(req.params.bagId);
+                const graderId = Number(req.params.graderId);
+                if (!bagId || !graderId) {
+                    return res.status(400).json({
+                        message: "bagId หรือ graderId ไม่ถูกต้อง",
+                    });
+                }
+                const pdfBuffer = yield graderbag_report_service_1.GraderBagReportService.generateBagManualPayloadPdf(bagId, graderId);
+                res.setHeader("Content-Type", "application/pdf");
+                res.setHeader("Content-Disposition", `inline; filename="bag_${bagId}_grader_${graderId}_manual.pdf"`);
+                return res.send(pdfBuffer);
+            }
+            catch (error) {
+                return res.status(500).json({
+                    message: error.message || "ไม่สามารถสร้างรายงาน PDF ได้",
+                });
+            }
+        });
+    }
     static printBagScorePayloadPdf(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {

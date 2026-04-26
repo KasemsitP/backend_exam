@@ -7,4 +7,5 @@ graderRouter.get("/graders/campaign/:campaignId", grader_controller_1.graderCont
 graderRouter.get("/graders/assignment/:campaign_id/:account_id", grader_controller_1.graderController.getAssignmentByAccountId);
 graderRouter.get("/graders/confirmed-bags/:campaignId/:graderId", grader_controller_1.graderController.getConfirmedBags);
 graderRouter.get("/graders/bags/:bagId/score-payload/:questionNo/:graderId/pdf", grader_controller_1.graderController.printBagScorePayloadPdf);
+graderRouter.get("/graders/bags/:bagId/manual-payload/:graderId/pdf", grader_controller_1.graderController.printBagManualPayloadPdf);
 exports.default = graderRouter;

@@ -78,16 +78,17 @@ function buildBookletBlocks(raw, questionCount, unlock) {
     return Array.from(byBooklet.values()).sort((a, b) => a.bookletId - b.bookletId);
 }
 function buildUnlockedBookletBlocks(raw, questionCount) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     const byBooklet = new Map();
     for (const r of raw) {
         let block = byBooklet.get(r.booklet_id);
         if (!block) {
             block = {
                 bookletId: r.booklet_id,
-                examCode: (_a = r.exam_code) !== null && _a !== void 0 ? _a : String(r.random_num),
+                randomNum: String((_a = r.random_num) !== null && _a !== void 0 ? _a : ""),
+                examCode: (_b = r.exam_code) !== null && _b !== void 0 ? _b : String(r.random_num),
                 // ดึงชื่อมาด้วย (ต้องแน่ใจว่า SQL ใน Repo มีการ SELECT full_name หรือ title, first_name, last_name มาให้แล้ว)
-                fullName: `${(_b = r.title) !== null && _b !== void 0 ? _b : ""}${(_c = r.full_name) !== null && _c !== void 0 ? _c : `${(_d = r.first_name) !== null && _d !== void 0 ? _d : ""} ${(_e = r.last_name) !== null && _e !== void 0 ? _e : ""}`}`
+                fullName: `${(_c = r.title) !== null && _c !== void 0 ? _c : ""}${(_d = r.full_name) !== null && _d !== void 0 ? _d : `${(_e = r.first_name) !== null && _e !== void 0 ? _e : ""} ${(_f = r.last_name) !== null && _f !== void 0 ? _f : ""}`}`
                     .trim(),
                 questionCount: 0,
                 questions: [],
@@ -95,10 +96,10 @@ function buildUnlockedBookletBlocks(raw, questionCount) {
             byBooklet.set(r.booklet_id, block);
         }
         block.questions.push({
-            questionNo: r.question_no, label: (_f = r.label) !== null && _f !== void 0 ? _f : `ข้อ ${r.question_no}`,
-            category: (_g = r.category) !== null && _g !== void 0 ? _g : null, grader1Score: r.grader1_score != null ? Number(r.grader1_score) : null,
-            grader1Name: (_h = r.grader1_names) !== null && _h !== void 0 ? _h : null, grader2Score: r.grader2_score != null ? Number(r.grader2_score) : null,
-            grader2Name: (_j = r.grader2_names) !== null && _j !== void 0 ? _j : null, finalScore: r.final_score != null ? Number(r.final_score) : null,
+            questionNo: r.question_no, label: (_g = r.label) !== null && _g !== void 0 ? _g : `ข้อ ${r.question_no}`,
+            category: (_h = r.category) !== null && _h !== void 0 ? _h : null, grader1Score: r.grader1_score != null ? Number(r.grader1_score) : null,
+            grader1Name: (_j = r.grader1_names) !== null && _j !== void 0 ? _j : null, grader2Score: r.grader2_score != null ? Number(r.grader2_score) : null,
+            grader2Name: (_k = r.grader2_names) !== null && _k !== void 0 ? _k : null, finalScore: r.final_score != null ? Number(r.final_score) : null,
         });
     }
     for (const block of byBooklet.values()) {
@@ -228,7 +229,7 @@ function drawBagScorePage(doc, info, booklets, questionCount, questionLabels, un
     }
 }
 function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLabels) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const pageWidth = doc.page.width;
     const pageHeight = doc.page.height;
     const { left, right, top, bottom } = doc.page.margins;
@@ -256,7 +257,8 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
     });
     y = doc.y + 10;
     const totalRows = 30;
-    // ✅ เพิ่มคอลัมน์ชื่อ
+    // ✅ เพิ่มคอลัมน์ชื่อ + ลำดับจัดเก็บ
+    const colSeqWidth = 50;
     const colCodeWidth = 50;
     const colNameWidth = 100;
     const colPerScoreWidth = 22;
@@ -264,7 +266,8 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
     const colSumWidth = 40;
     const baseRowH1 = 42, baseRowH2 = 18, baseRowH = 16;
     const totalQuestionCols = questionCount * colsPerQuestion;
-    const usedWidth = colCodeWidth +
+    const usedWidth = colSeqWidth +
+        colCodeWidth +
         colNameWidth +
         totalQuestionCols * colPerScoreWidth +
         colSumWidth * 2;
@@ -273,6 +276,7 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
     const needH = baseRowH1 + baseRowH2 + totalRows * baseRowH;
     const heightScale = needH > availableTableHeight ? availableTableHeight / needH : 1;
     const scale = Math.min(widthScale, heightScale, 1);
+    const cwSeq = colSeqWidth * scale;
     const cwCode = colCodeWidth * scale;
     const cwName = colNameWidth * scale;
     const cwScore = colPerScoreWidth * scale;
@@ -290,7 +294,13 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
     let x = startX;
     doc.font(FONT_BOLD).fontSize(fontHeaderSize);
     // รวบเส้น header ชั้นบน
-    let p = doc.rect(x, y, cwCode, rowH1 + rowH2);
+    let p = doc.rect(x, y, cwSeq, rowH1 + rowH2);
+    doc.text("ลำดับจัดเก็บ", x, y + 6 * scale, {
+        width: cwSeq,
+        align: "center",
+    });
+    x += cwSeq;
+    p = p.rect(x, y, cwCode, rowH1 + rowH2);
     doc.text("รหัสประจำตัว\nสอบ", x, y + 4 * scale, {
         width: cwCode,
         align: "center",
@@ -318,7 +328,7 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
     p.stroke();
     // แถวล่าง: หัวคอลัมน์ย่อย
     y += rowH1;
-    x = startX + cwCode + cwName;
+    x = startX + cwSeq + cwCode + cwName;
     const subHeads = ["ค.1", "ค.2", "ต่าง", "เฉลี่ย"];
     p = doc.lineWidth(0.5); // เริ่ม path ใหม่
     for (let q = 1; q <= questionCount; q++) {
@@ -341,9 +351,18 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
         const bk = booklets[i];
         x = startX;
         //  รวบเส้น body ต่อ 1 แถว
-        let pathRow = doc.rect(x, y, cwCode, rowH);
+        let pathRow = doc.rect(x, y, cwSeq, rowH);
         if (bk) {
-            doc.text((_b = bk.examCode) !== null && _b !== void 0 ? _b : "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
+            doc.text((_b = bk.randomNum) !== null && _b !== void 0 ? _b : "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
+                width: cwSeq - 4 * scale,
+                align: "center",
+                ellipsis: true,
+            });
+        }
+        x += cwSeq;
+        pathRow = pathRow.rect(x, y, cwCode, rowH);
+        if (bk) {
+            doc.text((_c = bk.examCode) !== null && _c !== void 0 ? _c : "", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
                 width: cwCode - 4 * scale,
                 align: "center",
                 ellipsis: true,
@@ -352,7 +371,7 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
         x += cwCode;
         pathRow = pathRow.rect(x, y, cwName, rowH);
         if (bk) {
-            doc.text((_c = bk.fullName) !== null && _c !== void 0 ? _c : "-", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
+            doc.text((_d = bk.fullName) !== null && _d !== void 0 ? _d : "-", x + 2 * scale, y + Math.max(1, (rowH - fontBodySize) / 2), {
                 width: cwName - 4 * scale,
                 align: "left",
                 ellipsis: true,
@@ -361,13 +380,13 @@ function drawUnlockedBagScorePage(doc, info, booklets, questionCount, questionLa
         x += cwName;
         let totalPerSubject = 0;
         for (let q = 1; q <= questionCount; q++) {
-            const qRow = (_d = bk === null || bk === void 0 ? void 0 : bk.questions) === null || _d === void 0 ? void 0 : _d.find((qq) => qq.questionNo === q);
-            const s1 = (_e = qRow === null || qRow === void 0 ? void 0 : qRow.grader1Score) !== null && _e !== void 0 ? _e : null;
-            const s2 = (_f = qRow === null || qRow === void 0 ? void 0 : qRow.grader2Score) !== null && _f !== void 0 ? _f : null;
+            const qRow = (_e = bk === null || bk === void 0 ? void 0 : bk.questions) === null || _e === void 0 ? void 0 : _e.find((qq) => qq.questionNo === q);
+            const s1 = (_f = qRow === null || qRow === void 0 ? void 0 : qRow.grader1Score) !== null && _f !== void 0 ? _f : null;
+            const s2 = (_g = qRow === null || qRow === void 0 ? void 0 : qRow.grader2Score) !== null && _g !== void 0 ? _g : null;
             const diff = s1 != null && s2 != null ? Math.abs(Number(s1) - Number(s2)) : null;
             const avg = s1 != null && s2 != null
                 ? (Number(s1) + Number(s2)) / 2
-                : (_g = qRow === null || qRow === void 0 ? void 0 : qRow.finalScore) !== null && _g !== void 0 ? _g : null;
+                : (_h = qRow === null || qRow === void 0 ? void 0 : qRow.finalScore) !== null && _h !== void 0 ? _h : null;
             const vals = [
                 formatIntPdf(s1),
                 formatIntPdf(s2),

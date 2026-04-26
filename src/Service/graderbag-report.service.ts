@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { Worker } from "worker_threads";
 import graderBagReportRepo from "../Repo/graderbag-report.repo";
+import graderReportRepo from "../Repo/grader-report.repo";
 import { DB } from "../model/DB";
 import { keyService } from "./key.service";
 
@@ -27,6 +28,23 @@ type BagPayloadPdfData = {
   bag_no: string | number;
   info: BaseSheetInfo;
   rows: BagScorePayloadRow[];
+};
+
+type ManualPayloadRow = {
+  random_num: string | number;
+  qr_payload: string | null;
+};
+
+type ManualQuestion = {
+  question_no: number;
+  label?: string | null;
+};
+
+type BagManualPdfData = {
+  bag_no: string | number;
+  info: BaseSheetInfo;
+  rows: ManualPayloadRow[];
+  questions: ManualQuestion[];
 };
 
 export class GraderBagReportService {
@@ -133,12 +151,84 @@ export class GraderBagReportService {
       });
 
       return pdfBuffer;
-    } 
+    }
     catch(error) {
       console.log("Service Error (GraderBagReportService.generateBagScorePayloadPdf):", error);
       throw error;
     }
     finally {
+      conn.release();
+    }
+  }
+
+  static async generateBagManualPayloadPdf(bagId: number, graderId: number): Promise<Buffer> {
+    const conn = await DB.getInstance().getConnection();
+    try {
+      const header = await graderBagReportRepo.findBagReportHeader(conn, bagId);
+      if (!header) {
+        throw new Error("ไม่พบข้อมูลถุงที่ต้องการสร้างรายงาน");
+      }
+
+      const graderInfo = await graderBagReportRepo.findGraderInfoByBagId(conn, graderId);
+      if (!graderInfo) {
+        throw new Error("ไม่พบข้อมูลผู้ตรวจของถุงนี้");
+      }
+      
+
+
+      const subjectQuestions = await graderReportRepo.getDerivedSubjestQuestionfromBagID(conn, bagId);
+      if (!subjectQuestions.length) {
+        throw new Error("ไม่พบรายการข้อของวิชาในถุงนี้");
+      }
+
+      const booklets = await graderBagReportRepo.findBookletsByBagId(conn, bagId);
+      if (!booklets.length) {
+        throw new Error("ไม่พบเล่มข้อสอบในถุงนี้");
+      }
+
+      const rows: ManualPayloadRow[] = booklets.map((b) => ({
+        random_num: b.random_num,
+        qr_payload: b.qr_payload ? keyService.maskQrPayload(b.qr_payload) : null,
+      }));
+
+      const questions: ManualQuestion[] = subjectQuestions.map((q) => ({
+        question_no: q.question_no,
+        label: q.label ?? null,
+      }));
+      
+
+      const subjectName = subjectQuestions[0]?.name ?? header.subject_name ?? "-";
+
+      const questionNo = subjectQuestions[0]?.question_no;
+
+const graderOrder = questionNo
+  ? await graderBagReportRepo.findGraderOrderInBag(conn, bagId, graderId, questionNo)
+  : null;
+
+      const manualBag: BagManualPdfData = {
+        bag_no: header.bag_no,
+        info: {
+          org: header.campaign_name ?? "-",
+          course: subjectName,
+          site: header.site ?? "-",
+          start_num: header.start_num ?? "-",
+          end_num: header.end_num ?? "-",
+          grader_order: graderOrder,
+          full_name: graderInfo.full_name ?? "-",
+        },
+        rows,
+        questions,
+      };
+
+      const pdfBuffer = await this.runWorkerTask("generateBagManualPayloadPdf", {
+        manualBag,
+      });
+
+      return pdfBuffer;
+    } catch (error) {
+      console.log("Service Error (GraderBagReportService.generateBagManualPayloadPdf):", error);
+      throw error;
+    } finally {
       conn.release();
     }
   }

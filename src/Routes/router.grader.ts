@@ -19,4 +19,9 @@ graderRouter.get(
 
 graderRouter.get("/graders/bags/:bagId/score-payload/:questionNo/:graderId/pdf", graderController.printBagScorePayloadPdf);
 
+graderRouter.get(
+  "/graders/bags/:bagId/manual-payload/:graderId/pdf",
+  graderController.printBagManualPayloadPdf
+);
+
 export default graderRouter;

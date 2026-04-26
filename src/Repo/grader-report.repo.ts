@@ -59,6 +59,15 @@ export type BagInfoRow = {
   subject_id: number;
   subject_name: string;
 };
+export interface DerivedSubjectQuestionRow {
+  bag_id: number;
+  bag_no: number;
+  subject_id: number;
+  code: string;
+  name: string;
+  question_no: number;
+  label: string;
+}
 
 export type QuestionCountRow = { question_count: number | null };
 
@@ -122,6 +131,56 @@ export class GraderReportRepo {
     // Default to the first subject found
     return Number(rows[0].subject_id);
   }
+
+async getDerivedSubjestQuestionfromBagID(
+  conn: PoolConnection,
+  bagId: number
+): Promise<DerivedSubjectQuestionRow[]> {
+  const sql = `
+    SELECT
+      b.id AS bag_id,
+      b.bag_no,
+
+      s.id AS subject_id,
+      s.code,
+      s.name,
+
+      sq.question_no,
+      sq.label
+
+    FROM bags b
+    JOIN sessions sess
+      ON sess.id = b.session_id
+
+    JOIN session_subjects ss
+      ON ss.session_id = sess.id  
+
+    JOIN subjects s
+      ON s.id = ss.subject_id
+
+    JOIN subject_questions sq
+      ON sq.subject_id = s.id
+
+    WHERE b.id = ?
+    ORDER BY s.code, sq.question_no;
+  `;
+
+  const [rows] = await conn.query<RowDataPacket[]>(sql, [bagId]);
+
+  if (!rows?.length) {
+    throw new Error("ไม่พบ subject/question ของถุงนี้");
+  }
+
+  return rows.map((r) => ({
+    bag_id: Number(r.bag_id),
+    bag_no: Number(r.bag_no),
+    subject_id: Number(r.subject_id),
+    code: String(r.code),
+    name: String(r.name),
+    question_no: Number(r.question_no),
+    label: String(r.label ?? ""),
+  }));
+}
 
   // async getQuestionCountForBagSubject(conn: PoolConnection, bagId: number, subjectId: number): Promise<number> {
   //   const sql = `
