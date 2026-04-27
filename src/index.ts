@@ -178,7 +178,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
-    rolling: false,
+    rolling: true, //  ทุก request ที่ผ่าน middleware จะรีเซ็ต expires ของ cookie + แถว auth_sessions ให้ใหม่ → user ที่ active ไม่หลุด
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
